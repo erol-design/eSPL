@@ -34,7 +34,7 @@ G474, G491, G4A1. A peripheral instance or feature that the selected device does
    - `eSPL/G4/Private`
    - `eSPL/Common/Inc`
    - `eSPL/G4/CMSIS/Device/Include`
-   - Arm CMSIS Core (`core_cm4.h`), for example from the Keil CMSIS pack or `eSPL/G0/CMSIS/Core/Include`
+   - `eSPL/G4/CMSIS/Core/Include`
 4. Define the device, for example `STM32G431xx`.
 5. Optionally select the validation level for the whole build (default FULL):
 
@@ -47,11 +47,14 @@ G474, G491, G4A1. A peripheral instance or feature that the selected device does
 All translation units must use the same level. Each public API header documents which checks
 remain at which level.
 
-`Examples/G431_Blink` is a minimal Keil MDK project (NUCLEO-G431RB, LD2 on PA5).
+The quickest start is **`Examples/G431_Template`** (NUCLEO-G431RB): 170 MHz clock setup, LED,
+ST-LINK virtual COM port at 115200 baud, with a Keil MDK project and a CMake / Arm GCC build.
+Copy it and adapt the board values. `Examples/G431_Blink` is a smaller Keil-only example.
 
 ## Toolchains
 
-Keil MDK with Arm Compiler 6.22 (primary), clang (Arm target). Other compilers are not tested.
+Keil MDK with Arm Compiler 6.22 (primary), clang (Arm target), Arm GCC 14.2 (template build).
+Other compilers are not tested.
 
 ## Notes
 

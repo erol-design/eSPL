@@ -6,6 +6,8 @@
 - Validation level tags on every public status API header.
 - Hardware tests passed on NUCLEO-G431RB and on an STM32G474 board for the tested modules.
 - Errata ES0430 / ES0431 Rev 10 and ES0523 Rev 7 reviewed and applied.
+- Arm CMSIS Core included under `CMSIS/Core`.
+- `Examples/G431_Template`: 170 MHz, LED and virtual COM port template, Keil and CMake / Arm GCC.
 
 Known limitations: pre-release; not every API is hardware-verified. HRTIM is not hardware-tested.
 USB and UCPD are not part of this library.
