@@ -718,7 +718,7 @@ SPL_Status USART_SyncConfig(USART_TypeDef *instance, const USART_SyncTypeDef *cf
                     (cfg->last_bit_clock <= 1U) && (cfg->slave <= 1U) && (cfg->ignore_nss <= 1U),
                 SPL_ERR_PARAM); /* normal */
     /* RM0440 Table 370: synchronous mode is limited to USART1..3. SAFE. */
-    SPL_REQUIRE_SAFE(IS_USART_INSTANCE(instance) != 0U, SPL_ERR_UNSUPPORTED);
+    SPL_REQUIRE_SAFE(IS_USART_INSTANCE(instance), SPL_ERR_UNSUPPORTED);
     /* master (CK output) and slave (CK input) are exclusive. SAFE. */
     SPL_REQUIRE_SAFE((cfg->clock_out == 0U) || (cfg->slave == 0U), SPL_ERR_PARAM);
     SPL_REQUIRE_SAFE(Usart_Enabled(instance) == 0U,
@@ -751,7 +751,7 @@ SPL_Status USART_SmartcardConfig(USART_TypeDef *instance, const USART_SmartcardT
                          ((cfg->enable == 0U) || (cfg->prescaler != 0U)),
                      SPL_ERR_PARAM);
     /* RM0440 Table 370: smartcard mode is limited to USART1..3. SAFE. */
-    SPL_REQUIRE_SAFE(IS_SMARTCARD_INSTANCE(instance) != 0U, SPL_ERR_UNSUPPORTED);
+    SPL_REQUIRE_SAFE(IS_SMARTCARD_INSTANCE(instance), SPL_ERR_UNSUPPORTED);
     SPL_REQUIRE_SAFE(Usart_Enabled(instance) == 0U,
                      SPL_ERR_STATE); /* SAFE: UE = 1 write ignored by hardware */
     cr3 = instance->CR3 & ~(USART_CR3_SCEN | USART_CR3_NACK | USART_CR3_SCARCNT_Msk);
@@ -786,7 +786,7 @@ SPL_Status USART_IrdaConfig(USART_TypeDef *instance, uint8_t enable, uint8_t low
     SPL_REQUIRE((enable <= 1U) && (low_power <= 1U), SPL_ERR_PARAM); /* normal */
     /* PSC = 0 is reserved in IrDA mode (RM0440 40.8.6). SAFE. */
     SPL_REQUIRE_SAFE((enable == 0U) || (prescaler != 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(IS_IRDA_INSTANCE(instance) != 0U,
+    SPL_REQUIRE_SAFE(IS_IRDA_INSTANCE(instance),
                      SPL_ERR_UNSUPPORTED); /* SAFE: feature absent on this instance */
     SPL_REQUIRE_SAFE(Usart_Enabled(instance) == 0U,
                      SPL_ERR_STATE); /* SAFE: UE = 1 write ignored by hardware */
@@ -814,7 +814,7 @@ SPL_Status USART_LinConfig(USART_TypeDef *instance, uint8_t enable, uint8_t brea
     SPL_REQUIRE_SAFE(Usart_AnyValid(instance) != 0U, SPL_ERR_PARAM); /* SAFE: invalid MMIO base */
     SPL_REQUIRE((enable <= 1U) && (break_11bit <= 1U) && (break_irq <= 1U),
                 SPL_ERR_PARAM); /* normal */
-    SPL_REQUIRE_SAFE(IS_UART_LIN_INSTANCE(instance) != 0U,
+    SPL_REQUIRE_SAFE(IS_UART_LIN_INSTANCE(instance),
                      SPL_ERR_UNSUPPORTED); /* SAFE: feature absent on this instance */
     SPL_REQUIRE_SAFE(Usart_Enabled(instance) == 0U,
                      SPL_ERR_STATE); /* SAFE: UE = 1 write ignored by hardware */
@@ -854,7 +854,7 @@ SPL_Status USART_AutoBaudConfig(USART_TypeDef *instance, uint8_t enable, uint8_t
     SPL_REQUIRE_SAFE(Usart_AnyValid(instance) != 0U, SPL_ERR_PARAM); /* SAFE: invalid MMIO base */
     SPL_REQUIRE(enable <= 1U, SPL_ERR_PARAM);                        /* normal */
     SPL_REQUIRE_SAFE(mode <= 3U, SPL_ERR_PARAM);                     /* SAFE: ABRMODE overflow */
-    SPL_REQUIRE_SAFE(IS_USART_AUTOBAUDRATE_DETECTION_INSTANCE(instance) != 0U,
+    SPL_REQUIRE_SAFE(IS_USART_AUTOBAUDRATE_DETECTION_INSTANCE(instance),
                      SPL_ERR_UNSUPPORTED); /* SAFE: feature absent on this instance */
     /* ERRATA ES0431 2.12.3 / ES0430 2.16.3 / ES0523 2.12.3: clearing ABREN during a reception
      * corrupts data. ABREN and ABRMODE change only with UE = 0 here, so no reception can be
@@ -870,7 +870,7 @@ SPL_Status USART_AutoBaudConfig(USART_TypeDef *instance, uint8_t enable, uint8_t
 SPL_Status USART_AutoBaudRequest(USART_TypeDef *instance)
 {
     SPL_REQUIRE_SAFE(Usart_AnyValid(instance) != 0U, SPL_ERR_PARAM); /* SAFE: invalid MMIO base */
-    SPL_REQUIRE_SAFE(IS_USART_AUTOBAUDRATE_DETECTION_INSTANCE(instance) != 0U, SPL_ERR_UNSUPPORTED);
+    SPL_REQUIRE_SAFE(IS_USART_AUTOBAUDRATE_DETECTION_INSTANCE(instance), SPL_ERR_UNSUPPORTED);
     SPL_REQUIRE_SAFE((instance->CR2 & USART_CR2_ABREN) != 0U,
                      SPL_ERR_STATE); /* SAFE: request ignored */
     instance->RQR = USART_RQR_ABRRQ;
@@ -882,7 +882,7 @@ SPL_Status USART_AutoBaudStatus(USART_TypeDef *instance, uint8_t *done, uint8_t 
     uint32_t isr;
 
     SPL_REQUIRE_SAFE(Usart_AnyValid(instance) != 0U, SPL_ERR_PARAM); /* SAFE: invalid MMIO base */
-    SPL_REQUIRE_SAFE(IS_USART_AUTOBAUDRATE_DETECTION_INSTANCE(instance) != 0U, SPL_ERR_UNSUPPORTED);
+    SPL_REQUIRE_SAFE(IS_USART_AUTOBAUDRATE_DETECTION_INSTANCE(instance), SPL_ERR_UNSUPPORTED);
     SPL_REQUIRE_SAFE((done != (void *)0) && (error != (void *)0), SPL_ERR_PARAM);
     isr = instance->ISR;
     *done = ((isr & USART_ISR_ABRF) != 0U) ? 1U : 0U;
@@ -899,7 +899,7 @@ SPL_Status USART_WakeupConfig(USART_TypeDef *instance, uint8_t enable, uint8_t s
     /* WUS = 01 is reserved (RM0440 40.8.3). SAFE. */
     SPL_REQUIRE_SAFE((source != 1U) && (source <= 3U), SPL_ERR_PARAM);
     /* RM0440 Table 370: wake-up is supported on all G4 USART instances. SAFE. */
-    SPL_REQUIRE_SAFE(IS_UART_WAKEUP_FROMSTOP_INSTANCE(instance) != 0U, SPL_ERR_UNSUPPORTED);
+    SPL_REQUIRE_SAFE(IS_UART_WAKEUP_FROMSTOP_INSTANCE(instance), SPL_ERR_UNSUPPORTED);
     SPL_REQUIRE_SAFE(Usart_Enabled(instance) == 0U,
                      SPL_ERR_STATE); /* SAFE: UE = 1 write ignored by hardware */
     cr3 = instance->CR3 & ~(USART_CR3_WUS_Msk | USART_CR3_WUFIE);

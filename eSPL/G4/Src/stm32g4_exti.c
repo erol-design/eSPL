@@ -113,8 +113,8 @@ static Exti_Class Exti_Classify(uint8_t line)
     }
     else
     {
-        lines = (uint32_t)EXTI_LINES2_MASK;
-        cfg = (uint32_t)EXTI_CFG2_MASK;
+        lines = EXTI_LINES2_MASK;
+        cfg = EXTI_CFG2_MASK;
     }
     if ((cfg & bit) != 0U)
     {

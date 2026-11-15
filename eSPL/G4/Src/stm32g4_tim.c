@@ -117,7 +117,7 @@ SPL_Status TIM_BaseInit(TIM_TypeDef *t, const TIM_BaseInitTypeDef *cfg)
         return SPL_ERR_STATE;
     }
     /* Preserve direction, one-pulse and unrelated CR1 bits. */
-    cr1 = t->CR1 & (uint32_t)~TIM_CR1_ARPE;
+    cr1 = t->CR1 & ~TIM_CR1_ARPE;
     if (cfg->auto_reload_preload != 0U)
     {
         cr1 |= TIM_CR1_ARPE;
@@ -146,7 +146,7 @@ SPL_Status TIM_Enable(TIM_TypeDef *t, uint8_t enable)
     }
     else
     {
-        t->CR1 &= (uint32_t)~TIM_CR1_CEN;
+        t->CR1 &= ~TIM_CR1_CEN;
     }
     return SPL_OK;
 }
@@ -167,7 +167,7 @@ SPL_Status TIM_UpdateInterrupt(TIM_TypeDef *t, uint8_t enable)
     }
     else
     {
-        t->DIER &= (uint32_t)~TIM_DIER_UIE;
+        t->DIER &= ~TIM_DIER_UIE;
     }
     return SPL_OK;
 }
@@ -185,7 +185,7 @@ SPL_Status TIM_ClearUpdate(TIM_TypeDef *t)
 #if defined(TIM_SPL_EXTENDED)
     /* TIM SR is rc_w0: zero on UIF, ones on the other flags of this timer type,
      * reserved bits at their reset value 0 (same value as TIM_ClearFlags). */
-    t->SR = Tim_FlagMask(t) & ~(uint32_t)TIM_SR_UIF;
+    t->SR = Tim_FlagMask(t) & ~TIM_SR_UIF;
 #else
     /* Host mock header without the full SR map (never a target build). */
     t->SR = ~(uint32_t)TIM_SR_UIF;
@@ -359,7 +359,7 @@ SPL_Status TIM_MainOutputEnable(TIM_TypeDef *t, uint8_t enable)
     }
     else
     {
-        bdtr &= (uint32_t)~TIM_BDTR_MOE;
+        bdtr &= ~TIM_BDTR_MOE;
     }
     /* Never copy a stale BKDSRM/BK2DSRM=1 back: hardware may have cleared it
      * between read and write, and with MOE=0 a 1 disarms the break (RM0440
@@ -592,7 +592,7 @@ SPL_Status TIM_CounterInit(TIM_TypeDef *t, const TIM_CounterInitTypeDef *cfg)
     }
     /* Preserve ARPE, URS, UDIS, DITHEN; CEN is known to be 0. */
     cr1 = t->CR1 &
-          (uint32_t)~(TIM_CR1_DIR | TIM_CR1_CMS | TIM_CR1_CKD | TIM_CR1_OPM | TIM_CR1_UIFREMAP);
+          ~(TIM_CR1_DIR | TIM_CR1_CMS | TIM_CR1_CKD | TIM_CR1_OPM | TIM_CR1_UIFREMAP);
     t->CR1 = cr1 | bits;
     return SPL_OK;
 }
@@ -684,7 +684,7 @@ SPL_Status TIM_EncoderInit(TIM_TypeDef *t, const TIM_EncoderInitTypeDef *cfg)
     ccmr |= (cfg->ti2_filter << TIM_CCMR1_IC2F_Pos) & TIM_CCMR1_IC2F_Msk;
     t->CCMR1 = ccmr;
     /* Polarity via CC1P/CC2P; CC1NP and CC2NP must be kept low (RM0440 29.3.25). */
-    ccer = t->CCER & (uint32_t)~(TIM_CCER_CC1P | TIM_CCER_CC1NP | TIM_CCER_CC2P | TIM_CCER_CC2NP);
+    ccer = t->CCER & ~(TIM_CCER_CC1P | TIM_CCER_CC1NP | TIM_CCER_CC2P | TIM_CCER_CC2NP);
     if (cfg->ti1_inverted != 0U)
     {
         ccer |= TIM_CCER_CC1P;
@@ -715,7 +715,7 @@ SPL_Status TIM_ComplementaryOutputInit(TIM_TypeDef *t, uint8_t ch, uint8_t inver
     /* SAFE: reject invalid parameters before hardware access. */
     SPL_REQUIRE_SAFE(!((Tim_ComplementaryValid(t, ch) == 0U) || (inverted > 1U)), SPL_ERR_PARAM);
     shift = 4U * ((uint32_t)ch - 1U);
-    if ((t->CCER & ((uint32_t)TIM_CCER_CC1NE << shift)) != 0U)
+    if ((t->CCER & (TIM_CCER_CC1NE << shift)) != 0U)
     {
         return SPL_ERR_STATE;
     }
@@ -724,7 +724,7 @@ SPL_Status TIM_ComplementaryOutputInit(TIM_TypeDef *t, uint8_t ch, uint8_t inver
     {
         return SPL_ERR_STATE;
     }
-    ccer = t->CCER & ~((uint32_t)TIM_CCER_CC1NP << shift);
+    ccer = t->CCER & ~(TIM_CCER_CC1NP << shift);
     t->CCER = ccer | ((uint32_t)inverted << (TIM_CCER_CC1NP_Pos + shift));
     return SPL_OK;
 }
@@ -741,7 +741,9 @@ SPL_Status TIM_ComplementaryEnable(TIM_TypeDef *t, uint8_t ch, uint8_t enable)
     {
         return SPL_ERR_STATE;
     }
-    mask = (uint32_t)TIM_CCER_CC1NE << (4U * ((uint32_t)ch - 1U));
+    /* Once 32 bit degiskene alinir: host'ta unsigned long 64 bittir (kaydirma uint32_t'de). */
+    mask = TIM_CCER_CC1NE;
+    mask <<= 4U * ((uint32_t)ch - 1U);
     if (enable != 0U)
     {
         t->CCER |= mask;

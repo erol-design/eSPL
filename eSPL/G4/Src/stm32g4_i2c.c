@@ -212,7 +212,7 @@ SPL_Status I2C_Stop(I2C_TypeDef *i2c)
     /* START is cleared by hardware and writing 0 has no effect. Never copy a
      * START=1 read back: hardware may clear it between read and write, and
      * the write-back would request a new START/RESTART. */
-    i2c->CR2 = (i2c->CR2 & (uint32_t)~I2C_CR2_START) | I2C_CR2_STOP;
+    i2c->CR2 = (i2c->CR2 & ~I2C_CR2_START) | I2C_CR2_STOP;
     return SPL_OK;
 }
 

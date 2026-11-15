@@ -155,7 +155,7 @@ SPL_Status DAC_SetHighFrequencyMode(DAC_TypeDef *dac, uint32_t hclk_hz)
     {
         hfsel = 0U;
     }
-    dac->MCR = (dac->MCR & (uint32_t)~DAC_MCR_HFSEL_Msk) | hfsel;
+    dac->MCR = (dac->MCR & ~DAC_MCR_HFSEL_Msk) | hfsel;
     return SPL_OK;
 }
 

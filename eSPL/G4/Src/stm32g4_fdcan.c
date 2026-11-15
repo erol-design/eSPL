@@ -167,7 +167,7 @@ SPL_Status FDCAN_LeaveInit(FDCAN_GlobalTypeDef *can)
         return SPL_ERR_STATE;
     }
 
-    can->CCCR &= (uint32_t)~FDCAN_CCCR_INIT;
+    can->CCCR &= ~FDCAN_CCCR_INIT;
     return SPL_OK;
 }
 
@@ -251,7 +251,7 @@ SPL_Status FDCAN_Configure(FDCAN_GlobalTypeDef *can, const FDCAN_ConfigTypeDef *
     can->XIDAM = FDCAN_XIDAM_EIDM;
     can->TXBC = cfg->tx_queue << FDCAN_TXBC_TFQM_Pos;
 
-    cccr = can->CCCR & (uint32_t)~(FDCAN_CCCR_FDOE | FDCAN_CCCR_BRSE);
+    cccr = can->CCCR & ~(FDCAN_CCCR_FDOE | FDCAN_CCCR_BRSE);
     if (cfg->fd_enable != 0U)
     {
         cccr |= FDCAN_CCCR_FDOE;
@@ -315,7 +315,7 @@ SPL_Status FDCAN_SetTestMode(FDCAN_GlobalTypeDef *can, FDCAN_TestModeTypeDef mod
 
     /* MON may be set only with INIT and CCE (RM0440 44.4.6). Clearing
      * CCCR.TEST resets FDCAN_TEST in hardware (44.4.4). */
-    cccr = (can->CCCR | FDCAN_CCCR_CCE) & (uint32_t)~(FDCAN_CCCR_TEST | FDCAN_CCCR_MON);
+    cccr = (can->CCCR | FDCAN_CCCR_CCE) & ~(FDCAN_CCCR_TEST | FDCAN_CCCR_MON);
     if ((mode == FDCAN_MODE_EXT_LOOPBACK) || (mode == FDCAN_MODE_INT_LOOPBACK))
     {
         cccr |= FDCAN_CCCR_TEST;

@@ -9,6 +9,10 @@
 #error "PWR wake-up pin bit layouts differ between CR3/CR4/SR1/SCR"
 #endif
 
+/* CMSIS PWR_CR5_R1MODE_Msk = (0x1U << 8): 0x1U temel tipi unsigned char, 8 bit kaydirma MISRA
+ * 12.2 ihlali. Ayni bit 32 bit isaretsiz sabitten kurulur (deger ayni, 0x100). */
+#define PWR_CR5_R1MODE_BIT ((uint32_t)1U << PWR_CR5_R1MODE_Pos)
+
 static uint8_t Pwr_IsBool(uint8_t value)
 {
     return (uint8_t)((value <= 1U) ? 1U : 0U);
@@ -16,7 +20,7 @@ static uint8_t Pwr_IsBool(uint8_t value)
 
 static uint8_t Pwr_ValidPins(uint32_t pins)
 {
-    return (uint8_t)(((pins != 0U) && ((pins & ~(uint32_t)PWR_WAKEUP_PIN_ALL) == 0U)) ? 1U : 0U);
+    return (uint8_t)(((pins != 0U) && ((pins & ~PWR_WAKEUP_PIN_ALL) == 0U)) ? 1U : 0U);
 }
 
 SPL_Status PWR_SetBackupAccess(uint8_t enable)
@@ -26,7 +30,7 @@ SPL_Status PWR_SetBackupAccess(uint8_t enable)
     /* SAFE: invalid boolean can silently change power control. */
     SPL_REQUIRE_SAFE(Pwr_IsBool(enable) != 0U, SPL_ERR_PARAM);
 
-    cr1 = PWR->CR1 & ~(uint32_t)PWR_CR1_DBP;
+    cr1 = PWR->CR1 & ~PWR_CR1_DBP;
     if (enable != 0U)
     {
         cr1 |= PWR_CR1_DBP;
@@ -71,16 +75,16 @@ SPL_Status PWR_StartVoltageScaling(PWR_RangeTypeDef range)
          * VOS=01. Table 38: 1 = normal (<= 150 MHz), 0 = boost (<= 170 MHz). */
         if (range == PWR_RANGE1_NORMAL)
         {
-            PWR->CR5 = PWR->CR5 | PWR_CR5_R1MODE;
+            PWR->CR5 = PWR->CR5 | PWR_CR5_R1MODE_BIT;
         }
         else
         {
-            PWR->CR5 = PWR->CR5 & ~(uint32_t)PWR_CR5_R1MODE;
+            PWR->CR5 = PWR->CR5 & ~PWR_CR5_R1MODE_BIT;
         }
     }
     /* VOS reads back 01 or 10 only (00/11 cannot be written), so the RMW never
      * writes a forbidden value. Caller polls PWR_GetVoltageScalingStatus. */
-    PWR->CR1 = (PWR->CR1 & ~(uint32_t)PWR_CR1_VOS) | vos;
+    PWR->CR1 = (PWR->CR1 & ~PWR_CR1_VOS) | vos;
     return SPL_OK;
 }
 
@@ -106,7 +110,7 @@ SPL_Status PWR_ConfigPVD(PWR_PvdLevelTypeDef level, uint8_t enable)
         return SPL_ERR_STATE;
     }
 
-    cr2 = PWR->CR2 & ~(uint32_t)(PWR_CR2_PLS | PWR_CR2_PVDE);
+    cr2 = PWR->CR2 & ~(PWR_CR2_PLS | PWR_CR2_PVDE);
     cr2 |= lvl << PWR_CR2_PLS_Pos;
     if (enable != 0U)
     {
@@ -179,6 +183,6 @@ SPL_Status PWR_SetLowPowerMode(PWR_LowPowerModeTypeDef mode)
     SPL_REQUIRE_SAFE((m == (uint32_t)PWR_LPM_STOP0) || (m == (uint32_t)PWR_LPM_STOP1) ||
                      (m == (uint32_t)PWR_LPM_STANDBY) || (m == (uint32_t)PWR_LPM_SHUTDOWN), SPL_ERR_PARAM);
     /* RM0440 6.4.1: 000 Stop0, 001 Stop1, 011 Standby, 1xx Shutdown. */
-    PWR->CR1 = (PWR->CR1 & ~(uint32_t)PWR_CR1_LPMS) | (m << PWR_CR1_LPMS_Pos);
+    PWR->CR1 = (PWR->CR1 & ~PWR_CR1_LPMS) | (m << PWR_CR1_LPMS_Pos);
     return SPL_OK;
 }

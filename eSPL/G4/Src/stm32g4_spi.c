@@ -113,7 +113,7 @@ SPL_Status SPI_Enable(SPI_TypeDef *spi, uint8_t enable)
             }
             return SPL_BUSY;
         }
-        spi->CR1 &= (uint32_t)~SPI_CR1_SPE;
+        spi->CR1 &= ~SPI_CR1_SPE;
         /* RX FIFO should be drained by caller before next enable.
          * No implicit DR reads: preserving received data is intentional. */
     }

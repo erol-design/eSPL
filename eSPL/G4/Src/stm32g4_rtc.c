@@ -153,7 +153,7 @@ SPL_Status RTC_LSEStart(uint32_t drive, uint8_t bypass)
     }
 
     /* LSEBYP is writable only with LSEON = 0 and LSERDY = 0: configure, then start. */
-    bdcr = (bdcr & (uint32_t)~(RCC_BDCR_LSEDRV_Msk | RCC_BDCR_LSEBYP)) | cfg;
+    bdcr = (bdcr & ~(RCC_BDCR_LSEDRV_Msk | RCC_BDCR_LSEBYP)) | cfg;
     RCC->BDCR = bdcr;
     RCC->BDCR = bdcr | RCC_BDCR_LSEON;
     return SPL_OK;
@@ -202,7 +202,7 @@ SPL_Status RTC_ClockConfig(uint32_t source)
     }
 
     wanted =
-        (bdcr & (uint32_t)~RCC_BDCR_RTCSEL_Msk) | (source << RCC_BDCR_RTCSEL_Pos) | RCC_BDCR_RTCEN;
+        (bdcr & ~RCC_BDCR_RTCSEL_Msk) | (source << RCC_BDCR_RTCSEL_Pos) | RCC_BDCR_RTCEN;
     if (wanted != bdcr)
     {
         RCC->BDCR = wanted;
@@ -351,7 +351,7 @@ SPL_Status RTC_SetHourFormat(uint32_t format)
     {
         return SPL_ERR_STATE;
     }
-    cr = Rtc_CrBase() & (uint32_t)~RTC_CR_FMT;
+    cr = Rtc_CrBase() & ~RTC_CR_FMT;
     if (format == RTC_FORMAT_12H)
     {
         cr |= RTC_CR_FMT;
@@ -415,7 +415,7 @@ SPL_Status RTC_SetBypassShadow(uint8_t enable)
     {
         return SPL_ERR_STATE;
     }
-    cr = Rtc_CrBase() & (uint32_t)~RTC_CR_BYPSHAD;
+    cr = Rtc_CrBase() & ~RTC_CR_BYPSHAD;
     if (enable != 0U)
     {
         cr |= RTC_CR_BYPSHAD;
@@ -752,7 +752,7 @@ SPL_Status RTC_WakeupConfig(uint32_t clock_sel, uint32_t reload)
         return Rtc_WaitStatus();
     }
     RTC->WUTR = reload << RTC_WUTR_WUT_Pos;
-    RTC->CR = (Rtc_CrBase() & (uint32_t)~RTC_CR_WUCKSEL_Msk) | (clock_sel << RTC_CR_WUCKSEL_Pos);
+    RTC->CR = (Rtc_CrBase() & ~RTC_CR_WUCKSEL_Msk) | (clock_sel << RTC_CR_WUCKSEL_Pos);
     return SPL_OK;
 }
 
@@ -772,7 +772,7 @@ SPL_Status RTC_WakeupEnable(uint8_t interrupt)
     {
         return Rtc_WaitStatus();
     }
-    cr = (Rtc_CrBase() & (uint32_t)~RTC_CR_WUTIE) | RTC_CR_WUTE;
+    cr = (Rtc_CrBase() & ~RTC_CR_WUTIE) | RTC_CR_WUTE;
     if (interrupt != 0U)
     {
         cr |= RTC_CR_WUTIE;
@@ -787,7 +787,7 @@ SPL_Status RTC_WakeupDisable(void)
     {
         return SPL_ERR_STATE;
     }
-    RTC->CR = Rtc_CrBase() & (uint32_t)~(RTC_CR_WUTE | RTC_CR_WUTIE);
+    RTC->CR = Rtc_CrBase() & ~(RTC_CR_WUTE | RTC_CR_WUTIE);
     return SPL_OK;
 }
 
@@ -1022,7 +1022,7 @@ SPL_Status TAMP_InputConfig(uint8_t input, const TAMP_InputTypeDef *cfg)
         return SPL_ERR_STATE;
     }
     bit = (uint32_t)input - 1U;
-    TAMP->CR1 &= ~((uint32_t)TAMP_CR1_TAMP1E << bit); /* reconfigure with the input disabled */
+    TAMP->CR1 &= ~(TAMP_CR1_TAMP1E << bit); /* reconfigure with the input disabled */
     cr2 = (uint32_t)(((cfg->active_high != 0U) ? TAMP_CR2_TAMP1TRG : 0U) |
                      ((cfg->masked != 0U) ? TAMP_CR2_TAMP1MSK : 0U) |
                      ((cfg->no_erase != 0U) ? TAMP_CR2_TAMP1NOERASE : 0U));
@@ -1031,10 +1031,10 @@ SPL_Status TAMP_InputConfig(uint8_t input, const TAMP_InputTypeDef *cfg)
         (TAMP->CR2 &
          ~((uint32_t)(TAMP_CR2_TAMP1TRG | TAMP_CR2_TAMP1MSK | TAMP_CR2_TAMP1NOERASE) << bit)) |
         (cr2 << bit);
-    TAMP->IER = (TAMP->IER & ~((uint32_t)TAMP_IER_TAMP1IE << bit)) | (ier << bit);
+    TAMP->IER = (TAMP->IER & ~(TAMP_IER_TAMP1IE << bit)) | (ier << bit);
     if (cfg->enable != 0U)
     {
-        TAMP->CR1 |= (uint32_t)TAMP_CR1_TAMP1E << bit;
+        TAMP->CR1 |= TAMP_CR1_TAMP1E << bit;
     }
     return SPL_OK;
 }

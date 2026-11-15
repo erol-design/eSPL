@@ -508,15 +508,15 @@ SPL_Status ADC_CommonClockConfig(ADC_TypeDef *adc, uint32_t ckmode, uint32_t pre
 
 SPL_Status ADC_InternalChannelsConfig(ADC_TypeDef *adc, uint32_t mask)
 {
-    const uint32_t all = ADC_CCR_VREFEN | ADC_CCR_VSENSESEL | ADC_CCR_VBATSEL;
+    const uint32_t valid_bits = ADC_CCR_VREFEN | ADC_CCR_VSENSESEL | ADC_CCR_VBATSEL;
     ADC_Common_TypeDef *common;
 
     /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((Adc_Valid(adc) == 0U) || ((mask & ~all) != 0U)), SPL_ERR_PARAM);
+    SPL_REQUIRE_SAFE(!((Adc_Valid(adc) == 0U) || ((mask & ~valid_bits) != 0U)), SPL_ERR_PARAM);
 
     /* RM0440 21.8.2 gives no write condition for these bits. */
     common = Adc_Common(adc);
-    common->CCR = (common->CCR & ~all) | mask;
+    common->CCR = (common->CCR & ~valid_bits) | mask;
     return SPL_OK;
 }
 

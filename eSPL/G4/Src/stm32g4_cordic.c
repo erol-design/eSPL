@@ -209,9 +209,9 @@ SPL_Status CORDIC_Config(const CORDIC_ContextTypeDef *ctx, const CORDIC_ConfigTy
     /* SAFE: Result width must fit CSR. */
     SPL_REQUIRE_SAFE(config->res_size <= CORDIC_SIZE_16BIT, SPL_ERR_PARAM);
     /* SAFE: Number of writes is encoded as writes-1. */
-    SPL_REQUIRE_SAFE(config->arg_writes >= 1U && config->arg_writes <= 2U, SPL_ERR_PARAM);
+    SPL_REQUIRE_SAFE((config->arg_writes >= 1U) && (config->arg_writes <= 2U), SPL_ERR_PARAM);
     /* SAFE: Number of reads is encoded as reads-1. */
-    SPL_REQUIRE_SAFE(config->res_reads >= 1U && config->res_reads <= 2U, SPL_ERR_PARAM);
+    SPL_REQUIRE_SAFE((config->res_reads >= 1U) && (config->res_reads <= 2U), SPL_ERR_PARAM);
     f.function = config->function;
     f.precision = config->precision;
     f.scale = config->scale;

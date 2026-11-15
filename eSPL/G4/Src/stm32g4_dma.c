@@ -115,7 +115,7 @@ SPL_Status DMA_Enable(DMA_Channel_TypeDef *ch, uint8_t enable)
     }
     else
     {
-        ch->CCR &= (uint32_t)~DMA_CCR_EN;
+        ch->CCR &= ~DMA_CCR_EN;
     }
     return SPL_OK;
 }
@@ -130,7 +130,7 @@ SPL_Status DMA_DeInit(DMA_Channel_TypeDef *ch)
         return SPL_ERR_PARAM;
     }
     /* RM0440 12.6.3: CCR fields other than EN are writable only with EN=0. */
-    ch->CCR &= (uint32_t)~DMA_CCR_EN;
+    ch->CCR &= ~DMA_CCR_EN;
     ch->CCR = 0U;
     ch->CNDTR = 0U;
     ch->CPAR = 0U;
