@@ -1,0 +1,26 @@
+# Derleme çıktıları
+build/
+Objects/
+Listings/
+__pycache__/
+*.o
+*.d
+# *.d derleme bagimlilik dosyasi icindir; ".d" ile biten klasorler (mcuboot release-notes.d) haric
+!*.d/
+*.crf
+*.axf
+*.lnp
+*.dep
+*.htm
+*.build_log.htm
+*.map
+*.lst
+# cppcheck MISRA eklentisinin bazen silemediği geçici dosyalar (~60 MB)
+*.c.*.dump
+# Keil kullanıcıya özel ayarlar
+*.uvguix.*
+# Keil oturum dosyaları: µVision her açılışta yeniden yazar
+*.uvoptx
+!eSPL/G0/Tools/measure/keil/bench.uvoptx
+**/DebugConfig/
+*.bak
