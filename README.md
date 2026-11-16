@@ -169,7 +169,7 @@ eSPL is initially focused on STMicroelectronics STM32 microcontrollers.
 | MCU Family | Status |
 |---|---|
 | STM32G0 | Reference implementation (v0.20.0-dev); development paused, hardware test pending |
-| STM32G4 | Active development (v0.18.0-dev); FULL/MIX/FAST host-verified, selected tests hardware-verified on NUCLEO-G431RB and STM32G474 |
+| STM32G4 | Release candidate (v0.18.0); FULL/MIX/FAST host-verified, selected tests hardware-verified on NUCLEO-G431RB and NUCLEO-G474RE |
 | STM32H7 | Planned |
 | Other MCU families | Future development |
 

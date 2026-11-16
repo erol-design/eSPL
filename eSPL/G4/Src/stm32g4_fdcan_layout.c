@@ -26,6 +26,34 @@ static uint32_t FDCAN_InstanceCount(FDCAN_SkuTypeDef sku)
     return count;
 }
 
+/* Per-instance section start words and element sizes (RM0440 44.3.6, Figure 670). The same
+ * values are FDCAN_RAM_*_WORD in stm32g4_fdcan.c; both files pin them to the derivation below. */
+#define FDCAN_LAYOUT_EXT_FILTER_WORD 28U
+#define FDCAN_LAYOUT_RX_FIFO0_WORD 44U
+#define FDCAN_LAYOUT_RX_FIFO1_WORD 98U
+#define FDCAN_LAYOUT_TX_EVENT_WORD 152U
+#define FDCAN_LAYOUT_TX_FIFO_WORD 158U
+#define FDCAN_LAYOUT_ELEMENT_WORDS 18U
+#define FDCAN_LAYOUT_EVENT_WORDS 2U
+
+/* Compile-time check (CCL-2 YAP-03): each section starts where the previous one ends when
+ * sized from the public FDCAN_*_MAX limits, and the Tx FIFO ends exactly at
+ * FDCAN_MESSAGE_RAM_WORDS_PER_INSTANCE. */
+typedef char Fdcan_LayoutSectionCheck
+    [((FDCAN_LAYOUT_EXT_FILTER_WORD == (FDCAN_STANDARD_FILTER_MAX * 1U)) &&
+      (FDCAN_LAYOUT_RX_FIFO0_WORD ==
+       (FDCAN_LAYOUT_EXT_FILTER_WORD + (FDCAN_EXTENDED_FILTER_MAX * 2U))) &&
+      (FDCAN_LAYOUT_RX_FIFO1_WORD ==
+       (FDCAN_LAYOUT_RX_FIFO0_WORD + (FDCAN_RX_FIFO_ELEMENT_MAX * FDCAN_LAYOUT_ELEMENT_WORDS))) &&
+      (FDCAN_LAYOUT_TX_EVENT_WORD ==
+       (FDCAN_LAYOUT_RX_FIFO1_WORD + (FDCAN_RX_FIFO_ELEMENT_MAX * FDCAN_LAYOUT_ELEMENT_WORDS))) &&
+      (FDCAN_LAYOUT_TX_FIFO_WORD ==
+       (FDCAN_LAYOUT_TX_EVENT_WORD + (FDCAN_TX_EVENT_ELEMENT_MAX * FDCAN_LAYOUT_EVENT_WORDS))) &&
+      (FDCAN_MESSAGE_RAM_WORDS_PER_INSTANCE ==
+       (FDCAN_LAYOUT_TX_FIFO_WORD + (FDCAN_TX_FIFO_ELEMENT_MAX * FDCAN_LAYOUT_ELEMENT_WORDS))))
+         ? 1
+         : -1];
+
 /* RM0440 Rev 9, section 44.3.6, Figure 670: fixed physical reservations.
  * Active filter counts never move the following sections. */
 static FDCAN_MessageRamSectionTypeDef FDCAN_Section(uint32_t start, uint32_t count,
@@ -76,11 +104,16 @@ SPL_Status FDCAN_LayoutCalculate(FDCAN_SkuTypeDef sku, uint32_t instance,
     candidate.instance_start_word = base;
     candidate.instance_end_word = base + FDCAN_MESSAGE_RAM_WORDS_PER_INSTANCE;
     candidate.standard_filters = FDCAN_Section(base, config->standard_filter_count, 1U);
-    candidate.extended_filters = FDCAN_Section(base + 28U, config->extended_filter_count, 2U);
-    candidate.rx_fifo0 = FDCAN_Section(base + 44U, 3U, 18U);
-    candidate.rx_fifo1 = FDCAN_Section(base + 98U, 3U, 18U);
-    candidate.tx_events = FDCAN_Section(base + 152U, 3U, 2U);
-    candidate.tx_fifo = FDCAN_Section(base + 158U, 3U, 18U);
+    candidate.extended_filters =
+        FDCAN_Section(base + FDCAN_LAYOUT_EXT_FILTER_WORD, config->extended_filter_count, 2U);
+    candidate.rx_fifo0 = FDCAN_Section(base + FDCAN_LAYOUT_RX_FIFO0_WORD,
+                                       FDCAN_RX_FIFO_ELEMENT_MAX, FDCAN_LAYOUT_ELEMENT_WORDS);
+    candidate.rx_fifo1 = FDCAN_Section(base + FDCAN_LAYOUT_RX_FIFO1_WORD,
+                                       FDCAN_RX_FIFO_ELEMENT_MAX, FDCAN_LAYOUT_ELEMENT_WORDS);
+    candidate.tx_events = FDCAN_Section(base + FDCAN_LAYOUT_TX_EVENT_WORD,
+                                        FDCAN_TX_EVENT_ELEMENT_MAX, FDCAN_LAYOUT_EVENT_WORDS);
+    candidate.tx_fifo = FDCAN_Section(base + FDCAN_LAYOUT_TX_FIFO_WORD, FDCAN_TX_FIFO_ELEMENT_MAX,
+                                      FDCAN_LAYOUT_ELEMENT_WORDS);
     candidate.used_words = FDCAN_MESSAGE_RAM_WORDS_PER_INSTANCE;
     candidate.free_words = 0U;
     *layout = candidate;

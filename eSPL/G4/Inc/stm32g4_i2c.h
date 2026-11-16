@@ -16,6 +16,21 @@ extern "C"
      * when PCLK/I2CCLK is in 1.5..3 (the driver never prefills TXDR): keep the
      * ratio < 1.5 or > 3 (e.g. I2CCLK = PCLK1).
      * Target-mode errata are handled by the v0.17 target APIs below. */
+    /* Caller duties (CCL-2 driver-library hand-off). This driver has no device knowledge
+     * and no sleep entry; the device driver or application above it owns:
+     * - Caller duty (CCL-2 I2C-28, I2C-29): after each write to a device with a write
+     *   cycle (e.g. EEPROM) poll its address for ACK with a bounded retry count, or wait a
+     *   fixed time, before the next command; split writes at the device page boundary.
+     * - Caller duty (CCL-2 I2C-27): verify any checksum/CRC field the device sends before
+     *   using the data. With PEC, I2C_StopDetected, I2C_TransferComplete and the target
+     *   byte services return ERR_HW while PECERR is set (flag kept: read I2C_GetErrors,
+     *   then clear); a DMA transfer reads I2C_GetErrors itself at the end.
+     * - Caller duty (CCL-2 I2C-30): this driver never enters a low-power mode; before
+     *   WFI/WFE make sure no transfer runs (ISR.BUSY=0, STOP sent and detected).
+     * - Caller duty (CCL-2 I2C-24): target mode is polled and enables no interrupt; handle
+     *   every ADDR (I2C_TargetPollAddress, I2C_TargetAckAddress), STOPF (I2C_ClearStop)
+     *   and NACKF (I2C_ClearErrorFlags) event and reset the buffer index and direction on
+     *   every STOP or NACK. */
     /* Seviye: PARAM[S] STATE[r] */
     SPL_Status I2C_MasterInit(I2C_TypeDef *i2c, uint32_t timingr);
     /* Start/StartNoStop/StartLong: TC=1 or TCR=1 (bus still held by the
@@ -164,7 +179,10 @@ extern "C"
 
     /* PE must be zero. Programs TIMINGR, OAR1/OAR2 and target CR1. WUPEN
      * requires I2C1, clock stretching and DNF=0; the caller must select HSI16
-     * as I2C1 kernel clock before entering Stop mode. */
+     * as I2C1 kernel clock before entering Stop mode.
+     * ERRATA ES0431 2.11.4 / ES0430 2.15.4 / ES0523 2.11.3 (no software workaround, caller): with
+     * no_stretch=1 a transmit underrun may not set OVR; keep clock stretching enabled unless the
+     * target byte service latency is bounded tightly enough. */
     /* Seviye: PARAM[S,n] STATE[S] UNSUPPORTED[S] */
     SPL_Status I2C_TargetInit(I2C_TypeDef *i2c, const I2C_TargetConfigTypeDef *cfg);
     /* ADDR=0 -> WOULD_BLOCK. Returns ADDCODE and DIR without clearing ADDR. */

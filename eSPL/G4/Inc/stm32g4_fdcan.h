@@ -49,6 +49,9 @@ extern "C"
         FDCAN_NONMATCH_REJECT = 2
     } FDCAN_NonMatchTypeDef;
 
+    /* Caller duty (CCL-2 CAN-03d): choose FDCAN_NONMATCH_REJECT for nonmatch_std/ext, or,
+     * when non-matching frames go to a FIFO, check id (filter_index ==
+     * FDCAN_FILTER_INDEX_NONE) after FDCAN_TryRead and discard unknown IDs. */
     typedef struct
     {
         uint32_t std_filter_count; /* LSS 0..28 */
@@ -114,7 +117,12 @@ extern "C"
         uint8_t data[64];
     } FDCAN_FrameTypeDef;
 
-    /* Seviye: PARAM[S] */
+    /* Sets CCCR.INIT. With INIT = 0 and a pending transmission request (TXBRP != 0) -> BUSY, no
+     * write: entering init stops transfers and CCE (set by the configuration APIs) resets
+     * TXBRP. Retry when the requests complete, or cancel them first with FDCAN_TxCancel (a
+     * request that never completes, e.g. no ACK, needs the cancel). INIT = 1 already (software
+     * or bus-off) is accepted. */
+    /* Seviye: PARAM[S] BUSY[r] */
     SPL_Status FDCAN_RequestInit(FDCAN_GlobalTypeDef *can);
     /* Seviye: PARAM[S] */
     SPL_Status FDCAN_InitReady(FDCAN_GlobalTypeDef *can, uint8_t *ready);
@@ -128,7 +136,9 @@ extern "C"
     /* DESTRUCTIVE STATUS READ: Reading PSR may reset LEC/DLEC to 7,
      * and reading ECR resets CEL on M_CAN. Capture or log the returned
      * snapshot; do not call this API merely to check that an instance exists.
-     * Callers coordinating multiple diagnostics must serialize this read. */
+     * Callers coordinating multiple diagnostics must serialize this read.
+     * Caller duty (CCL-2 CAN-10b): detect error passive, either by enabling FDCAN_IE_EPE
+     * and handling it, or by calling this API periodically and evaluating PSR.EP / ECR. */
     /* Seviye: PARAM[S] */
     SPL_Status FDCAN_Status(FDCAN_GlobalTypeDef *can, uint32_t *psr, uint32_t *ecr);
     /* Seviye: PARAM[S] */
@@ -158,7 +168,8 @@ extern "C"
 
     /* Adds one frame at TXFQS.TFQPI and requests it (TXBAR). INIT must be 0:
      * INIT=1 (software init, or set by hardware on bus-off) => STATE; recover
-     * via FDCAN_Status (PSR.BO) and FDCAN_LeaveInit.
+     * via FDCAN_Status (PSR.BO) and FDCAN_LeaveInit. Bus monitoring mode (MON = 1, TEST = 0,
+     * FDCAN_SetTestMode) => STATE: the core cannot transmit there.
      * WOULD_BLOCK when the FIFO/queue is full. buffer (may be NULL) returns
      * the Tx buffer index 0..2 used, for TxCancel/TxStatus. */
     /* Seviye: PARAM[S,r] STATE[r] HW[r] WOULD_BLOCK[r] */
@@ -175,7 +186,9 @@ extern "C"
     /* Reads the element at the get index of RX FIFO 0/1, then acknowledges it.
      * CCE must be 0. Empty: WOULD_BLOCK, or STATE when INIT=1 (bus-off sets
      * INIT; nothing can arrive). Frames already queued stay readable with
-     * INIT=1. Bytes >= length are zero. Does not report message lost. */
+     * INIT=1. Bytes >= length are zero. Does not report message lost.
+     * Caller duty (CCL-2 CAN-06a): one call reads one frame and RFxN is a per-message event
+     * flag, so the RX interrupt handler must call this until WOULD_BLOCK (FIFO empty). */
     /* Seviye: PARAM[S] STATE[r] HW[r] WOULD_BLOCK[r] */
     SPL_Status FDCAN_TryRead(FDCAN_GlobalTypeDef *can, uint32_t fifo, FDCAN_FrameTypeDef *frame);
     /* Plain read of RXFxS: fill level 0..3 and message-lost flag (RFxL). */
@@ -186,7 +199,9 @@ extern "C"
     /* Seviye: PARAM[S] */
     SPL_Status FDCAN_ClearRxLost(FDCAN_GlobalTypeDef *can, uint32_t fifo);
 
-    /* IE / ILS / ILE full-register writes; unknown bits => SPL_ERR_PARAM. */
+    /* IE / ILS / ILE full-register writes; unknown bits => SPL_ERR_PARAM.
+     * Caller duty (CCL-2 CAN-11a): route each enabled source group (ILS) to a line (IT0/IT1)
+     * enabled in ILE whose NVIC handler is defined and services that source's IR flags. */
     /* Seviye: PARAM[S] */
     SPL_Status FDCAN_IrqEnable(FDCAN_GlobalTypeDef *can, uint32_t ie_mask);
     /* Seviye: PARAM[S] */

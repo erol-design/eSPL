@@ -199,8 +199,6 @@ static SPL_Status Lptim_SyncedWrite(LPTIM_TypeDef *lptim, uint32_t *pending, uin
 
 SPL_Status LPTIM_SetAutoReload(LPTIM_TypeDef *lptim, LPTIM_SyncTypeDef *sync, uint32_t arr)
 {
-    uint32_t count;
-
     /* SAFE: reject invalid parameters before hardware access. */
     SPL_REQUIRE_SAFE(!((Lptim_ValidInstance(lptim) == 0U) || (sync == (LPTIM_SyncTypeDef *)0) || (arr == 0U) ||
         (arr > LPTIM_REG16_MAX)), SPL_ERR_PARAM);
@@ -209,23 +207,14 @@ SPL_Status LPTIM_SetAutoReload(LPTIM_TypeDef *lptim, LPTIM_SyncTypeDef *sync, ui
     /* SAFE: reject invalid parameters before hardware access. */
     SPL_REQUIRE_SAFE(!((Lptim_WriteGateOpen(lptim) != 0U) && (arr <= (lptim->CMP & LPTIM_CMP_CMP))), SPL_ERR_PARAM);
     /* RM0440 33.4.10: PRELOAD=0 updates ARR at once; an ARR at or below the
-     * running counter makes the period run to 0xFFFF. With RSTARE=1 the
-     * counter cannot be read (a read resets it): shrinking is refused. */
+     * running counter makes the period run to 0xFFFF. Comparing with a counter
+     * read races the moving counter (CCL-2 ZMN-02), so a running LPTIM with
+     * PRELOAD=0 refuses every shrink: STATE, no write. Use PRELOAD=1 (update at
+     * the period end) or disable the timer first. Growing ARR is safe. */
     if (((lptim->CFGR & LPTIM_CFGR_PRELOAD) == 0U) && (arr < (lptim->ARR & LPTIM_ARR_ARR)) &&
         (Lptim_WriteGateOpen(lptim) != 0U))
     {
-        if ((lptim->CR & LPTIM_CR_RSTARE) != 0U)
-        {
-            return SPL_ERR_STATE;
-        }
-        if (LPTIM_ReadCounter(lptim, &count) != SPL_OK)
-        {
-            return SPL_BUSY; /* counter moving faster than three reads */
-        }
-        if (arr <= count)
-        {
-            return SPL_ERR_STATE;
-        }
+        return SPL_ERR_STATE;
     }
     return Lptim_SyncedWrite(lptim, &sync->arr_pending, LPTIM_ISR_ARROK, &lptim->ARR, arr);
 }

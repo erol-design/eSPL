@@ -447,7 +447,7 @@ static const Rcc_PeriphEntry rcc_periph[RCC_PERIPH_COUNT] = {
 #define RCC_KCLASS_QSPI 8U  /* QUADSPI */
 #define RCC_KCLASS_COUNT 9U
 
-static const uint8_t rcc_kernel_map[RCC_KCLASS_COUNT][4] = {
+static const uint8_t rcc_kernel_map[][4] = {
     {0U, 0U, 0U, 0U},
     {RCC_KCLK_PCLK, RCC_KCLK_SYSCLK, RCC_KCLK_HSI16, RCC_KCLK_LSE},
     {RCC_KCLK_PCLK, RCC_KCLK_SYSCLK, RCC_KCLK_HSI16, 0U},
@@ -458,6 +458,20 @@ static const uint8_t rcc_kernel_map[RCC_KCLASS_COUNT][4] = {
     {RCC_KCLK_NONE, RCC_KCLK_PLLP, RCC_KCLK_SYSCLK, 0U},
     {RCC_KCLK_SYSCLK, RCC_KCLK_HSI16, RCC_KCLK_PLLQ, 0U},
 };
+
+/* Compile-time check (CCL-2 YAP-03): one rcc_kernel_map row per class 0..RCC_KCLASS_COUNT-1,
+ * every RCC_KCLASS_* value indexes a row, and each row has one entry per code of a 2-bit
+ * selector field (mask 3, codes 0..3, as used by RCC_SetKernelClock/RCC_GetKernelSource). */
+typedef char Rcc_KernelMapCheck
+    [(((sizeof(rcc_kernel_map) / sizeof(rcc_kernel_map[0])) == RCC_KCLASS_COUNT) &&
+      (RCC_KCLASS_UART < RCC_KCLASS_COUNT) && (RCC_KCLASS_I2C < RCC_KCLASS_COUNT) &&
+      (RCC_KCLASS_LPTIM < RCC_KCLASS_COUNT) && (RCC_KCLASS_SAI < RCC_KCLASS_COUNT) &&
+      (RCC_KCLASS_FDCAN < RCC_KCLASS_COUNT) && (RCC_KCLASS_CLK48 < RCC_KCLASS_COUNT) &&
+      (RCC_KCLASS_ADC < RCC_KCLASS_COUNT) && (RCC_KCLASS_QSPI < RCC_KCLASS_COUNT) &&
+      ((sizeof(rcc_kernel_map[0]) / sizeof(rcc_kernel_map[0][0])) == 4U) &&
+      ((RCC_CCIPR_I2C1SEL_Msk >> RCC_CCIPR_I2C1SEL_Pos) == 3U))
+         ? 1
+         : -1];
 
 typedef struct
 {
@@ -659,6 +673,10 @@ static const uint8_t rcc_kernel_users[RCC_KERNEL_COUNT][2] = {
     [RCC_KERNEL_ADC345] = {RCC_PERIPH_ADC345, RCC_PERIPH_COUNT},
     [RCC_KERNEL_QSPI] = {RCC_PERIPH_QSPI, RCC_PERIPH_COUNT},
 };
+
+/* Compile-time check (CCL-2 YAP-03): every RCC_PERIPH_* id and the RCC_PERIPH_COUNT "none"
+ * marker fit the uint8_t entries of rcc_kernel_users. */
+typedef char Rcc_KernelUsersCheck[((uint32_t)RCC_PERIPH_COUNT <= UINT8_MAX) ? 1 : -1];
 
 /* 1 when src is the kernel clock of a peripheral whose bus clock is on, or
  * (rtcsel != 0) the RTC clock with RTCEN = 1 (RM0440 7.4.26, 7.4.30, 7.4.27).

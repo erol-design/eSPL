@@ -218,7 +218,11 @@ extern "C"
      * QSPI_CommConfig (FMODE=10) that may start polling. */
     /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] BUSY[r] */
     SPL_Status QSPI_AutoPollingConfig(const QSPI_AutoPollTypeDef *cfg);
-    /* LPTR = timeout, then CR.TCEN = enable. BUSY=0 required. */
+    /* LPTR = timeout, then CR.TCEN = enable. BUSY=0 required.
+     * QSPI_Init leaves the timeout off (TCEN = 0): in memory-mapped mode NCS then stays active
+     * (memory selected) after the last access until QSPI_Abort, which costs supply current and
+     * keeps the memory out of its standby state (CCL-2 DBL-02). Enable it here when the memory
+     * should be released between accesses; keeping it off is the caller's decision. */
     /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] BUSY[r] */
     SPL_Status QSPI_MemoryMappedTimeout(uint16_t timeout, uint8_t enable);
     /* CR.DMAEN = enable. Allowed in any BUSY state (no RM restriction). */

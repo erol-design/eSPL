@@ -811,6 +811,14 @@ SPL_Status RTC_WakeupClearFlag(void)
     return SPL_OK;
 }
 
+/* Compile-time check (CCL-2 YAP-03): RTC_BACKUP_NB words from TAMP->BKP0R stay inside the
+ * CMSIS TAMP register block (BKP0R..BKP(RTC_BACKUP_NB-1)R are its last members). */
+typedef char Rtc_BackupCountCheck
+    [((offsetof(TAMP_TypeDef, BKP0R) + ((size_t)RTC_BACKUP_NB * sizeof(uint32_t))) <=
+      sizeof(TAMP_TypeDef))
+         ? 1
+         : -1];
+
 SPL_Status RTC_BackupWrite(uint32_t index, uint32_t value)
 {
     volatile uint32_t *bkp = &TAMP->BKP0R;

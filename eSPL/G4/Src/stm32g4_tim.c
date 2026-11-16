@@ -163,6 +163,12 @@ SPL_Status TIM_UpdateInterrupt(TIM_TypeDef *t, uint8_t enable)
     SPL_REQUIRE_SAFE(!((Tim_IsBase(t) == 0U) || (enable > 1U)), SPL_ERR_PARAM);
     if (enable != 0U)
     {
+        /* Stale UIF: the interrupt would fire at once for an old event (CCL-2 KSM-12; same
+         * rule as RTC_AlarmAEnable). STATE, no write: clear it with TIM_ClearUpdate first. */
+        if ((t->SR & TIM_SR_UIF) != 0U)
+        {
+            return SPL_ERR_STATE;
+        }
         t->DIER |= TIM_DIER_UIE;
     }
     else
@@ -741,7 +747,7 @@ SPL_Status TIM_ComplementaryEnable(TIM_TypeDef *t, uint8_t ch, uint8_t enable)
     {
         return SPL_ERR_STATE;
     }
-    /* Once 32 bit degiskene alinir: host'ta unsigned long 64 bittir (kaydirma uint32_t'de). */
+    /* Load into the 32-bit variable first: unsigned long is 64-bit on the host (shift in uint32_t). */
     mask = TIM_CCER_CC1NE;
     mask <<= 4U * ((uint32_t)ch - 1U);
     if (enable != 0U)
@@ -808,6 +814,14 @@ SPL_Status TIM_BreakDeadTimeInit(TIM_TypeDef *t, const TIM_BreakDeadTimeInitType
     SPL_REQUIRE_SAFE(!((cfg->break2_enable != 0U) && ((cfg->off_state_run == 0U) || (cfg->off_state_idle == 0U))), SPL_ERR_PARAM);
     /* Outputs must be off; LOCK >= 1 freezes DTG/BKE/BKP/AOE/BKF/BK2x and LOCK itself. */
     if (((t->BDTR & TIM_BDTR_MOE) != 0U) || (Tim_LockLevel(t) != 0U))
+    {
+        return SPL_ERR_STATE;
+    }
+    /* Zero dead time with a complementary output already enabled: MOE would drive both switches
+     * of a bridge leg at the same edge (CCL-2 ZMN-09; TIM_ComplementaryEnable rejects the
+     * opposite order). STATE, no write. */
+    if ((cfg->dead_time == 0U) &&
+        ((t->CCER & (TIM_CCER_CC1NE | TIM_CCER_CC2NE | TIM_CCER_CC3NE | TIM_CCER_CC4NE)) != 0U))
     {
         return SPL_ERR_STATE;
     }

@@ -41,7 +41,7 @@ typedef struct
 } Dbgmcu_FreezeBit;
 
 /* Indexed by DBGMCU_FreezeTypeDef (order checked by the host test). */
-static const Dbgmcu_FreezeBit dbgmcu_freeze[DBGMCU_FZ_COUNT] = {
+static const Dbgmcu_FreezeBit dbgmcu_freeze[] = {
     {DBGMCU_REG_APB1FZR1, DBGMCU_APB1FZR1_DBG_TIM2_STOP_Msk},
     {DBGMCU_REG_APB1FZR1, DBGMCU_APB1FZR1_DBG_TIM3_STOP_Msk},
     {DBGMCU_REG_APB1FZR1, DBGMCU_APB1FZR1_DBG_TIM4_STOP_Msk},
@@ -64,6 +64,11 @@ static const Dbgmcu_FreezeBit dbgmcu_freeze[DBGMCU_FZ_COUNT] = {
     {DBGMCU_REG_APB2FZ, DBGMCU_M_TIM20},
     {DBGMCU_REG_APB2FZ, DBGMCU_M_HRTIM1},
 };
+
+/* Compile-time check (CCL-2 YAP-03): one dbgmcu_freeze entry per DBGMCU_FreezeTypeDef value
+ * 0..DBGMCU_FZ_COUNT-1 (an entry left out would otherwise be silently zero). */
+typedef char Dbgmcu_FreezeTableCheck
+    [((sizeof(dbgmcu_freeze) / sizeof(dbgmcu_freeze[0])) == (uint32_t)DBGMCU_FZ_COUNT) ? 1 : -1];
 
 static volatile uint32_t *Dbgmcu_FreezeReg(uint32_t reg)
 {

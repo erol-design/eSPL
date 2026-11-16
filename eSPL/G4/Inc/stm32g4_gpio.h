@@ -20,6 +20,8 @@ typedef struct {
     uint32_t alternate;      /* 0..15; used only in AF mode */
     uint32_t initial_level; /* 0 or 1, applied via BSRR before output MODER */
 } GPIO_InitTypeDef;
+/* Caller duty (CCL-2 GPIO-03): GPIO_Init writes every field to the registers; call
+ * GPIO_StructInit (or zero-initialize) and set every field before each GPIO_Init call. */
 void GPIO_StructInit(GPIO_InitTypeDef *cfg);
 /* Clock must be enabled by caller. Configuration is not concurrency-safe.
  * A selected pin locked through GPIOx_LCKR causes SPL_ERR_STATE with no writes.

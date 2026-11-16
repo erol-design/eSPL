@@ -87,6 +87,8 @@ extern "C"
     /* Seviye: PARAM[S] STATE[r] BUSY[r] */
     SPL_Status ADC_PowerRegulator(ADC_TypeDef *adc);
     /* Single-ended calibration (same as ADC_StartCalibrationMode(adc, ADC_CAL_SINGLE)). */
+    /* Caller duty (CCL-2 ADC-01b): CFGR.DMAEN is not checked here or in
+     * ADC_StartCalibrationMode; call ADC_DisableDma before calibration if DMA was enabled. */
     /* Seviye: PARAM[S] STATE[r] */
     SPL_Status ADC_StartCalibration(ADC_TypeDef *adc);
     /* Seviye: PARAM[S] */
@@ -109,6 +111,9 @@ extern "C"
      * the previous conversion may be wrong (all revisions); convert twice, drop the first. */
     /* Seviye: PARAM[S] STATE[r] HW[r] BUSY[r] */
     SPL_Status ADC_Start(ADC_TypeDef *adc);
+    /* Caller duty (CCL-2 ADC-08b): on OVR (ERR_HW here, or the OVR flag) the library restarts
+     * nothing; the caller clears OVR (ADC_ClearErrors) and restarts the conversion and, when
+     * DMA is used, the DMA channel. */
     /* OVR: ERR_HW. EOC=0: disabled -> ERR_STATE; enabled and ADSTART=1 -> WOULD_BLOCK;
      * v0.11.1: enabled and ADSTART=0 (nothing running, sample already read, stopped) ->
      * ERR_STATE. Retained EOC data can be read after disable. Error leaves output unchanged. */
@@ -118,6 +123,11 @@ extern "C"
     /* Seviye: PARAM[S] */
     SPL_Status ADC_ClearErrors(ADC_TypeDef *adc);
     /* ADSTART=1 or JADSTART=1: ERR_STATE (RM0440 21.7.4 DMAEN/DMACFG). */
+    /* Caller duty (CCL-2 ADC-06a, ADC-06b, ADC-06c, ADC-06d): the library does not link the
+     * ADC sequence to the DMA channel. The caller maps buffer index n to sequence rank n, sets
+     * the DMA count to a multiple of the sequence length, enables the DMA channel before
+     * ADC_Start, and with repeated scans uses circular here and DMA circular together (or
+     * re-arms ADC and DMA after each one-shot sequence). */
     /* ERRATA ES0431 2.5.10 / ES0430 2.7.10 / ES0523 2.6.8 (Rev Y; G491/G4A1 Rev A): after a
      * one-shot DMA end the first conversion reads channel 0 (result 0); discard it or ADC_Disable +
      * ADC_Enable. */

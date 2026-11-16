@@ -58,6 +58,59 @@ typedef char Fdcan_PayloadCheck[((sizeof(((FDCAN_FrameTypeDef *)0)->data) >= FDC
                                     ? 1
                                     : -1];
 
+/* Compile-time check (CCL-2 YAP-03): every Message RAM section ends at or before the next
+ * section start, and the Tx buffers end inside the per-instance block (212 words). Section
+ * sizes: 28 standard filters x 1 word, 8 extended filters x 2, 3 Rx FIFO0 / FIFO1 elements x
+ * 18, 3 Tx event elements x 2, 3 Tx buffers x 18. */
+typedef char Fdcan_RamLayoutCheck
+    [((FDCAN_RAM_STD_FILTER_WORD + (FDCAN_STANDARD_FILTER_MAX * 1U)) <= FDCAN_RAM_EXT_FILTER_WORD) &&
+             ((FDCAN_RAM_EXT_FILTER_WORD + (FDCAN_EXTENDED_FILTER_MAX * 2U)) <= FDCAN_RAM_RX_FIFO0_WORD) &&
+             ((FDCAN_RAM_RX_FIFO0_WORD + (FDCAN_RX_FIFO_ELEMENT_MAX * FDCAN_RAM_ELEMENT_WORDS)) <=
+              FDCAN_RAM_RX_FIFO1_WORD) &&
+             ((FDCAN_RAM_RX_FIFO1_WORD + (FDCAN_RX_FIFO_ELEMENT_MAX * FDCAN_RAM_ELEMENT_WORDS) +
+               (FDCAN_TX_EVENT_ELEMENT_MAX * 2U)) <= FDCAN_RAM_TX_BUFFER_WORD) &&
+             ((FDCAN_RAM_TX_BUFFER_WORD + (FDCAN_TX_FIFO_ELEMENT_MAX * FDCAN_RAM_ELEMENT_WORDS)) <=
+              FDCAN_MESSAGE_RAM_WORDS_PER_INSTANCE)
+         ? 1
+         : -1];
+
+/* Compile-time check (CCL-2 YAP-03): the section starts equal the tightly packed derivation
+ * from the public FDCAN_*_MAX limits, the same derivation stm32g4_fdcan_layout.c checks for
+ * FDCAN_LayoutCalculate, so the driver and the FD-01 layout cannot drift apart. */
+typedef char Fdcan_RamLayoutSyncCheck
+    [((FDCAN_RAM_STD_FILTER_WORD == 0U) &&
+      (FDCAN_RAM_EXT_FILTER_WORD == (FDCAN_STANDARD_FILTER_MAX * 1U)) &&
+      (FDCAN_RAM_RX_FIFO0_WORD == (FDCAN_RAM_EXT_FILTER_WORD + (FDCAN_EXTENDED_FILTER_MAX * 2U))) &&
+      (FDCAN_RAM_RX_FIFO1_WORD ==
+       (FDCAN_RAM_RX_FIFO0_WORD + (FDCAN_RX_FIFO_ELEMENT_MAX * FDCAN_RAM_ELEMENT_WORDS))) &&
+      (FDCAN_RAM_TX_BUFFER_WORD ==
+       (FDCAN_RAM_RX_FIFO1_WORD + (FDCAN_RX_FIFO_ELEMENT_MAX * FDCAN_RAM_ELEMENT_WORDS) +
+        (FDCAN_TX_EVENT_ELEMENT_MAX * 2U))) &&
+      (FDCAN_MESSAGE_RAM_WORDS_PER_INSTANCE ==
+       (FDCAN_RAM_TX_BUFFER_WORD + (FDCAN_TX_FIFO_ELEMENT_MAX * FDCAN_RAM_ELEMENT_WORDS))))
+         ? 1
+         : -1];
+
+/* Number of FDCAN instances on this SKU (Fdcan_Index returns 0..FDCAN_INSTANCE_COUNT-1). */
+#if defined(FDCAN3)
+#define FDCAN_INSTANCE_COUNT 3U
+#elif defined(FDCAN2)
+#define FDCAN_INSTANCE_COUNT 2U
+#else
+#define FDCAN_INSTANCE_COUNT 1U
+#endif
+/* RM0440 44.3.6: Message RAM of instance n starts at SRAMCAN_BASE + n * 0x350. */
+#define FDCAN_RAM_INSTANCE_STRIDE 0x350U
+
+/* Compile-time check (CCL-2 YAP-03): 212 words per instance is the RM 0x350-byte stride, and
+ * all instance blocks end below APB2PERIPH_BASE, the closest bound CMSIS gives for SRAMCAN
+ * (CMSIS has no SRAMCAN size macro). */
+typedef char Fdcan_RamInstanceCheck
+    [(((FDCAN_MESSAGE_RAM_WORDS_PER_INSTANCE * 4U) == FDCAN_RAM_INSTANCE_STRIDE) &&
+      ((SRAMCAN_BASE + (FDCAN_INSTANCE_COUNT * FDCAN_RAM_INSTANCE_STRIDE)) <= APB2PERIPH_BASE))
+         ? 1
+         : -1];
+
 /* Zero-based instance number, or FDCAN_INSTANCE_NONE. Message RAM of
  * instance n starts at SRAMCAN_BASE + n * 0x350 (RM0440 44.3.6). */
 static uint32_t Fdcan_Index(const FDCAN_GlobalTypeDef *can)
@@ -114,6 +167,15 @@ SPL_Status FDCAN_RequestInit(FDCAN_GlobalTypeDef *can)
 {
     /* SAFE: invalid input may cause an incorrect MMIO access or silent data corruption. */
     SPL_REQUIRE_SAFE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
+    /* Entering init stops transfers; the configuration APIs then set CCE, which resets TXBRP
+     * (RM0440 44.3.4, v0.10_FDCAN_CONTRACT). Pending transmission requests are dropped:
+     * with INIT = 0 and TXBRP != 0 a frame would be lost silently (CCL-2 CAN-09b). BUSY until
+     * the requests complete, or the caller cancels them with FDCAN_TxCancel. INIT = 1 already
+     * (software or bus-off) is not blocked: nothing more is lost by writing INIT again. */
+    if (((can->CCCR & FDCAN_CCCR_INIT) == 0U) && (can->TXBRP != 0U))
+    {
+        return SPL_BUSY;
+    }
 
     can->CCCR |= FDCAN_CCCR_INIT;
     return SPL_OK;
@@ -503,7 +565,11 @@ SPL_Status FDCAN_TryWrite(FDCAN_GlobalTypeDef *can, const FDCAN_FrameTypeDef *fr
      * sent and the FIFO would only fill up. INIT = 1 also covers CCE = 1
      * (TXBAR not writable). With FDOE/BRSE clear the core silently ignores
      * FDF/BRS (Table 410): reject instead. */
+    /* Bus monitoring (MON = 1, TEST = 0) cannot start a transmission: a queued frame would never
+     * be sent and the queue would fill up (CCL-2 YAP-09). Internal loopback (MON = 1, TEST = 1)
+     * transmits and is allowed. */
     if ((Fdcan_InitSet(can) != 0U) ||
+        ((can->CCCR & (FDCAN_CCCR_MON | FDCAN_CCCR_TEST)) == FDCAN_CCCR_MON) ||
         ((frame->fdf != 0U) && ((can->CCCR & FDCAN_CCCR_FDOE) == 0U)) ||
         ((frame->brs != 0U) && ((can->CCCR & FDCAN_CCCR_BRSE) == 0U)))
     {

@@ -90,6 +90,11 @@ typedef enum
     EXTI_CLASS_CONFIGURABLE = 3
 } Exti_Class;
 
+/* Compile-time check (CCL-2 YAP-03): every line 0..EXTI_LINE_COUNT-1 maps to bank 1 (IMR1..,
+ * lines 0..31) or bank 2 (IMR2.., lines 32..63) of 32 bits each, as Exti_Classify assumes. */
+typedef char Exti_LineCountCheck[((EXTI_LINE_COUNT > 32U) && (EXTI_LINE_COUNT <= (2U * 32U))) ? 1
+                                                                                             : -1];
+
 static uint32_t Exti_Bit(uint8_t line)
 {
     return (uint32_t)1U << ((uint32_t)line & 31U);

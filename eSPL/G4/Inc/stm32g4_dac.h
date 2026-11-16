@@ -13,6 +13,11 @@ extern "C"
  * dual-channel DACs only (DAC2 is single-channel: SPL_ERR_UNSUPPORTED).
  * DAC3/DAC4 have no GPIO connection and no output buffer (RM0440 22.3): only
  * DAC_MODE_INT_UNBUFFERED is accepted there. The DAC AHB clock is enabled by the caller.
+ * Pin (caller duty, CCL-2 ANL-08): with an external-pin mode (DAC_MODE_EXT_*) the caller puts
+ * the DAC output pin (DAC1 OUT1 PA4, OUT2 PA5; DAC2 OUT1 PA6) in analog mode (GPIO_MODE_ANALOG)
+ * before DAC_Enable and assigns no other function (alternate function, GPIO output, another
+ * analog output) to it while the channel is enabled; otherwise two drivers fight on the pin.
+ * DAC_MODE_INT_UNBUFFERED leaves the pin free. The library does not touch GPIO.
  * Not reentrant per instance: serialize calls (ISR included). */
 
 /* Channel numbers. */

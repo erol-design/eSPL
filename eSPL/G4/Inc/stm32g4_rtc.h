@@ -216,6 +216,8 @@ extern "C"
     SPL_Status RTC_BackupRead(uint32_t index, uint32_t *value);
 
     /* --- Timestamp, calibration, output and daylight saving --- */
+    /* Caller duty (CCL-2 KSM-12): irq = 1 does not check TSF/ITSF; clear them first
+     * (RTC_TimestampGet reads and clears them) before enabling the interrupt. */
     /* Seviye: PARAM[n] STATE[r] */
     SPL_Status RTC_TimestampConfig(uint8_t enable, uint8_t falling_edge, uint8_t internal,
                                    uint8_t irq);
@@ -230,6 +232,15 @@ extern "C"
     SPL_Status RTC_DaylightSaving(int8_t hour_step, uint8_t backup_bit);
 
     /* --- TAMP external and internal event control --- */
+    /* ERRATA ES0431 2.10.3 / ES0430 2.14.3 / ES0523 2.10.3 (no workaround, caller): with
+     * timestamp-on-tamper (RTC_CR.TAMPTS, set outside this API) a tamper event can be lost for four
+     * APB cycles and two ck_apre cycles after clearing TSF; do not use that interval as the only
+     * security signal.
+     * ERRATA ES0431 2.10.5 / ES0430 2.14.5 / ES0523 2.10.5 (no workaround, caller): with TAMPTS an
+     * LSE failure can erase or block secrets without setting ITAMP3F; monitor the RCC LSE CSS
+     * independently when ITAMP3 is security relevant. */
+    /* Caller duty (CCL-2 KSM-12): TAMP_InputConfig / TAMP_InternalConfig irq bits do not check
+     * TAMP_SR; clear stale flags with TAMP_ClearFlags before enabling the interrupt. */
     /* Seviye: PARAM[S,n] STATE[r] */
     SPL_Status TAMP_InputConfig(uint8_t input, const TAMP_InputTypeDef *cfg);
     /* Seviye: PARAM[S,n] STATE[S,r] */

@@ -10,6 +10,17 @@
  * CMSIS NVIC_EncodePriority). PRIGROUP = 7 - group for group <= PRIO_BITS. */
 #define NVIC_PRIGROUP_TOP 7U
 
+/* Compile-time check (CCL-2 YAP-03): every device IRQ 0..NVIC_IRQ_MAX indexes the CMSIS NVIC
+ * enable words (ISER, same name in CMSIS 4/5/6: size taken with sizeof) and the priority byte
+ * array, whose name differs between CMSIS versions (IP / IPR) and whose length is the ARMv7-M
+ * architectural maximum of 240 external interrupts. */
+#define NVIC_ARMV7M_EXT_IRQ_MAX 240U
+#define NVIC_ISER_WORDS ((uint32_t)(sizeof(((NVIC_Type *)0)->ISER) / sizeof(uint32_t)))
+typedef char Nvic_IrqRangeCheck[(((uint32_t)NVIC_IRQ_MAX < (32U * NVIC_ISER_WORDS)) &&
+                                 ((uint32_t)NVIC_IRQ_MAX < NVIC_ARMV7M_EXT_IRQ_MAX))
+                                    ? 1
+                                    : -1];
+
 static uint32_t Nvic_IsDeviceIrq(IRQn_Type irq)
 {
     int32_t n = (int32_t)irq;

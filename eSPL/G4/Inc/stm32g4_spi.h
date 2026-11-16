@@ -15,6 +15,43 @@ extern "C"
      * service that checks a flag reads SR. In TI slave mode capture FRE with
      * SPI_GetErrors before calling other services. */
 
+    /* Caller duties (CCL-2 driver-library hand-off). This driver has no chip select, no
+     * transaction, no sleep entry and no device knowledge; the layer above it owns:
+     * - Caller duty (CCL-2 SPI-01): when devices on one bus differ in CPOL/CPHA, bit order
+     *   or frame size, reconfigure the unit (SPI_Enable(0), SPI_Init, SPI_Enable(1)) before
+     *   asserting each device's chip select.
+     * - Caller duty (CCL-2 SPI-04b, SPI-05b): drive chip selects (GPIO, SPI_NSS_SOFT);
+     *   release CS on every exit path, including error returns of these services and the
+     *   caller's own timeout exits, and never assert a second CS while one is active.
+     * - Caller duty (CCL-2 SPI-04c): send command, address and data of one device operation
+     *   inside one CS assertion; do not use nss_pulse=1 for devices that end an operation
+     *   on CS high.
+     * - Caller duty (CCL-2 SPI-06b): in master mode the clock runs only while TX data is
+     *   sent; write one dummy frame (SPI_TryWrite8/16) for every frame to be received, or
+     *   program the TX DMA channel for the same count.
+     * - Caller duty (CCL-2 SPI-11b): in full-duplex DMA program the RX and TX channel
+     *   counters from the same length value.
+     * - CCL-2 SPI-22: SPI_DmaConfig(enable=1) returns BUSY while SPE=1 and BSY=1. Caller duty: do not
+     *   reprogram the DMA channels before both channels of the previous transfer completed
+     *   and the stop order (see SPI_DmaConfig) was run.
+     * - CCL-2 SPI-10d: SPI_TryRead8/16 return ERR_HW while CRCERR is set (flag kept). Caller
+     *   duty: with crc_enable=1 and a DMA transfer read SPI_GetErrors after the CRC frame; on
+     *   CRCERR clear it with SPI_ClearCrcError and report a failure to the upper layer.
+     * - Caller duty (CCL-2 SPI-23): before a latch/strobe pulse wait for FTLVL=0 and BSY=0
+     *   (SPI_GetFifoLevels, SPI_Status); TXE alone means the last frame is still shifting.
+     * - Caller duty (CCL-2 SPI-15a): this driver never enters a low-power mode; before
+     *   WFI/WFE make sure no transfer runs (FTLVL=0, BSY=0, DMA channels stopped) and CS
+     *   is high.
+     * - Caller duty (CCL-2 SPI-13a, SPI-13b, SPI-13c): the device driver sends the write
+     *   enable command in its own CS cycle before each write/erase, polls the device busy
+     *   status (or waits a fixed time) before the next command, and splits writes at the
+     *   device page boundary.
+     * - Caller duty (CCL-2 SPI-14a, SPI-14b, SPI-14c): the device driver checks the device
+     *   ID at start-up, rejects all-0x00/all-0xFF reads (or uses a CRC or known field), and
+     *   verifies any checksum field the device sends before using the data.
+     * - Caller duty (CCL-2 SPI-15c): the device driver sends the device power-down command
+     *   before MCU sleep and the wake-up command before the first access after wake-up. */
+
     /* ---- Legacy API (v0.8 .. v0.10), behaviour kept ---- */
 
     typedef struct
@@ -46,7 +83,8 @@ extern "C"
      * remove NSS during a frame. */
     /* Seviye: PARAM[S,n] STATE[r] HW[r] BUSY[r] */
     SPL_Status SPI_Enable(SPI_TypeDef *spi, uint8_t enable);
-    /* 8-bit DR access. v0.11: SPL_ERR_STATE when the data size is > 8 bits. */
+    /* 8-bit DR access. v0.11: SPL_ERR_STATE when the data size is > 8 bits. Read: ERR_HW while OVR
+     * or CRCERR is set (flags kept; see SPI_TryRead16). */
     /* Seviye: PARAM[S] STATE[r] WOULD_BLOCK[r] */
     SPL_Status SPI_TryWrite8(SPI_TypeDef *spi, uint8_t data);
     /* Seviye: PARAM[S] STATE[r] HW[r] WOULD_BLOCK[r] */
@@ -112,7 +150,8 @@ extern "C"
     SPL_Status SPI_Init(SPI_TypeDef *spi, const SPI_ConfigTypeDef *cfg);
 
     /* 16-bit DR access; requires data size > 8 bits (else STATE). Write also
-     * requires SPE=1. Read returns ERR_HW while OVR is set. */
+     * requires SPE=1. Read returns ERR_HW while OVR or CRCERR is set (flags kept: read them with
+     * SPI_GetErrors, clear with SPI_ClearOverrun / SPI_ClearCrcError, then drain). */
     /* Seviye: PARAM[S] STATE[r] WOULD_BLOCK[r] */
     SPL_Status SPI_TryWrite16(SPI_TypeDef *spi, uint16_t data);
     /* Seviye: PARAM[S] STATE[r] HW[r] WOULD_BLOCK[r] */
@@ -134,8 +173,10 @@ extern "C"
     /* RM0440 42.5.9 start order: SPI_DmaConfig(RX,1); enable DMA channels;
      * SPI_DmaConfig(TX,1); SPI_Enable(1). Stop order: disable DMA channels;
      * SPI_Enable(0) (retry while BUSY); SPI_DmaConfig(TX|RX,0).
-     * Enabling is allowed with SPE=0 or 1; disabling requires SPE=0 (STATE). */
-    /* Seviye: PARAM[S,n] STATE[r] */
+     * Enabling is allowed with SPE=0 or 1, but not while SPE=1 and BSY=1 (previous transfer
+     * still in progress: BUSY, no write); with SPE=0 a stuck BSY is ignored (ERRATA ES0431 2.14.1
+     * / ES0430 2.18.1 / ES0523 2.14.1). Disabling requires SPE=0 (STATE). */
+    /* Seviye: PARAM[S,n] STATE[r] BUSY[r] */
     SPL_Status SPI_DmaConfig(SPI_TypeDef *spi, uint32_t dma_mask, uint8_t enable);
 
 /* DMA packing options (data size <= 8 bits, DMA PSIZE = 16 bit). */

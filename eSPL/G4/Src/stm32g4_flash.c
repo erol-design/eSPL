@@ -101,14 +101,25 @@ static SPL_Status Flash_ReadyForOperation(void)
     return SPL_OK;
 }
 
+/* Table 9/19/29: maximum HCLK in MHz per wait state, same for all categories. */
+static const uint8_t flash_max_mhz[][5] = {
+    {34U, 68U, 102U, 136U, 170U}, /* range 1 boost */
+    {30U, 60U, 90U, 120U, 150U},  /* range 1 normal */
+    {12U, 24U, 26U, 0U, 0U}       /* range 2 */
+};
+
+/* Compile-time check (CCL-2 YAP-03): one row per FLASH_RangeTypeDef value 0..FLASH_RANGE2 (the
+ * bound 2 of the SAFE check in FLASH_CalcLatency), and the 5 wait states 0..4 fit ACR.LATENCY. */
+typedef char Flash_LatencyTableCheck
+    [(((sizeof(flash_max_mhz) / sizeof(flash_max_mhz[0])) == ((uint32_t)FLASH_RANGE2 + 1U)) &&
+      ((uint32_t)FLASH_RANGE2 == 2U) && ((uint32_t)FLASH_RANGE1_BOOST == 0U) &&
+      ((sizeof(flash_max_mhz[0]) / sizeof(flash_max_mhz[0][0])) == 5U) &&
+      ((5U - 1U) <= (FLASH_ACR_LATENCY_Msk >> FLASH_ACR_LATENCY_Pos)))
+         ? 1
+         : -1];
+
 SPL_Status FLASH_CalcLatency(uint32_t hclk_hz, FLASH_RangeTypeDef range, uint32_t *latency)
 {
-    /* Table 9/19/29: maximum HCLK in MHz per wait state, same for all categories. */
-    static const uint8_t flash_max_mhz[3][5] = {
-        {34U, 68U, 102U, 136U, 170U}, /* range 1 boost */
-        {30U, 60U, 90U, 120U, 150U},  /* range 1 normal */
-        {12U, 24U, 26U, 0U, 0U}       /* range 2 */
-    };
     uint32_t ws;
     uint32_t row;
 

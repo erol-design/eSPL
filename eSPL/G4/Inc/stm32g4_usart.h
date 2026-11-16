@@ -97,6 +97,8 @@ extern "C"
      * @retval SPL_ERR_HW      Alim hata bayragi etkin; RDR okunmadi.
      * @retval SPL_ERR_STATE   UE ya da RE kapali, ya da veri alani 8 bitten genis.
      * @retval SPL_ERR_PARAM   Gecersiz ornek ya da NULL cikti.
+     * @note Data only: with parity (PCE=1) or a 7-bit frame the parity bit is masked off (CCL-2
+     *       YAP-09). USART_TryWrite: bits above the frame's data width are not sent.
      */
     /* Seviye: PARAM[S] STATE[S] HW[r] WOULD_BLOCK[r] */
     SPL_Status USART_TryRead(USART_TypeDef *instance, uint8_t *byte);
@@ -205,6 +207,9 @@ extern "C"
 #define USART_OPT_RXINV 0x08U       /* CR2.RXINV: RX pin level inverted */
 #define USART_OPT_DATAINV 0x10U     /* CR2.DATAINV: data (and parity) inverted */
 #define USART_OPT_HALF_DUPLEX 0x20U /* CR3.HDSEL: single wire on TX pin */
+/* Caller duty (CCL-2 UART-04): in half-duplex (HDSEL) or RS485 use the library does not
+ * filter received data; discard own echoed bytes (or keep the transceiver receiver off while
+ * transmitting), and release a GPIO direction pin only after USART_TxComplete reports 1. */
 
     /**
      * @brief Genisletilmis asenkron cerceve yapilandirmasi (USART_InitEx).

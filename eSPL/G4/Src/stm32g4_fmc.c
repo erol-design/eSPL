@@ -56,6 +56,17 @@ static uint32_t Fmc_BcrIndex(uint32_t bank)
     return (bank - 1U) * 2U;
 }
 
+/* Compile-time check (CCL-2 YAP-03): for the highest bank, BTR index idx + 1 fits CMSIS BTCR[]
+ * and BWTR index idx fits CMSIS BWTR[] (idx = Fmc_BcrIndex(FMC_NORSRAM_BANK4)). */
+typedef char Fmc_BankIndexCheck
+    [(((((FMC_NORSRAM_BANK4 - 1U) * 2U) + 1U) <
+       (sizeof(((FMC_Bank1_TypeDef *)0)->BTCR) / sizeof(((FMC_Bank1_TypeDef *)0)->BTCR[0]))) &&
+      (((FMC_NORSRAM_BANK4 - 1U) * 2U) <
+       (sizeof(((FMC_Bank1E_TypeDef *)0)->BWTR) / sizeof(((FMC_Bank1E_TypeDef *)0)->BWTR[0]))) &&
+      (FMC_NORSRAM_BANK1 == 1U))
+         ? 1
+         : -1];
+
 static FMC_CHECK_UNUSED uint8_t Fmc_Bool(uint8_t value)
 {
     return (uint8_t)((value <= 1U) ? 1U : 0U);
@@ -564,16 +575,23 @@ SPL_Status FMC_NAND_ITConfig(uint32_t its, uint8_t enable)
     return SPL_OK;
 }
 
+/* Bank window base per FMC_REGION_* code. */
+static const uint32_t fmc_region_base[] = {FMC_BANK1_1, FMC_BANK1_2, FMC_BANK1_3,
+                                           FMC_BANK1_4, FMC_BANK3,   FMC_NAND_ATTRIBUTE_BASE};
+
+/* Compile-time check (CCL-2 YAP-03): one entry per region code 0..FMC_REGION_NAND_ATTRIBUTE, the
+ * bound used by the SAFE check in FMC_GetBankAddress. */
+typedef char Fmc_RegionTableCheck
+    [((sizeof(fmc_region_base) / sizeof(fmc_region_base[0])) == (FMC_REGION_NAND_ATTRIBUTE + 1U)) ? 1
+                                                                                                  : -1];
+
 SPL_Status FMC_GetBankAddress(uint32_t region, uint32_t *address)
 {
-    static const uint32_t base[] = {FMC_BANK1_1, FMC_BANK1_2, FMC_BANK1_3,
-                                    FMC_BANK1_4, FMC_BANK3,   FMC_NAND_ATTRIBUTE_BASE};
-
     /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
     SPL_REQUIRE_SAFE(!((region > FMC_REGION_NAND_ATTRIBUTE)), SPL_ERR_PARAM);
     /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
     SPL_REQUIRE_SAFE(!((address == NULL)), SPL_ERR_PARAM);
-    *address = base[region];
+    *address = fmc_region_base[region];
     return SPL_OK;
 }
 

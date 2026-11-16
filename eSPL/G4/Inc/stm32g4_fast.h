@@ -244,6 +244,24 @@ static inline uint32_t Tim_FastFlagMask(const TIM_TypeDef *tim)
 #define DMA1_FAST_CHANNELS 6U
 #endif
 
+/* Compile-time check (CCL-2 YAP-03): DMA1_Channel1_BASE + (channel - 1) * 0x14 reaches exactly
+ * the last CMSIS DMA1 channel, and its ISR/IFCR shift (channel - 1) * 4 stays <= 28. */
+#if defined(DMA1_Channel8)
+    typedef char Dma1_FastChannelCheck
+        [(((DMA1_Channel2_BASE - DMA1_Channel1_BASE) == 0x14U) &&
+          ((DMA1_Channel1_BASE + ((DMA1_FAST_CHANNELS - 1U) * 0x14U)) == DMA1_Channel8_BASE) &&
+          (((DMA1_FAST_CHANNELS - 1U) * 4U) <= 28U))
+             ? 1
+             : -1];
+#else
+    typedef char Dma1_FastChannelCheck
+        [(((DMA1_Channel2_BASE - DMA1_Channel1_BASE) == 0x14U) &&
+          ((DMA1_Channel1_BASE + ((DMA1_FAST_CHANNELS - 1U) * 0x14U)) == DMA1_Channel6_BASE) &&
+          (((DMA1_FAST_CHANNELS - 1U) * 4U) <= 28U))
+             ? 1
+             : -1];
+#endif
+
     static inline uint32_t DMA1_FastFlags(uint32_t channel)
         SPL_DIAG((channel < 1U) || (channel > DMA1_FAST_CHANNELS),
                  "DMA1_FastFlags: channel outside SKU");

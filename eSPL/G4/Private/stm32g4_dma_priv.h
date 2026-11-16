@@ -15,6 +15,48 @@
 #define STM32G4_DMAMUX_DMA2_FIRST    DMAMUX1_Channel6_BASE
 #endif
 
+/* Compile-time check (CCL-2 YAP-03): channel stride 0x14 and DMAMUX stride 4 match CMSIS,
+ * the ISR/IFCR nibble of the last channel (shift (n - 1) * 4) fits in 32 bits, the DMA1 channel
+ * block ends before DMA2, and STM32G4_DMAMUX_VALID_MASK has one bit per DMAMUX channel. */
+typedef char Stm32g4_DmaStrideCheck
+    [(((DMA1_Channel2_BASE - DMA1_Channel1_BASE) == 0x14U) &&
+      ((DMA2_Channel2_BASE - DMA2_Channel1_BASE) == 0x14U) &&
+      ((DMAMUX1_Channel1_BASE - DMAMUX1_Channel0_BASE) == 4U) &&
+      (((STM32G4_DMA_CHANNELS_PER_CTRL - 1U) * 4U) <= 28U) &&
+      ((DMA1_Channel1_BASE + (STM32G4_DMA_CHANNELS_PER_CTRL * 0x14U)) <= DMA2_BASE) &&
+      (STM32G4_DMAMUX_VALID_MASK == ((1UL << (2U * STM32G4_DMA_CHANNELS_PER_CTRL)) - 1UL)))
+         ? 1
+         : -1];
+
+/* Compile-time check (CCL-2 YAP-03): the last channel reached by
+ * base + (STM32G4_DMA_CHANNELS_PER_CTRL - 1) * stride is the last CMSIS channel of each DMA
+ * controller and of each DMAMUX half (DMA1: channel 0.., DMA2: STM32G4_DMAMUX_DMA2_FIRST..). */
+#if defined(DMA1_Channel8)
+typedef char Stm32g4_DmaRegionCheck
+    [(((DMA1_Channel1_BASE + ((STM32G4_DMA_CHANNELS_PER_CTRL - 1U) * 0x14U)) ==
+       DMA1_Channel8_BASE) &&
+      ((DMA2_Channel1_BASE + ((STM32G4_DMA_CHANNELS_PER_CTRL - 1U) * 0x14U)) ==
+       DMA2_Channel8_BASE) &&
+      ((DMAMUX1_Channel0_BASE + ((STM32G4_DMA_CHANNELS_PER_CTRL - 1U) * 4U)) ==
+       DMAMUX1_Channel7_BASE) &&
+      ((STM32G4_DMAMUX_DMA2_FIRST + ((STM32G4_DMA_CHANNELS_PER_CTRL - 1U) * 4U)) ==
+       DMAMUX1_Channel15_BASE))
+         ? 1
+         : -1];
+#else
+typedef char Stm32g4_DmaRegionCheck
+    [(((DMA1_Channel1_BASE + ((STM32G4_DMA_CHANNELS_PER_CTRL - 1U) * 0x14U)) ==
+       DMA1_Channel6_BASE) &&
+      ((DMA2_Channel1_BASE + ((STM32G4_DMA_CHANNELS_PER_CTRL - 1U) * 0x14U)) ==
+       DMA2_Channel6_BASE) &&
+      ((DMAMUX1_Channel0_BASE + ((STM32G4_DMA_CHANNELS_PER_CTRL - 1U) * 4U)) ==
+       DMAMUX1_Channel5_BASE) &&
+      ((STM32G4_DMAMUX_DMA2_FIRST + ((STM32G4_DMA_CHANNELS_PER_CTRL - 1U) * 4U)) ==
+       DMAMUX1_Channel11_BASE))
+         ? 1
+         : -1];
+#endif
+
 /* The peripheral map is sparse on some G4 SKUs: do not index DMA
  * channels using sizeof(DMA_Channel_TypeDef). Channel stride is 0x14. */
 static inline uint8_t STM32G4_DmaChannelLocation(

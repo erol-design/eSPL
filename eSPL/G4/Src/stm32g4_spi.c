@@ -147,8 +147,9 @@ SPL_Status SPI_TryRead8(SPI_TypeDef *spi, uint8_t *data)
         return SPL_ERR_STATE;
     }
     /* RX FIFO may still hold data after SPE has been cleared.
-     * Draining that data is a required part of normal shutdown. */
-    if ((spi->SR & SPI_SR_OVR) != 0U)
+     * Draining that data is a required part of normal shutdown.
+     * CRCERR (CRC enabled; CCL-2 SPI-10d) is reported like OVR: the flag is kept. */
+    if ((spi->SR & (SPI_SR_OVR | SPI_SR_CRCERR)) != 0U)
     {
         return SPL_ERR_HW;
     }
@@ -428,7 +429,7 @@ SPL_Status SPI_TryRead16(SPI_TypeDef *spi, uint16_t *data)
     {
         return SPL_ERR_STATE;
     }
-    if ((spi->SR & SPI_SR_OVR) != 0U)
+    if ((spi->SR & (SPI_SR_OVR | SPI_SR_CRCERR)) != 0U)
     {
         return SPL_ERR_HW;
     }
@@ -475,6 +476,14 @@ SPL_Status SPI_DmaConfig(SPI_TypeDef *spi, uint32_t dma_mask, uint8_t enable)
 
     if (enable != 0U)
     {
+        /* A transfer is still in progress (SPE = 1 and BSY = 1): starting the next DMA transfer
+         * now would mix the two (CCL-2 SPI-22). BUSY, no write; retry when BSY = 0. With SPE = 0
+         * BSY is not checked: it may stay high after the disable (ERRATA ES0431 2.14.1 /
+         * ES0430 2.18.1 / ES0523 2.14.1) and must not block the next start. */
+        if (((spi->CR1 & SPI_CR1_SPE) != 0U) && ((spi->SR & SPI_SR_BSY) != 0U))
+        {
+            return SPL_BUSY;
+        }
         spi->CR2 |= dma_mask;
     }
     else

@@ -8,7 +8,7 @@ It follows the classic Standard Peripheral Library naming style (`GPIO_Init`, `U
 - Every status-returning API returns `SPL_Status`
 - File prefix `stm32g4_`
 
-Version: **v0.18.0-dev** (pre-release). See [RELEASE_NOTES.md](RELEASE_NOTES.md).
+Version: **v0.18.0 candidate** (pre-release). See [RELEASE_NOTES.md](RELEASE_NOTES.md).
 
 ## Modules
 

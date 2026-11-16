@@ -95,6 +95,9 @@ extern "C"
      * LPTIM_SyncTypeDef in use afterwards, else a write left unacknowledged
      * keeps pending=1 and SetAutoReload/SetCompare/SyncStatus return BUSY
      * forever after the next LPTIM_Enable.
+     * Caller duty (CCL-2 ZMN-08): the LPTIM1_OUT level after this call is not guaranteed by
+     * the driver; on error and shutdown the caller drives the pin to its safe level (e.g.
+     * GPIO output at the safe level) instead of relying on LPTIM_Disable.
      * ERRATA ES0431 2.9.1 / ES0430 2.13.1 / ES0523 2.9.1: with IER != 0 ENABLE is not cleared;
      * LPTIM1 is reset via RCC_APB1RSTR1.LPTIM1RST (set, then cleared) and ALL
      * LPTIM registers (CFGR, IER, ARR, CMP, ...) return to reset values: run
@@ -116,7 +119,9 @@ extern "C"
      * previous ARR write not acknowledged (ARROK=0). Clears ARROK via
      * ICR.ARROKCF immediately before the write, then sets arr_pending.
      * ERRATA ES0431 2.9.2 / ES0430 2.13.2 / ES0523 2.9.2: STATE (no write) while IER != 0;
-     * program ARR/CMP with all LPTIM interrupts disabled. */
+     * program ARR/CMP with all LPTIM interrupts disabled.
+     * Running with PRELOAD=0: a smaller ARR -> STATE, no write (CCL-2 ZMN-02: an ARR below the
+     * moving counter runs the period to 0xFFFF); shrink with PRELOAD=1 or while disabled. */
     /* Seviye: PARAM[S] STATE[r] BUSY[r] */
     SPL_Status LPTIM_SetAutoReload(LPTIM_TypeDef *lptim, LPTIM_SyncTypeDef *sync, uint32_t arr);
     /* CMP write (0..0xFFFF), same rules with CMPOK / ICR.CMPOKCF. The caller

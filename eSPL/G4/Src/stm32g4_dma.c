@@ -131,6 +131,12 @@ SPL_Status DMA_DeInit(DMA_Channel_TypeDef *ch)
     }
     /* RM0440 12.6.3: CCR fields other than EN are writable only with EN=0. */
     ch->CCR &= ~DMA_CCR_EN;
+    /* Read back: reprogram only once the channel is disabled (CCL-2 DMA-04). EN still 1 ->
+     * HW, nothing else written. */
+    if ((ch->CCR & DMA_CCR_EN) != 0U)
+    {
+        return SPL_ERR_HW;
+    }
     ch->CCR = 0U;
     ch->CNDTR = 0U;
     ch->CPAR = 0U;

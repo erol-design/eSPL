@@ -11,7 +11,20 @@ extern "C"
 
 /* System window watchdog (RM0440 Rev 9 section 36). Single WWDG instance,
  * no static state. The caller enables the WWDG APB clock first. Activation
- * (WDGA) is irreversible until reset; EWI cannot be cleared by software. */
+ * (WDGA) is irreversible until reset; EWI cannot be cleared by software.
+ * Caller duty (CCL-2 WDG-02a, WDG-02b): call WWDG_Refresh only from thread context, never
+ * from an interrupt handler (EWI included) or a callback run by one, and only in the main
+ * (task) loop or inside a long multi-page/multi-block processing loop, never in delay,
+ * driver or helper functions. The library itself never refreshes.
+ * Caller duty (CCL-2 WDG-10): with several tasks or a cyclic schedule, refresh only after
+ * every critical task has reported progress in the last refresh interval, or only after a
+ * common cycle that called all critical tasks unconditionally has completed in that round.
+ * Caller duty (CCL-2 WDG-08): choose a window below the reload counter and time each refresh
+ * after the counter drops below the window; WWDG_Refresh rejects an early refresh
+ * (ERR_STATE) but the library does not check the window/counter relation.
+ * Caller duty (CCL-2 WDG-11): every operation without refresh after WWDG_Enable must be
+ * shorter than the timeout computed for the actual PCLK1; otherwise refresh inside it or
+ * enable the WWDG after it. No API of this library waits. */
 
 /* Valid counter/window values: T6 must be 1 (RM0440 36.3.3). */
 #define WWDG_COUNTER_MIN 0x40U

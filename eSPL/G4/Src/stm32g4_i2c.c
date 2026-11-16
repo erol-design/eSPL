@@ -8,6 +8,9 @@
  * Fresh-START gates keep BERR so a stale flag is seen before a new transfer. */
 #define I2C_XFER_ABORT_LEGACY (I2C_ISR_NACKF | I2C_ISR_ARLO)
 #define I2C_XFER_ABORT_ALL (I2C_ERRORS_ALL & ~I2C_ISR_BERR)
+/* CR2 set-only command bits: a read-modify-write never copies a read-back 1 into them
+ * (CCL-2 KSM-34; contract v0.10_I2C "never copied back"). */
+#define I2C_CR2_COMMANDS (I2C_CR2_START | I2C_CR2_STOP | I2C_CR2_NACK | I2C_CR2_PECBYTE)
 
 static uint8_t I2c_Valid(const I2C_TypeDef *i2c)
 {
@@ -212,7 +215,7 @@ SPL_Status I2C_Stop(I2C_TypeDef *i2c)
     /* START is cleared by hardware and writing 0 has no effect. Never copy a
      * START=1 read back: hardware may clear it between read and write, and
      * the write-back would request a new START/RESTART. */
-    i2c->CR2 = (i2c->CR2 & ~I2C_CR2_START) | I2C_CR2_STOP;
+    i2c->CR2 = (i2c->CR2 & ~I2C_CR2_COMMANDS) | I2C_CR2_STOP;
     return SPL_OK;
 }
 
@@ -329,8 +332,9 @@ SPL_Status I2C_TransferComplete(I2C_TypeDef *i2c, uint8_t *complete)
     SPL_REQUIRE_SAFE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
     /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
     SPL_REQUIRE_SAFE(!((complete == (uint8_t *)0)), SPL_ERR_PARAM);
-    /* ERRATA ES0431 2.11.2 / ES0430 2.15.2 / ES0523 2.11.2: spurious BERR does not abort. */
-    if ((i2c->ISR & I2C_XFER_ABORT_LEGACY) != 0U)
+    /* ERRATA ES0431 2.11.2 / ES0430 2.15.2 / ES0523 2.11.2: spurious BERR does not abort.
+     * PECERR (PEC enabled; CCL-2 I2C-27) is reported too, flags kept for I2C_GetErrors. */
+    if ((i2c->ISR & (I2C_XFER_ABORT_LEGACY | I2C_ISR_PECERR)) != 0U)
     {
         return SPL_ERR_HW;
     }
@@ -345,8 +349,8 @@ SPL_Status I2C_StopDetected(I2C_TypeDef *i2c, uint8_t *detected)
     /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
     SPL_REQUIRE_SAFE(!((detected == (uint8_t *)0)), SPL_ERR_PARAM);
     /* A target NACK in an AUTOEND transfer also ends with STOPF: report it as
-     * ERR_HW like I2C_TransferComplete (flags kept for I2C_GetErrors). */
-    if ((i2c->ISR & I2C_XFER_ABORT_LEGACY) != 0U)
+     * ERR_HW like I2C_TransferComplete (flags kept for I2C_GetErrors); PECERR as well. */
+    if ((i2c->ISR & (I2C_XFER_ABORT_LEGACY | I2C_ISR_PECERR)) != 0U)
     {
         return SPL_ERR_HW;
     }
@@ -370,6 +374,8 @@ SPL_Status I2C_ClearStop(I2C_TypeDef *i2c)
 /* ---- v0.10: long transfers, 10-bit addressing, errors, reset, timeout ---- */
 
 #define I2C_CHUNK_MAX 255U
+/* Compile-time check (CCL-2 YAP-03): the chunk size fits CR2.NBYTES exactly. */
+typedef char I2c_ChunkCheck[(I2C_CHUNK_MAX == (I2C_CR2_NBYTES_Msk >> I2C_CR2_NBYTES_Pos)) ? 1 : -1];
 #define I2C_XFER_ALL (I2C_XFER_READ | I2C_XFER_AUTOEND | I2C_XFER_ADDR10 | I2C_XFER_HEAD10R)
 /* Reserved bits of I2C_TIMEOUTR: 14:13 and 30:28 (RM0440 39.9.6). */
 #define I2C_TIMEOUTR_VALID                                                                         \
@@ -751,7 +757,7 @@ SPL_Status I2C_TargetSetBytes(I2C_TypeDef *i2c, uint8_t nbytes, uint8_t reload)
     SPL_REQUIRE(reload <= 1U, SPL_ERR_PARAM);
     SPL_REQUIRE_SAFE((i2c->CR1 & (I2C_CR1_PE | I2C_CR1_SBC)) == (I2C_CR1_PE | I2C_CR1_SBC),
                      SPL_ERR_STATE);
-    i2c->CR2 = (i2c->CR2 & ~(I2C_CR2_NBYTES_Msk | I2C_CR2_RELOAD | I2C_CR2_START)) |
+    i2c->CR2 = (i2c->CR2 & ~(I2C_CR2_NBYTES_Msk | I2C_CR2_RELOAD | I2C_CR2_COMMANDS)) |
                ((uint32_t)nbytes << I2C_CR2_NBYTES_Pos) | ((reload != 0U) ? I2C_CR2_RELOAD : 0U);
     return SPL_OK;
 }
@@ -765,7 +771,7 @@ SPL_Status I2C_TargetAckAddress(I2C_TypeDef *i2c)
     /* ES0431 2.11.3 / ES0430 2.15.3: after own-address match, clear ADDR
      * and write CR2 with START low before STOP to prevent a spurious
      * controller transfer. Applying the sequence is harmless on ES0523. */
-    cr2 = i2c->CR2 & ~I2C_CR2_START;
+    cr2 = i2c->CR2 & ~I2C_CR2_COMMANDS; /* START low; no read-back command bit (CCL-2 KSM-34) */
     i2c->ICR = I2C_ICR_ADDRCF;
     i2c->CR2 = cr2;
     return SPL_OK;
@@ -775,7 +781,7 @@ SPL_Status I2C_TargetNack(I2C_TypeDef *i2c)
 {
     SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
     SPL_REQUIRE_SAFE((i2c->CR1 & I2C_CR1_PE) != 0U, SPL_ERR_STATE);
-    i2c->CR2 = (i2c->CR2 & ~I2C_CR2_START) | I2C_CR2_NACK;
+    i2c->CR2 = (i2c->CR2 & ~I2C_CR2_COMMANDS) | I2C_CR2_NACK;
     return SPL_OK;
 }
 
@@ -792,7 +798,7 @@ SPL_Status I2C_TargetTryWrite(I2C_TypeDef *i2c, uint8_t byte)
 
     SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
     isr = i2c->ISR;
-    if ((isr & (I2C_ISR_OVR | I2C_ISR_BERR)) != 0U)
+    if ((isr & (I2C_ISR_OVR | I2C_ISR_BERR | I2C_ISR_PECERR)) != 0U)
     {
         return SPL_ERR_HW;
     }
@@ -815,7 +821,8 @@ SPL_Status I2C_TargetTryRead(I2C_TypeDef *i2c, uint8_t *byte)
     SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
     SPL_REQUIRE_SAFE(byte != (uint8_t *)0, SPL_ERR_PARAM);
     isr = i2c->ISR;
-    if ((isr & (I2C_ISR_OVR | I2C_ISR_BERR)) != 0U)
+    /* PECERR (PEC enabled; CCL-2 I2C-27): the received PEC byte did not match. */
+    if ((isr & (I2C_ISR_OVR | I2C_ISR_BERR | I2C_ISR_PECERR)) != 0U)
     {
         return SPL_ERR_HW;
     }
@@ -837,6 +844,9 @@ SPL_Status I2C_TargetTimeoutRecover(I2C_TypeDef *i2c)
     {
         return SPL_ERR_STATE;
     }
+    /* ERRATA ES0431 2.11.6 / ES0430 2.15.6 / ES0523 2.11.5: on an SMBus timeout the target may
+     * hold SDA low; without STOPF the peripheral is reset by a PE cycle (PE=0, three CR1 reads,
+     * PE=1). TIMEOUT is cleared separately by the caller (I2C_ClearErrorFlags). */
     if ((i2c->ISR & I2C_ISR_STOPF) != 0U)
     {
         return SPL_OK;
@@ -866,7 +876,7 @@ SPL_Status I2C_SetPecByte(I2C_TypeDef *i2c)
     SPL_REQUIRE_SAFE(I2c_HasSmbus(i2c) != 0U, SPL_ERR_UNSUPPORTED);
     SPL_REQUIRE_SAFE((i2c->CR1 & (I2C_CR1_PE | I2C_CR1_PECEN)) == (I2C_CR1_PE | I2C_CR1_PECEN),
                      SPL_ERR_STATE);
-    i2c->CR2 = (i2c->CR2 & ~I2C_CR2_START) | I2C_CR2_PECBYTE;
+    i2c->CR2 = (i2c->CR2 & ~I2C_CR2_COMMANDS) | I2C_CR2_PECBYTE;
     return SPL_OK;
 }
 

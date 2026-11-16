@@ -9,8 +9,8 @@
 #error "PWR wake-up pin bit layouts differ between CR3/CR4/SR1/SCR"
 #endif
 
-/* CMSIS PWR_CR5_R1MODE_Msk = (0x1U << 8): 0x1U temel tipi unsigned char, 8 bit kaydirma MISRA
- * 12.2 ihlali. Ayni bit 32 bit isaretsiz sabitten kurulur (deger ayni, 0x100). */
+/* CMSIS PWR_CR5_R1MODE_Msk is (0x1U << 8): the essential type of 0x1U is unsigned char, so the
+ * 8-bit shift violates MISRA 12.2. The same bit is built from a 32-bit unsigned constant (0x100). */
 #define PWR_CR5_R1MODE_BIT ((uint32_t)1U << PWR_CR5_R1MODE_Pos)
 
 static uint8_t Pwr_IsBool(uint8_t value)

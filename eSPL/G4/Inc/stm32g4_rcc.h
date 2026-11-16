@@ -268,7 +268,12 @@ extern "C"
     /* Seviye: PARAM[S] STATE[r] */
     SPL_Status RCC_GetPllReady(uint8_t *ready);
 
-    /* --- SYSCLK and bus prescalers (sequence for > 80 MHz: contract section 3) --- */
+    /* --- SYSCLK and bus prescalers (sequence for > 80 MHz: contract section 3) ---
+     * Caller duty (CCL-2 CLK-06): the library never changes clocks on its own and does not
+     * track configured peripherals. After a runtime change of SYSCLK source, AHB/APB
+     * prescaler or a kernel clock (wakeup clock restore included), the caller reconfigures
+     * every already configured peripheral whose timing derives from it (baud rate, CAN bit
+     * timing, timer prescaler, ADC clock). */
     /* Writes CFGR.SW. Target must be ready (PLL: PLLRDY and PLLREN). A previous
      * switch still pending (SW != SWS): its target on -> BUSY, off (PLL: PLLON=0
      * or PLLREN=0) -> STATE (it never completes; start that target). Confirm
@@ -331,7 +336,9 @@ extern "C"
      * ERRATA ES0431 2.2.5 / ES0430 2.2.5 / ES0523 2.2.3, ES0431 2.2.3 / ES0430 2.2.4 (LSI as
      * RTCCLK; not in ES0523): BORRSTF selects the boot-time backup-domain erase
      * (RTC_BackupDomainFullReset), then RCC_ClearResetFlags; sequence in
-     * Docs/v0.10_RTC_CONTRACT.md. */
+     * Docs/v0.10_RTC_CONTRACT.md.
+     * Caller duty (CCL-2 WDG-06): the boot code reads these flags and branches on
+     * IWDGRSTF/WWDGRSTF (count, log, keep state or safe mode) before RCC_ClearResetFlags. */
     /* Seviye: PARAM[S] */
     SPL_Status RCC_GetResetFlags(uint32_t *flags);
     /* Sets CSR.RMVF (LSION preserved). */

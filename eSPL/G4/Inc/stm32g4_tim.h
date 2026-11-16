@@ -9,7 +9,11 @@ extern "C"
 #endif
     /* Peripheral clocks, GPIO AF mapping and IRQ priority are board responsibilities.
      * This module is non-blocking and does not install interrupt handlers.
-     * Configure with CEN=0 and, for channels, CCxE=0. */
+     * Configure with CEN=0 and, for channels, CCxE=0.
+     * Caller duty (CCL-2 ZMN-08): this driver has no error or shutdown path of its own; on
+     * error and shutdown the caller puts the outputs at a safe level (TIM_MainOutputEnable 0
+     * with OSSI, TIM_ChannelEnable 0, or the pin as GPIO at the safe level); stopping the
+     * counter (TIM_Enable 0) alone keeps the last output level. */
     typedef struct
     {
         uint32_t prescaler;           /* PSC register: 0..65535, division by PSC+1 */
@@ -49,7 +53,9 @@ extern "C"
     SPL_Status TIM_Enable(TIM_TypeDef *tim, uint8_t enable);
     /* Seviye: PARAM[S] */
     SPL_Status TIM_GenerateUpdate(TIM_TypeDef *tim);
-    /* Seviye: PARAM[S] */
+    /* Sets/clears DIER.UIE only. enable=1 with UIF=1 (stale event) -> STATE, no write (CCL-2
+     * KSM-12): clear it with TIM_ClearUpdate (also after TIM_GenerateUpdate), then enable. */
+    /* Seviye: PARAM[S] STATE[r] */
     SPL_Status TIM_UpdateInterrupt(TIM_TypeDef *tim, uint8_t enable);
     /* Seviye: PARAM[S] */
     SPL_Status TIM_UpdatePending(TIM_TypeDef *tim, uint8_t *pending);
@@ -73,6 +79,9 @@ extern "C"
      * atomik degil: birlikte degistirmek icin OCxPE = ARPE = 1 ile ayni update araliginda yazin. */
     /* Seviye: PARAM[S] */
     SPL_Status TIM_SetCompare(TIM_TypeDef *tim, uint8_t channel, uint32_t compare);
+    /* Caller duty (CCL-2 ZMN-06): returns one raw CCRx value; the difference of two captures
+     * and counter overflows between them are the caller's (count update events, choose PSC/ARR
+     * so the longest interval fits one period, or mark the measurement invalid). */
     /* Seviye: PARAM[S] HW[r] WOULD_BLOCK[r] */
     SPL_Status TIM_GetCapture(TIM_TypeDef *tim, uint8_t channel, uint32_t *capture);
     /* BDTR.MOE set/clear. TIM1/8/15/16/17/20 only (TIM8/TIM20 where the SKU
@@ -219,7 +228,8 @@ extern "C"
      * frozen at 0 by an earlier BDTR write, e.g. TIM_MainOutputEnable) -> SPL_ERR_STATE. In
      * that case the other BDTR fields WERE written (LOCK 0 locks nothing): an exception to
      * "no write on error", kept visible instead of silently returning OK. Only a timer/system
-     * reset restores the write-once LOCK. */
+     * reset restores the write-once LOCK. dead_time = 0 while any CCxNE is set -> STATE, no
+     * write (CCL-2 ZMN-09: no dead time on an enabled complementary pair). */
     /* Seviye: PARAM[S] STATE[r] */
     SPL_Status TIM_BreakDeadTimeInit(TIM_TypeDef *tim, const TIM_BreakDeadTimeInitTypeDef *cfg);
     /* Seviye: PARAM[S] */

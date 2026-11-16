@@ -129,8 +129,11 @@ extern "C"
     SPL_Status HRTIM_TimerInit(uint32_t timer, const HRTIM_TimerInitTypeDef *cfg);
     /* period within the Table 232 limits of the current CKPSC. Allowed while running (PREEN
      * decides when it takes effect). Issue #27 politikasi: yazilmis CMP1..4 sinanmaz, CMP > PER
-     * gecerli (periyot icinde olay yok). PER ve CMP ayri yazimlardir, atomik degildir. */
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+     * gecerli (periyot icinde olay yok). PER ve CMP ayri yazimlardir, atomik degildir.
+     * Running with PREEN = 0 and period < current PERxR -> STATE, no write (a period below the
+     * moving counter would let it run to 0xFFFF; no counter read, no race). Shrink with PREEN = 1
+     * or while stopped; growing is allowed. */
+    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] */
     SPL_Status HRTIM_SetPeriod(uint32_t timer, uint32_t period);
     /* unit 1..4. value within the Table 232 limits of the current CKPSC, or 0 for units 1 and 3
      * (skipped pulse, RM 28.3.4). Issue #27 politikasi: PER ile iliski sinanmaz; CMP > PER
@@ -146,7 +149,9 @@ extern "C"
     SPL_Status HRTIM_OutputConfig(uint32_t timer, uint32_t output, const HRTIM_OutputTypeDef *cfg);
     /* Timer stopped, both outputs of the timer disabled and no DTxR lock bit set, else STATE.
      * enable=1: DTxR = rising | prescaler | falling (positive signs, locks 0), OUTxR.DTEN = 1.
-     * enable=0: OUTxR.DTEN = 0. Negative (overlapping) dead time is not offered. */
+     * enable=0: OUTxR.DTEN = 0. Negative (overlapping) dead time is not offered.
+     * enable=1 with rising = 0 or falling = 0 -> PARAM (both bridge switches would conduct at the
+     * same edge). */
     /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] */
     SPL_Status HRTIM_DeadTimeConfig(uint32_t timer, const HRTIM_DeadTimeTypeDef *cfg);
     /* Software set (active=1, SETxyR.SST) or reset (active=0, RSTxyR.SRT) of one output; the

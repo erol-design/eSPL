@@ -8,6 +8,19 @@
 extern "C" {
 #endif
 /* Supported target: STM32G431; caller enables RCC clocks and configures DMAMUX. */
+/* Caller duty (CCL-2 DMA-01, KSM-29): memory_address/peripheral_address are the caller's;
+ * the library checks only non-zero and alignment. Each buffer lies in memory the DMA can
+ * access (RM0440 bus matrix), stays valid (static, or alive until the transfer ends) and is
+ * neither written nor read by the caller until TC (DMA_Flags or interrupt) or DMA_DeInit. */
+/* Caller duty (CCL-2 DMA-06a, DMA-06b, DMA-07): the library has no DMA IRQ handler and sets
+ * no NVIC priority. The caller handles TE (TE interrupt, or DMA_Flags at transfer end),
+ * clears every enabled event flag in its handler (DMA_ClearFlags), and gives the DMA IRQ a
+ * priority no more urgent than the served peripheral's IRQ unless the DMA handler leaves
+ * that peripheral's state and registers alone. */
+/* Caller duty (CCL-2 DMA-10): widths match the peripheral data register and the buffer
+ * element type; peripheral_increment 0 for a peripheral register, memory_increment 1 for a
+ * buffer and 0 for a single fixed item, both 1 memory->memory. Only codes and alignment are
+ * checked. */
 typedef struct {
     uint32_t peripheral_address;
     uint32_t memory_address;
@@ -20,6 +33,9 @@ typedef struct {
     uint8_t circular;
     uint8_t priority; /* 0..3 */
 } DMA_InitTypeDef;
+/* Caller duty (CCL-2 DMA-09): the EN=0 checks of DMA_Init, DMA_SetCount and DMA_Interrupts
+ * (STATE) are SAFE checks and are removed at SPL_CHECK_LEVEL FAST; at that level call them
+ * only with the channel disabled (DMA_DeInit OK, or EN read back 0 after DMA_Enable(ch, 0)). */
 /* Seviye: PARAM[S,n,r] STATE[S] */
 SPL_Status DMA_Init(DMA_Channel_TypeDef *ch, const DMA_InitTypeDef *cfg);
 /* enable=1: STATE when CNDTR=0 or (v0.13.4) a stale TC/HT/TE flag of this channel is set
@@ -27,11 +43,14 @@ SPL_Status DMA_Init(DMA_Channel_TypeDef *ch, const DMA_InitTypeDef *cfg);
 /* Seviye: PARAM[n,r] STATE[S,n] */
 SPL_Status DMA_Enable(DMA_Channel_TypeDef *ch, uint8_t enable);
 /* v0.13.4: EN=0, then CCR (IRQ enables included), CNDTR, CPAR, CMAR = 0 and the channel's
- * flags cleared (IFCR, GIF too). DMAMUX request line is not touched. */
-/* Seviye: PARAM[r] */
+ * flags cleared (IFCR, GIF too). DMAMUX request line is not touched. EN read back after the
+ * disable: still 1 -> HW, no further write. */
+/* Seviye: PARAM[r] HW[r] */
 SPL_Status DMA_DeInit(DMA_Channel_TypeDef *ch);
 /* Seviye: PARAM[n,r] STATE[S] */
 SPL_Status DMA_SetCount(DMA_Channel_TypeDef *ch, uint16_t count);
+/* Caller duty (CCL-2 DMA-13): a circular buffer is read from the half the DMA is not
+ * writing (HT/TC), from a copy, or only up to the position derived from DMA_Remaining. */
 /* Seviye: PARAM[S,r] */
 SPL_Status DMA_Remaining(DMA_Channel_TypeDef *ch, uint16_t *remaining);
 /* DMA flag mask uses 4 bits per channel: GIF=1 TCIF=2 HTIF=4 TEIF=8. */

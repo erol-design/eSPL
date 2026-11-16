@@ -520,16 +520,26 @@ SPL_Status ADC_InternalChannelsConfig(ADC_TypeDef *adc, uint32_t mask)
     return SPL_OK;
 }
 
+/* SQx field position per regular rank 1..16. */
+static const uint8_t k_pos[] = {
+    ADC_SQR1_SQ1_Pos,  ADC_SQR1_SQ2_Pos,  ADC_SQR1_SQ3_Pos,  ADC_SQR1_SQ4_Pos,
+    ADC_SQR2_SQ5_Pos,  ADC_SQR2_SQ6_Pos,  ADC_SQR2_SQ7_Pos,  ADC_SQR2_SQ8_Pos,
+    ADC_SQR2_SQ9_Pos,  ADC_SQR3_SQ10_Pos, ADC_SQR3_SQ11_Pos, ADC_SQR3_SQ12_Pos,
+    ADC_SQR3_SQ13_Pos, ADC_SQR3_SQ14_Pos, ADC_SQR4_SQ15_Pos, ADC_SQR4_SQ16_Pos};
+/* Register index per rank: SQR1 ranks 1..4, SQR2 5..9, SQR3 10..14, SQR4 15..16. */
+static const uint8_t k_reg[] = {0U, 0U, 0U, 0U, 1U, 1U, 1U, 1U,
+                                1U, 2U, 2U, 2U, 2U, 2U, 3U, 3U};
+
+/* Compile-time check (CCL-2 YAP-03): one k_pos/k_reg entry per rank 1..ADC_SEQ_MAX, and
+ * ADC_SEQ_MAX - 1 equals the SQR1.L field maximum (16 hardware ranks, L = length - 1). */
+typedef char Adc_SeqTableCheck[(((sizeof(k_pos) / sizeof(k_pos[0])) == ADC_SEQ_MAX) &&
+                                ((sizeof(k_reg) / sizeof(k_reg[0])) == ADC_SEQ_MAX) &&
+                                ((ADC_SEQ_MAX - 1U) == (ADC_SQR1_L_Msk >> ADC_SQR1_L_Pos)))
+                                   ? 1
+                                   : -1];
+
 SPL_Status ADC_RegularSequenceConfig(ADC_TypeDef *adc, const uint8_t *channels, uint8_t length)
 {
-    static const uint8_t k_pos[ADC_SEQ_MAX] = {
-        ADC_SQR1_SQ1_Pos,  ADC_SQR1_SQ2_Pos,  ADC_SQR1_SQ3_Pos,  ADC_SQR1_SQ4_Pos,
-        ADC_SQR2_SQ5_Pos,  ADC_SQR2_SQ6_Pos,  ADC_SQR2_SQ7_Pos,  ADC_SQR2_SQ8_Pos,
-        ADC_SQR2_SQ9_Pos,  ADC_SQR3_SQ10_Pos, ADC_SQR3_SQ11_Pos, ADC_SQR3_SQ12_Pos,
-        ADC_SQR3_SQ13_Pos, ADC_SQR3_SQ14_Pos, ADC_SQR4_SQ15_Pos, ADC_SQR4_SQ16_Pos};
-    /* Register index per rank: SQR1 ranks 1..4, SQR2 5..9, SQR3 10..14, SQR4 15..16. */
-    static const uint8_t k_reg[ADC_SEQ_MAX] = {0U, 0U, 0U, 0U, 1U, 1U, 1U, 1U,
-                                               1U, 2U, 2U, 2U, 2U, 2U, 3U, 3U};
     uint32_t sqr[4];
     uint32_t i;
     SPL_Status status;

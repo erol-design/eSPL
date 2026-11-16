@@ -77,7 +77,21 @@ extern "C"
      * ERRATA ES0431 2.2.9 / ES0430 2.2.9 / ES0523 2.2.7: Standby cannot be entered with HSE
      * bypass as SYSCLK: caller switches SYSCLK to HSI16 before WFI.
      * ERRATA ES0431 2.2.7 / ES0430 2.2.7 / ES0523 2.2.5: with DBG_SLEEP/DBG_STOP set, put an ISB
-     * right after the caller's WFI/WFE. */
+     * right after the caller's WFI/WFE.
+     * Caller duties around the caller's own sleep entry and wakeup path (the driver does none):
+     * Caller duty (CCL-2 PWR-04): before WFI/WFE confirm that every UART transmission (TC),
+     * flash operation (FLASH_SR.BSY) and DMA transfer in use has completed.
+     * Caller duty (CCL-2 PWR-05): if the IWDG runs, either freeze it in Stop/Standby with the
+     * IWDG_STOP/IWDG_STDBY option bits (this library does not write option bytes) or bound
+     * every sleep with a wakeup timer shorter than the IWDG timeout and refresh on wakeup.
+     * Caller duty (CCL-2 PWR-06b): set the sleep state (level, pull, or analog mode) of every
+     * pin configured as output before entry, or document that it stays at its last value.
+     * Caller duty (CCL-2 PWR-02a): after a Stop wakeup the clocks are not restored by the
+     * library; the caller re-runs its clock setup (oscillators, PLL, SYSCLK, prescalers).
+     * Caller duty (CCL-2 PWR-02b): after wakeup re-enable every peripheral and interrupt
+     * disabled before entry and re-initialise peripherals whose registers were lost.
+     * Caller duty (CCL-2 PWR-03b): after wakeup read the wakeup source (PWR_GetWakeupFlags,
+     * EXTI pending bits) or the stay-awake condition before entering sleep again. */
     /* Seviye: PARAM[S] */
     SPL_Status PWR_SetLowPowerMode(PWR_LowPowerModeTypeDef mode);
 

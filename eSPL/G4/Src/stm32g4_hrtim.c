@@ -43,6 +43,12 @@ typedef char Hrtim_FlagCheck
          ? 1
          : -1];
 
+/* Compile-time check (CCL-2 YAP-03): HRTIM_TIMER_COUNT matches the CMSIS timer array. */
+typedef char Hrtim_TimerCountCheck[((sizeof(((HRTIM_TypeDef *)0)->sTimerxRegs) /
+                                     sizeof(((HRTIM_TypeDef *)0)->sTimerxRegs[0])) == HRTIM_TIMER_COUNT)
+                                        ? 1
+                                        : -1];
+
 static HRTIM_Timerx_TypeDef *Hrtim_Timer(uint32_t timer)
 {
     return &HRTIM1->sTimerxRegs[timer];
@@ -58,16 +64,25 @@ static uint32_t Hrtim_Ckpsc(const HRTIM_Timerx_TypeDef *t)
     return (t->TIMxCR & HRTIM_TIMCR_CK_PSC_Msk) >> HRTIM_TIMCR_CK_PSC_Pos;
 }
 
+/* RM0440 Table 232: period and compare limits per CKPSC. The table lists CKPSC 0..5;
+ * 6 and 7 use the CKPSC 5 limits (no high-resolution bits left). */
+static const uint16_t hrtim_min[] = {0x0060U, 0x0030U, 0x0018U, 0x000CU,
+                                     0x0006U, 0x0003U, 0x0003U, 0x0003U};
+static const uint16_t hrtim_max[] = {0xFFDFU, 0xFFEFU, 0xFFF7U, 0xFFFBU,
+                                     0xFFFDU, 0xFFFDU, 0xFFFDU, 0xFFFDU};
+
+/* Compile-time check (CCL-2 YAP-03): HRTIM_CKPSC_MAX is the CK_PSC field maximum and both limit
+ * tables have one entry per CK_PSC code 0..HRTIM_CKPSC_MAX. */
+typedef char Hrtim_CkpscTableCheck
+    [((HRTIM_CKPSC_MAX == (HRTIM_TIMCR_CK_PSC_Msk >> HRTIM_TIMCR_CK_PSC_Pos)) &&
+      ((sizeof(hrtim_min) / sizeof(hrtim_min[0])) == (HRTIM_CKPSC_MAX + 1U)) &&
+      ((sizeof(hrtim_max) / sizeof(hrtim_max[0])) == (HRTIM_CKPSC_MAX + 1U)))
+         ? 1
+         : -1];
+
 /* ckpsc 0..7, checked by the caller. */
 static uint32_t Hrtim_InRange(uint32_t ckpsc, uint32_t value)
 {
-    /* RM0440 Table 232: period and compare limits per CKPSC. The table lists CKPSC 0..5;
-     * 6 and 7 use the CKPSC 5 limits (no high-resolution bits left). */
-    static const uint16_t hrtim_min[8] = {0x0060U, 0x0030U, 0x0018U, 0x000CU,
-                                          0x0006U, 0x0003U, 0x0003U, 0x0003U};
-    static const uint16_t hrtim_max[8] = {0xFFDFU, 0xFFEFU, 0xFFF7U, 0xFFFBU,
-                                          0xFFFDU, 0xFFFDU, 0xFFFDU, 0xFFFDU};
-
     return ((value >= hrtim_min[ckpsc]) && (value <= hrtim_max[ckpsc])) ? 1U : 0U;
 }
 
@@ -182,6 +197,15 @@ SPL_Status HRTIM_SetPeriod(uint32_t timer, uint32_t period)
     t = Hrtim_Timer(timer);
     /* SAFE: gecersiz alan / maske register semantigini bozabilir veya yanlis donanim durumuna yol acar. */
     SPL_REQUIRE_SAFE(!(Hrtim_InRange(Hrtim_Ckpsc(t), period) == 0U), SPL_ERR_PARAM);
+    /* Running with PREEN = 0: PERxR takes effect at once. A period at or below the moving
+     * counter would let it run to 0xFFFF before it wraps, and a counter read races the write
+     * (CCL-2 ZMN-02): every shrink is refused (STATE, no write). Use PREEN = 1 or stop the
+     * timer first. Growing the period is safe. */
+    if ((Hrtim_Running(timer) != 0U) && ((t->TIMxCR & HRTIM_TIMCR_PREEN) == 0U) &&
+        (period < (t->PERxR & HRTIM_PER_PER_Msk)))
+    {
+        return SPL_ERR_STATE;
+    }
     /* Issue #27 politikasi: HRTIM_SetCompare ile ayni kural, yalniz Tablo 232. Yazilmis CMP1..4
      * sinanmaz; CMP > PER gecerlidir (periyot icinde olay yok). Iki ayri register yazimi atomik
      * degildir: PREEN = 1 iken etkin degerler birlikte bir sonraki update olayinda yuklenir. */
@@ -270,6 +294,10 @@ SPL_Status HRTIM_DeadTimeConfig(uint32_t timer, const HRTIM_DeadTimeTypeDef *cfg
     SPL_REQUIRE_SAFE(!((cfg->enable > 1U) ||
         ((cfg->enable != 0U) && ((cfg->prescaler > HRTIM_DTPRSC_MAX) ||
                                  (cfg->rising > HRTIM_DT_MAX) || (cfg->falling > HRTIM_DT_MAX)))), SPL_ERR_PARAM);
+    /* SAFE: a zero rising or falling dead time with DTEN = 1 lets both switches of a bridge leg
+     * conduct at the same edge (CCL-2 ZMN-09; TIM_ComplementaryEnable rejects DTG = 0 too). */
+    SPL_REQUIRE_SAFE(!((cfg->enable != 0U) && ((cfg->rising == 0U) || (cfg->falling == 0U))),
+                     SPL_ERR_PARAM);
     t = Hrtim_Timer(timer);
     /* RM0440 28.5.52 DTEN: not while the timer runs or its outputs are enabled; 28.5.26: the
      * lock bits make value, sign and prescaler read-only. */

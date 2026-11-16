@@ -83,7 +83,10 @@ extern "C"
     SPL_Status FLASH_GetOptionRegister(uint32_t *optr);
 
     /* KEY1/KEY2 sequence. Already unlocked: OK, no write. A wrong sequence
-     * locks FLASH_CR until the next reset (and raises a HardFault). */
+     * locks FLASH_CR until the next reset (and raises a HardFault).
+     * Caller duty (CCL-2 FL-03a): this driver never locks by itself; after every FLASH_Unlock
+     * the caller calls FLASH_Lock on every exit path of its sequence, including error and
+     * timeout branches (retry FLASH_Lock while it returns BUSY, or end with a reset). */
     /* Seviye: HW[r] */
     SPL_Status FLASH_Unlock(void);
     /* Clears the operation bits and sets LOCK. BUSY while BSY=1. */
@@ -97,7 +100,10 @@ extern "C"
      * ERRATA ES0431 2.2.2 / ES0430 2.2.3 / ES0523 2.2.2: after a reset or power-down during
      * program/erase, FLASH_ECCR may be corrupted when that location is read: erase the page(s)
      * again before trusting ECC information (FLASH_GetEcc). */
-    /* Start a page erase. bank is FLASH_BANK_1/FLASH_BANK_2. */
+    /* Start a page erase. bank is FLASH_BANK_1/FLASH_BANK_2.
+     * Caller duty (CCL-2 FL-07b): one page per call, no range service; for a range the caller
+     * takes page_size from FLASH_GetGeometry, first page = start / page_size, last page =
+     * (start + length - 1) / page_size (rounds up), and erases first..last inclusive. */
     /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] HW[r] BUSY[r] */
     SPL_Status FLASH_ErasePageStart(uint32_t bank, uint32_t page);
     /* Start one 64-bit program at an 8-byte aligned main-memory address.

@@ -53,19 +53,27 @@ static uint8_t Dac_InternalOnly(const DAC_TypeDef *dac)
     return internal;
 }
 
+/* Channel masks, indexed by channel - 1 (DAC_CHANNEL_1, DAC_CHANNEL_2). */
+static const Dac_ChannelBits dac_bits[] = {
+    {DAC_CR_EN1, DAC_CR_CEN1, DAC_CR_TEN1, DAC_CR_TSEL1_Msk, DAC_CR_TSEL1_Pos, DAC_CR_WAVE1_Msk,
+     DAC_CR_MAMP1_Msk, DAC_CR_DMAEN1, DAC_CR_DMAUDRIE1, DAC_MCR_MODE1_Msk, DAC_MCR_MODE1_Pos,
+     DAC_MCR_DMADOUBLE1, DAC_MCR_SINFORMAT1, DAC_SR_DAC1RDY, DAC_SR_DMAUDR1, DAC_SWTRIGR_SWTRIG1},
+    {DAC_CR_EN2, DAC_CR_CEN2, DAC_CR_TEN2, DAC_CR_TSEL2_Msk, DAC_CR_TSEL2_Pos, DAC_CR_WAVE2_Msk,
+     DAC_CR_MAMP2_Msk, DAC_CR_DMAEN2, DAC_CR_DMAUDRIE2, DAC_MCR_MODE2_Msk, DAC_MCR_MODE2_Pos,
+     DAC_MCR_DMADOUBLE2, DAC_MCR_SINFORMAT2, DAC_SR_DAC2RDY, DAC_SR_DMAUDR2, DAC_SWTRIGR_SWTRIG2}};
+
+/* Compile-time check (CCL-2 YAP-03): channel - 1 is a valid dac_bits index for both
+ * channel codes accepted by Dac_Check. */
+typedef char Dac_ChannelTableCheck
+    [((DAC_CHANNEL_1 >= 1U) && (DAC_CHANNEL_2 >= 1U) &&
+      ((DAC_CHANNEL_1 - 1U) < (sizeof(dac_bits) / sizeof(dac_bits[0]))) &&
+      ((DAC_CHANNEL_2 - 1U) < (sizeof(dac_bits) / sizeof(dac_bits[0]))))
+         ? 1
+         : -1];
+
 /* Validates instance and channel; on success *bits points to the channel masks. */
 static SPL_Status Dac_Check(const DAC_TypeDef *dac, uint32_t channel, const Dac_ChannelBits **bits)
 {
-    static const Dac_ChannelBits dac_bits[2] = {
-        {DAC_CR_EN1, DAC_CR_CEN1, DAC_CR_TEN1, DAC_CR_TSEL1_Msk, DAC_CR_TSEL1_Pos, DAC_CR_WAVE1_Msk,
-         DAC_CR_MAMP1_Msk, DAC_CR_DMAEN1, DAC_CR_DMAUDRIE1, DAC_MCR_MODE1_Msk, DAC_MCR_MODE1_Pos,
-         DAC_MCR_DMADOUBLE1, DAC_MCR_SINFORMAT1, DAC_SR_DAC1RDY, DAC_SR_DMAUDR1,
-         DAC_SWTRIGR_SWTRIG1},
-        {DAC_CR_EN2, DAC_CR_CEN2, DAC_CR_TEN2, DAC_CR_TSEL2_Msk, DAC_CR_TSEL2_Pos, DAC_CR_WAVE2_Msk,
-         DAC_CR_MAMP2_Msk, DAC_CR_DMAEN2, DAC_CR_DMAUDRIE2, DAC_MCR_MODE2_Msk, DAC_MCR_MODE2_Pos,
-         DAC_MCR_DMADOUBLE2, DAC_MCR_SINFORMAT2, DAC_SR_DAC2RDY, DAC_SR_DMAUDR2,
-         DAC_SWTRIGR_SWTRIG2}};
-
     /* SAFE: reject invalid parameters before peripheral register access. */
     SPL_REQUIRE_SAFE(!((Dac_Valid(dac) == 0U) || ((channel != DAC_CHANNEL_1) && (channel != DAC_CHANNEL_2))), SPL_ERR_PARAM);
 #if defined(DAC2)

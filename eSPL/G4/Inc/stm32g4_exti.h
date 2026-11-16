@@ -29,11 +29,15 @@ extern "C"
 
     /* SYSCFG_EXTICR: route GPIO port pin 'line' (0..15) to EXTI line 'line'.
      * GPIOG only for lines 0..10 (RM0440 10.2.3-10.2.6). Read-back mismatch
-     * (SYSCFG clock off) -> SPL_ERR_STATE. */
+     * (SYSCFG clock off) -> SPL_ERR_STATE.
+     * Caller duty (CCL-2 GPIO-05): one port per line; a later call for the same line from
+     * another port silently replaces the earlier selection, so keep line numbers distinct. */
     /* Seviye: PARAM[S] STATE[r] */
     SPL_Status EXTI_SetGpioSource(GPIO_TypeDef *port, uint8_t line);
     /* Triggers (configurable lines only; direct lines need EXTI_TRIGGER_NONE), then
-     * IMR/EMR from 'mode' (non-zero EXTI_MODE_* mask). Pending bit is not cleared. */
+     * IMR/EMR from 'mode' (non-zero EXTI_MODE_* mask). Pending bit is not cleared.
+     * Caller duty (CCL-2 GPIO-06): with EXTI_TRIGGER_BOTH the handler (caller code) must read
+     * the pin level to tell rising from falling edge, unless its work is edge-independent. */
     /* Seviye: PARAM[S,n,r] UNSUPPORTED[r] */
     SPL_Status EXTI_LineConfig(uint8_t line, EXTI_TriggerTypeDef trigger, uint32_t mode);
     /* Clears IMR/EMR (and RTSR/FTSR on configurable lines). Pending bit untouched. */

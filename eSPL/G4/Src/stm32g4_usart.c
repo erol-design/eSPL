@@ -97,6 +97,30 @@ SPL_Status USART_TryWrite(USART_TypeDef *instance, uint8_t byte)
     return SPL_OK;
 }
 
+/* Largest value of the data field for the current CR1 M/PCE setting. */
+static inline __attribute__((unused)) uint32_t Usart_DataMask(uint32_t cr1)
+{
+    uint32_t mask = 0xFFU;
+
+    if ((cr1 & USART_CR1_M0) != 0U)
+    {
+        mask = 0x1FFU;
+    }
+    else if ((cr1 & USART_CR1_M1) != 0U)
+    {
+        mask = 0x7FU;
+    }
+    else
+    {
+        /* 8 bits. */
+    }
+    if ((cr1 & USART_CR1_PCE) != 0U)
+    {
+        mask >>= 1U; /* parity replaces the MSB (RM0440 40.8.1 PCE) */
+    }
+    return mask;
+}
+
 SPL_Status USART_TryRead(USART_TypeDef *instance, uint8_t *byte)
 {
     SPL_REQUIRE_SAFE(Usart_AnyValid(instance) != 0U, SPL_ERR_PARAM); /* SAFE: invalid MMIO base */
@@ -111,7 +135,9 @@ SPL_Status USART_TryRead(USART_TypeDef *instance, uint8_t *byte)
     {
         return SPL_WOULD_BLOCK;
     }
-    *byte = (uint8_t)instance->RDR;
+    /* With parity (PCE=1) or a 7-bit frame the parity bit sits above the data bits in RDR:
+     * mask it off, as USART_TryRead9 does (CCL-2 YAP-09). */
+    *byte = (uint8_t)(instance->RDR & Usart_DataMask(instance->CR1));
     return SPL_OK;
 }
 
@@ -205,12 +231,17 @@ static uint64_t Usart_DivRound(uint64_t num, uint64_t den)
     return (num + (den / 2U)) / den;
 }
 
+/* PRESC.PRESCALER code -> division factor (RM0440 40.8.14 / 41.7.12). */
+static const uint16_t usart_presc_div[] = {1U, 2U, 4U, 6U, 8U, 10U, 12U, 16U, 32U, 64U, 128U, 256U};
+
+/* Compile-time check (CCL-2 YAP-03): one table entry per prescaler code 0..USART_PRESC_DIV256,
+ * the bound used by the SAFE check in USART_InitEx. */
+typedef char Usart_PrescTableCheck
+    [((sizeof(usart_presc_div) / sizeof(usart_presc_div[0])) == (USART_PRESC_DIV256 + 1U)) ? 1 : -1];
+
 /* BRR for the given configuration; 0 if the baud rate cannot be reached. */
 static uint32_t Usart_ComputeBrr(uint8_t lpuart, const USART_InitExTypeDef *cfg)
 {
-    /* PRESC.PRESCALER code -> division factor (RM0440 40.8.14 / 41.7.12). */
-    static const uint16_t usart_presc_div[12] = {1U,  2U,  4U,  6U,  8U,   10U,
-                                                 12U, 16U, 32U, 64U, 128U, 256U};
     const uint64_t den = (uint64_t)cfg->baudrate * usart_presc_div[cfg->prescaler];
     const uint64_t f = (uint64_t)cfg->kernel_hz;
     uint64_t div;
@@ -479,30 +510,6 @@ SPL_Status USART_DriverEnableConfig(USART_TypeDef *instance, uint8_t enable, uin
     instance->CR1 = cr1;
     instance->CR3 = cr3;
     return SPL_OK;
-}
-
-/* Largest value of the data field for the current CR1 M/PCE setting. */
-static inline __attribute__((unused)) uint32_t Usart_DataMask(uint32_t cr1)
-{
-    uint32_t mask = 0xFFU;
-
-    if ((cr1 & USART_CR1_M0) != 0U)
-    {
-        mask = 0x1FFU;
-    }
-    else if ((cr1 & USART_CR1_M1) != 0U)
-    {
-        mask = 0x7FU;
-    }
-    else
-    {
-        /* 8 bits. */
-    }
-    if ((cr1 & USART_CR1_PCE) != 0U)
-    {
-        mask >>= 1U; /* parity replaces the MSB (RM0440 40.8.1 PCE) */
-    }
-    return mask;
 }
 
 SPL_Status USART_TryWrite9(USART_TypeDef *instance, uint16_t data)
