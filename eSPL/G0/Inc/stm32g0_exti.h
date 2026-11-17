@@ -18,7 +18,10 @@
  * line > 36 -> SPL_ERR_PARAM. Rejected calls write nothing. Configuration APIs use
  * read-modify-write: serialise them. NVIC is not touched.
  * Reset state note: IMR1 resets to 0xFFF8 0000 (lines 19..31 unmasked, COMP3 line 20 included;
- * RM0444 13.5.12). */
+ * RM0444 13.5.12).
+ * Caller duties (all APIs): serialise the configuration calls (read-modify-write); NVIC enable,
+ * priority and the handler are the caller's (the handler calls EXTI_ClearPending); lines 0..15
+ * need the pin configured as input (GPIO_Init). */
 
 #ifdef __cplusplus
 extern "C"
@@ -39,28 +42,36 @@ typedef enum
 } EXTI_TriggerTypeDef;
 
 /* EXTI_EXTICRx: route pin 'line' (0..15) of port GPIOA..GPIOF to EXTI line 'line'. */
-/* Seviye: PARAM[S,r] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F,r] */
 SPL_Status EXTI_SetGpioSource(GPIO_TypeDef *port, uint8_t line);
 /* Configurable lines: RTSR/FTSR from trigger, then IMR/EMR from mode (non-zero EXTI_MODE_* mask).
  * Direct lines: trigger must be EXTI_TRIGGER_NONE (else PARAM); only IMR/EMR. Pending untouched. */
-/* Seviye: PARAM[S,n] UNSUPPORTED[r] */
+/* Caller: select the source first (EXTI_SetGpioSource, PVD, COMP) and clear a stale pending bit
+ * (EXTI_ClearPending) before unmasking. */
+/* Level: PARAM[F] UNSUPPORTED[r] */
 SPL_Status EXTI_LineConfig(uint8_t line, EXTI_TriggerTypeDef trigger, uint32_t mode);
 /* Clears IMR/EMR (and RTSR/FTSR on configurable lines). Pending bits untouched. */
-/* Seviye: PARAM[S] UNSUPPORTED[r] */
+/* Caller: clear the pending bits afterwards when an edge may have been latched. */
+/* Level: PARAM[F] UNSUPPORTED[r] */
 SPL_Status EXTI_LineDisable(uint8_t line);
 /* Configurable lines only: writes only this line's SWIER bit (a rising-edge event, RPR set). */
-/* Seviye: PARAM[S] UNSUPPORTED[r] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] UNSUPPORTED[r] */
 SPL_Status EXTI_SoftwareTrigger(uint8_t line);
 /* Configurable lines only. *pending = 1 when the rising or the falling pending bit is set
  * (G4-compatible signature). */
-/* Seviye: PARAM[S] UNSUPPORTED[r] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] UNSUPPORTED[r] */
 SPL_Status EXTI_GetPending(uint8_t line, uint8_t *pending);
 /* G0 only: rising (RPR) and falling (FPR) pending bits separately. */
-/* Seviye: PARAM[S] UNSUPPORTED[r] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] UNSUPPORTED[r] */
 SPL_Status EXTI_GetPendingEdges(uint8_t line, uint8_t *rising, uint8_t *falling);
 /* Configurable lines only. RPR and FPR are write-1-to-clear: this line's bit is written to both,
  * nothing else. ISR-safe. */
-/* Seviye: PARAM[S] UNSUPPORTED[r] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] UNSUPPORTED[r] */
 SPL_Status EXTI_ClearPending(uint8_t line);
 
 #ifdef __cplusplus

@@ -66,16 +66,16 @@ SPL_Status NVIC_SetGrouping(NVIC_PriorityGroupTypeDef group)
 {
     uint32_t g = (uint32_t)group;
 
-    /* SAFE: invalid priority grouping underflows the AIRCR PRIGROUP encoding. */
-    SPL_REQUIRE_SAFE(g <= (uint32_t)__NVIC_PRIO_BITS, SPL_ERR_PARAM);
+    /* Invalid priority grouping underflows the AIRCR PRIGROUP encoding. */
+    SPL_REQUIRE(g <= (uint32_t)__NVIC_PRIO_BITS, SPL_ERR_PARAM);
     NVIC_SetPriorityGrouping(NVIC_PRIGROUP_TOP - g);
     return SPL_OK;
 }
 
 SPL_Status NVIC_GetGrouping(NVIC_PriorityGroupTypeDef *group)
 {
-    /* SAFE: an invalid output pointer may read/write an unrelated memory region. */
-    SPL_REQUIRE_SAFE(group != NULL, SPL_ERR_PARAM);
+    /* An invalid output pointer may read/write an unrelated memory region. */
+    SPL_REQUIRE(group != NULL, SPL_ERR_PARAM);
     switch (Nvic_PreemptBits())
     {
     case 0U:
@@ -102,13 +102,13 @@ SPL_Status NVIC_SetIrqPriority(IRQn_Type irq, uint32_t preempt, uint32_t sub)
     uint32_t preemptBits;
     uint32_t subBits;
 
-    /* SAFE: invalid exception numbers can address unrelated NVIC/SCB registers. */
-    SPL_REQUIRE_SAFE(Nvic_IsPriorityIrq(irq) != 0U, SPL_ERR_PARAM);
+    /* Invalid exception numbers can address unrelated NVIC/SCB registers. */
+    SPL_REQUIRE(Nvic_IsPriorityIrq(irq) != 0U, SPL_ERR_PARAM);
     preemptBits = Nvic_PreemptBits();
     subBits = (uint32_t)__NVIC_PRIO_BITS - preemptBits;
-    /* SAFE: overflow silently truncates the encoded interrupt priority. */
-    SPL_REQUIRE_SAFE(preempt < (1U << preemptBits), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(sub < (1U << subBits), SPL_ERR_PARAM);
+    /* Overflow silently truncates the encoded interrupt priority. */
+    SPL_REQUIRE(preempt < (1U << preemptBits), SPL_ERR_PARAM);
+    SPL_REQUIRE(sub < (1U << subBits), SPL_ERR_PARAM);
     NVIC_SetPriority(irq, (preempt << subBits) | sub);
     return SPL_OK;
 }
@@ -118,9 +118,9 @@ SPL_Status NVIC_GetIrqPriority(IRQn_Type irq, uint32_t *preempt, uint32_t *sub)
     uint32_t subBits;
     uint32_t priority;
 
-    SPL_REQUIRE_SAFE(Nvic_IsPriorityIrq(irq) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(preempt != NULL, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(sub != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(Nvic_IsPriorityIrq(irq) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(preempt != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(sub != NULL, SPL_ERR_PARAM);
     subBits = (uint32_t)__NVIC_PRIO_BITS - Nvic_PreemptBits();
     priority = NVIC_GetPriority(irq);
     *preempt = priority >> subBits;
@@ -130,48 +130,48 @@ SPL_Status NVIC_GetIrqPriority(IRQn_Type irq, uint32_t *preempt, uint32_t *sub)
 
 SPL_Status NVIC_Enable(IRQn_Type irq)
 {
-    /* SAFE: IRQ outside the architectural vector table may corrupt SCS memory. */
-    SPL_REQUIRE_SAFE(Nvic_IsDeviceIrq(irq) != 0U, SPL_ERR_PARAM);
+    /* IRQ outside the architectural vector table may corrupt SCS memory. */
+    SPL_REQUIRE(Nvic_IsDeviceIrq(irq) != 0U, SPL_ERR_PARAM);
     NVIC_EnableIRQ(irq);
     return SPL_OK;
 }
 
 SPL_Status NVIC_Disable(IRQn_Type irq)
 {
-    /* SAFE: IRQ outside the architectural vector table may corrupt SCS memory. */
-    SPL_REQUIRE_SAFE(Nvic_IsDeviceIrq(irq) != 0U, SPL_ERR_PARAM);
+    /* IRQ outside the architectural vector table may corrupt SCS memory. */
+    SPL_REQUIRE(Nvic_IsDeviceIrq(irq) != 0U, SPL_ERR_PARAM);
     NVIC_DisableIRQ(irq);
     return SPL_OK;
 }
 
 SPL_Status NVIC_IsEnabled(IRQn_Type irq, uint8_t *enabled)
 {
-    SPL_REQUIRE_SAFE(Nvic_IsDeviceIrq(irq) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(enabled != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(Nvic_IsDeviceIrq(irq) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(enabled != NULL, SPL_ERR_PARAM);
     *enabled = (NVIC_GetEnableIRQ(irq) != 0U) ? 1U : 0U;
     return SPL_OK;
 }
 
 SPL_Status NVIC_SetPending(IRQn_Type irq)
 {
-    /* SAFE: IRQ outside the architectural vector table may corrupt SCS memory. */
-    SPL_REQUIRE_SAFE(Nvic_IsDeviceIrq(irq) != 0U, SPL_ERR_PARAM);
+    /* IRQ outside the architectural vector table may corrupt SCS memory. */
+    SPL_REQUIRE(Nvic_IsDeviceIrq(irq) != 0U, SPL_ERR_PARAM);
     NVIC_SetPendingIRQ(irq);
     return SPL_OK;
 }
 
 SPL_Status NVIC_ClearPending(IRQn_Type irq)
 {
-    /* SAFE: IRQ outside the architectural vector table may corrupt SCS memory. */
-    SPL_REQUIRE_SAFE(Nvic_IsDeviceIrq(irq) != 0U, SPL_ERR_PARAM);
+    /* IRQ outside the architectural vector table may corrupt SCS memory. */
+    SPL_REQUIRE(Nvic_IsDeviceIrq(irq) != 0U, SPL_ERR_PARAM);
     NVIC_ClearPendingIRQ(irq);
     return SPL_OK;
 }
 
 SPL_Status NVIC_GetPending(IRQn_Type irq, uint8_t *pending)
 {
-    SPL_REQUIRE_SAFE(Nvic_IsDeviceIrq(irq) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(pending != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(Nvic_IsDeviceIrq(irq) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(pending != NULL, SPL_ERR_PARAM);
     *pending = (NVIC_GetPendingIRQ(irq) != 0U) ? 1U : 0U;
     return SPL_OK;
 }
@@ -180,10 +180,10 @@ SPL_Status NVIC_SysTickConfig(uint32_t reload, NVIC_SysTickClockTypeDef clock, u
 {
     uint32_t ctrl = SysTick_CTRL_ENABLE_Msk;
 
-    /* SAFE: invalid reload/interrupt can silently misconfigure system tick. */
-    SPL_REQUIRE_SAFE(reload != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(reload <= SysTick_LOAD_RELOAD_Msk, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(interrupt <= 1U, SPL_ERR_PARAM);
+    /* Invalid reload/interrupt can silently misconfigure system tick. */
+    SPL_REQUIRE(reload != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(reload <= SysTick_LOAD_RELOAD_Msk, SPL_ERR_PARAM);
+    SPL_REQUIRE(interrupt <= 1U, SPL_ERR_PARAM);
     if (clock == NVIC_SYSTICK_CLK_HCLK)
     {
         ctrl |= SysTick_CTRL_CLKSOURCE_Msk;

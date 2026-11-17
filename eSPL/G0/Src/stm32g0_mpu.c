@@ -1,7 +1,7 @@
 /* Cortex-M0+ MPU driver (v0.9), adapted from STM32H7 SPL Src/stm32h7_mpu.c (Armv7-M) for Armv6-M.
- * Docs/v0.9_MPU_CONTRACT.md. */
-/* Kutuphane birimi: spl_check.h karisma korumasi referansini bu birim de uretir; uretmeyen tek
- * birim stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
+ * Public contract: stm32g0_mpu.h, Docs/v0.9_MPU_CONTRACT.md. */
+/* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit
+ * that does not is stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
 #define SPL_LIBRARY_BUILD 1
 #include <stddef.h>
 #include "stm32g0_mpu.h"
@@ -10,9 +10,9 @@
 #define MPU_PERIPH_LAST 0x5FFFFFFFUL
 #define MPU_SRD_ALL 0xFFU
 
-/* Denetim seviyesi (A4 dalga 5, Docs/CHECK_LEVEL.md 5.4 MPU tablosu): SPL_REQUIRE = normal
- * sinif (yalniz FULL), SPL_REQUIRE_SAFE = SAFE sinif (FULL ve MIX). DREGION = 0 (UNSUPPORTED)
- * donanimin cevabi, result: her seviyede. Yalniz denetimde kullanilan yardimcilar static inline. */
+/* Check level (A4 wave 5, Docs/CHECK_LEVEL.md 5.4 MPU table): SPL_REQUIRE = checked at FULL only
+ * (not compiled at FAST). DREGION = 0 (UNSUPPORTED) is the hardware's answer, result: at every
+ * level. Helpers used only by the checks are static inline. */
 
 /* S / C / B per MPU_MemTypeDef; TEX always 000 on Armv6-M. */
 static const uint32_t mpu_attr[3] = {0U, MPU_RASR_S_Msk | MPU_RASR_B_Msk,
@@ -36,8 +36,9 @@ static inline uint32_t Mpu_AccessValid(uint32_t ap)
                : 0U;
 }
 
-/* SAFE: bolge numarasi, boyut, hiza, alt bolge, tip, erisim kodu, mimari kurallar. A4: `execute`
- * > 1 normal sinif, MPU_ConfigRegion'da ayri (Device / Strongly-ordered kurali `!= 0` ile). */
+/* region number, size, alignment, sub-region, type, access code, architecture rules. A4:
+ * `execute` > 1 is a separate check in MPU_ConfigRegion (the Device / Strongly-ordered rule
+ * uses `!= 0`). */
 static inline uint32_t Mpu_RegionValid(const MPU_RegionTypeDef *cfg, uint32_t n)
 {
     const uint32_t type = (uint32_t)cfg->type;
@@ -76,7 +77,7 @@ SPL_Status MPU_GetRegionCount(uint32_t *count)
 {
     uint32_t n;
 
-    SPL_REQUIRE_SAFE(count != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(count != NULL, SPL_ERR_PARAM);
     n = Mpu_RegionCount();
     if (n == 0U)
     {
@@ -90,16 +91,16 @@ SPL_Status MPU_ConfigRegion(const MPU_RegionTypeDef *cfg)
 {
     uint32_t n;
 
-    SPL_REQUIRE_SAFE(cfg != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(cfg != NULL, SPL_ERR_PARAM);
     n = Mpu_RegionCount();
     if (n == 0U)
     {
-        return SPL_ERR_UNSUPPORTED; /* result: donanimin cevabi */
+        return SPL_ERR_UNSUPPORTED; /* result: the hardware's answer */
     }
     SPL_REQUIRE(cfg->execute <= 1U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(Mpu_RegionValid(cfg, n) != 0U, SPL_ERR_PARAM); /* SAFE */
-    /* SAFE: calisirken bolge degisir (gecici yanlis izin). */
-    SPL_REQUIRE_SAFE(Mpu_IsOn() == 0U, SPL_ERR_STATE);
+    SPL_REQUIRE(Mpu_RegionValid(cfg, n) != 0U, SPL_ERR_PARAM);
+    /* the region changes while running (temporary wrong permission). */
+    SPL_REQUIRE(Mpu_IsOn() == 0U, SPL_ERR_STATE);
     MPU->RNR = cfg->number;
     MPU->RBAR = cfg->base & MPU_RBAR_ADDR_Msk; /* VALID = 0: region from RNR */
     MPU->RASR = ((cfg->execute != 0U) ? 0U : MPU_RASR_XN_Msk) |
@@ -117,8 +118,8 @@ SPL_Status MPU_DisableRegion(uint32_t number)
     {
         return SPL_ERR_UNSUPPORTED;
     }
-    SPL_REQUIRE_SAFE(number < n, SPL_ERR_PARAM);       /* SAFE: baska bolge */
-    SPL_REQUIRE_SAFE(Mpu_IsOn() == 0U, SPL_ERR_STATE); /* SAFE */
+    SPL_REQUIRE(number < n, SPL_ERR_PARAM); /* another region */
+    SPL_REQUIRE(Mpu_IsOn() == 0U, SPL_ERR_STATE);
     MPU->RNR = number;
     MPU->RASR = 0U;
     return SPL_OK;
@@ -131,9 +132,9 @@ SPL_Status MPU_Enable(uint8_t privileged_default, uint8_t in_fault_handlers)
     SPL_REQUIRE((privileged_default <= 1U) && (in_fault_handlers <= 1U), SPL_ERR_PARAM);
     if (Mpu_RegionCount() == 0U)
     {
-        return SPL_ERR_UNSUPPORTED; /* result: donanimin cevabi */
+        return SPL_ERR_UNSUPPORTED; /* result: the hardware's answer */
     }
-    /* normal: CTRL istenen degerle yeniden yazilir (zararsiz). */
+    /* CTRL would be rewritten with the requested value (harmless). */
     SPL_REQUIRE(Mpu_IsOn() == 0U, SPL_ERR_STATE);
     if (privileged_default != 0U)
     {
@@ -165,7 +166,7 @@ SPL_Status MPU_Disable(void)
 
 SPL_Status MPU_IsEnabled(uint32_t *enabled)
 {
-    SPL_REQUIRE_SAFE(enabled != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(enabled != NULL, SPL_ERR_PARAM);
     if (Mpu_RegionCount() == 0U)
     {
         return SPL_ERR_UNSUPPORTED;

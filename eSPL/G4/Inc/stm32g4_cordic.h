@@ -54,18 +54,18 @@ extern "C"
     } CORDIC_ContextTypeDef;
 
     /* outstanding = 0. No register access. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status CORDIC_ContextInit(CORDIC_ContextTypeDef *ctx);
     /* One CSR write (IEN kept, DMA bits 0). PARAM: NULL or field rule broken
      * (see contract). STATE: DMA enabled, RRDY=1, or outstanding != 0. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status CORDIC_Config(const CORDIC_ContextTypeDef *ctx, const CORDIC_ConfigTypeDef *config);
     /* IEN = enable (interrupt while RRDY=1). Other fields kept. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status CORDIC_InterruptConfig(uint8_t enable);
     /* DMAREN/DMAWEN. Entering DMA mode needs outstanding=0 and RRDY=0 (STATE).
      * Configure the DMA channels first: DMAWEN=1 requests data at once. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status CORDIC_DmaConfig(const CORDIC_ContextTypeDef *ctx, uint8_t read_enable,
                                 uint8_t write_enable);
     /* Writes the arguments of one calculation (starts it or queues it).
@@ -74,18 +74,18 @@ extern "C"
      * PARAM: NULL or argument outside the RM range for FUNC/SCALE.
      * STATE: DMA enabled, two operations outstanding (read first), or CSR
      * not a valid configuration. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status CORDIC_TryWrite(CORDIC_ContextTypeDef *ctx, uint32_t wdata1, uint32_t wdata2);
     /* Reads the result(s) of the oldest calculation when RRDY=1: rdata1 = first
      * RDATA word, rdata2 = second word (NRES=1 only; may be NULL otherwise).
      * WOULD_BLOCK: RRDY=0 with a calculation outstanding (RDATA not touched).
      * STATE: DMA enabled, or RRDY=0 and nothing outstanding. */
-    /* Seviye: PARAM[S] STATE[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] WOULD_BLOCK[r] */
     SPL_Status CORDIC_TryRead(CORDIC_ContextTypeDef *ctx, uint32_t *rdata1, uint32_t *rdata2);
     /* q1.15 packing helpers (pure integer, no register access). */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status CORDIC_PackQ15(int16_t arg1, int16_t arg2, uint32_t *wdata);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status CORDIC_UnpackQ15(uint32_t rdata, int16_t *res1, int16_t *res2);
 
 #ifdef __cplusplus

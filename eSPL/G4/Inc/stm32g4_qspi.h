@@ -142,14 +142,14 @@ extern "C"
      * written; call again (no repeat). Call after reset and after leaving memory-mapped mode
      * (Abort/Disable, then Init), with interrupts masked: the last CR write must follow the first
      * CCR write within 127 QUADSPI kernel clocks. Leaves CCR = 0x20000000. */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] BUSY[r] */
     SPL_Status QSPI_Init(const QSPI_InitTypeDef *init);
     /* Sets / clears CR.EN (read-modify-write that never copies ABORT back).
      * ABORT still pending => BUSY. Disable is allowed while BUSY=1: it is the
      * RM stop path for auto-polling and memory-mapped mode. */
-    /* Seviye: UNSUPPORTED[r] BUSY[r] */
+    /* Level: UNSUPPORTED[r] BUSY[r] */
     SPL_Status QSPI_Enable(void);
-    /* Seviye: UNSUPPORTED[r] BUSY[r] */
+    /* Level: UNSUPPORTED[r] BUSY[r] */
     SPL_Status QSPI_Disable(void);
 
     /* Writes DLR, ABR, then CCR (CCR last: it may be the start trigger).
@@ -161,76 +161,76 @@ extern "C"
      * ERRATA ES0430 2.6.3 (G47x/G48x only, not ES0523): STATE when the current
      * CCR is memory-mapped and cmd is not: run QSPI_Disable + QSPI_Init
      * (workaround) first. */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] HW[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] HW[r] BUSY[r] */
     SPL_Status QSPI_CommConfig(const QSPI_CommTypeDef *cmd);
     /* Pure: which register write starts cmd (QSPI_TRIGGER_x). No register access. */
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status QSPI_GetStartTrigger(const QSPI_CommTypeDef *cmd, uint32_t *trigger);
     /* DLR / ABR setters between commands: BUSY=0 required; never a trigger. */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] BUSY[r] */
     SPL_Status QSPI_SetDataLength(uint32_t dlr);
-    /* Seviye: STATE[r] UNSUPPORTED[r] BUSY[r] */
+    /* Level: STATE[r] UNSUPPORTED[r] BUSY[r] */
     SPL_Status QSPI_SetAlternateBytes(uint32_t abr);
     /* AR write. STATE when the current CCR has no address phase or is in
      * memory-mapped mode (the RM ignores AR writes there). Trigger rules as
      * for QSPI_CommConfig when AR starts the command. */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] HW[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] HW[r] BUSY[r] */
     SPL_Status QSPI_SetAddress(uint32_t address);
 
     /* Indirect write FIFO (FMODE=00). Byte/half-word/word DR access adds
      * 1/2/4 bytes. With BUSY=0 the write is the start trigger (trigger gate).
      * FIFO has fewer free bytes than the access width: WOULD_BLOCK while BUSY=1 (the transfer
      * drains it); STATE while BUSY=0 (nothing drains it, waiting cannot help). */
-    /* Seviye: STATE[r] UNSUPPORTED[r] HW[r] BUSY[r] WOULD_BLOCK[r] */
+    /* Level: STATE[r] UNSUPPORTED[r] HW[r] BUSY[r] WOULD_BLOCK[r] */
     SPL_Status QSPI_TryWrite8(uint8_t data);
-    /* Seviye: STATE[r] UNSUPPORTED[r] HW[r] BUSY[r] WOULD_BLOCK[r] */
+    /* Level: STATE[r] UNSUPPORTED[r] HW[r] BUSY[r] WOULD_BLOCK[r] */
     SPL_Status QSPI_TryWrite16(uint16_t data);
-    /* Seviye: STATE[r] UNSUPPORTED[r] HW[r] BUSY[r] WOULD_BLOCK[r] */
+    /* Level: STATE[r] UNSUPPORTED[r] HW[r] BUSY[r] WOULD_BLOCK[r] */
     SPL_Status QSPI_TryWrite32(uint32_t data);
     /* Indirect read FIFO (FMODE=01) or last polled status (FMODE=10).
      * WOULD_BLOCK while fewer than width bytes are available and more are
      * coming; STATE when they will never come (read the tail narrower). */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] HW[r] BUSY[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] HW[r] BUSY[r] WOULD_BLOCK[r] */
     SPL_Status QSPI_TryRead8(uint8_t *data);
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] HW[r] BUSY[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] HW[r] BUSY[r] WOULD_BLOCK[r] */
     SPL_Status QSPI_TryRead16(uint16_t *data);
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] HW[r] BUSY[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] HW[r] BUSY[r] WOULD_BLOCK[r] */
     SPL_Status QSPI_TryRead32(uint32_t *data);
 
     /* Raw SR read (no side effects). */
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status QSPI_GetStatus(uint32_t *sr);
     /* Writes FCR = flags; flags: non-zero subset of QSPI_FLAGS_CLEARABLE. */
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status QSPI_ClearFlags(uint32_t flags);
 
     /* Requests CR.ABORT (self-clearing). OK without a write when BUSY=0 or
      * ABORT already pending. Then poll QSPI_AbortPoll; TCF is set by the
      * abort (clear it with QSPI_ClearFlags). */
-    /* Seviye: UNSUPPORTED[r] */
+    /* Level: UNSUPPORTED[r] */
     SPL_Status QSPI_Abort(void);
     /* OK: no abort pending and BUSY=0. WOULD_BLOCK: ABORT still set.
      * STATE: BUSY=1 without an abort request (call QSPI_Abort). */
-    /* Seviye: STATE[r] UNSUPPORTED[r] WOULD_BLOCK[r] */
+    /* Level: STATE[r] UNSUPPORTED[r] WOULD_BLOCK[r] */
     SPL_Status QSPI_AbortPoll(void);
 
     /* PSMKR, PSMAR, PIR, then CR.PMM/APMS. BUSY=0 required. Call before the
      * QSPI_CommConfig (FMODE=10) that may start polling. */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] BUSY[r] */
     SPL_Status QSPI_AutoPollingConfig(const QSPI_AutoPollTypeDef *cfg);
     /* LPTR = timeout, then CR.TCEN = enable. BUSY=0 required.
      * QSPI_Init leaves the timeout off (TCEN = 0): in memory-mapped mode NCS then stays active
      * (memory selected) after the last access until QSPI_Abort, which costs supply current and
      * keeps the memory out of its standby state (CCL-2 DBL-02). Enable it here when the memory
      * should be released between accesses; keeping it off is the caller's decision. */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] BUSY[r] */
     SPL_Status QSPI_MemoryMappedTimeout(uint16_t timeout, uint8_t enable);
     /* CR.DMAEN = enable. Allowed in any BUSY state (no RM restriction). */
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status QSPI_DmaConfig(uint8_t enable);
     /* Sets (enable=1) or clears (enable=0) the CR enables in mask
      * (non-zero subset of QSPI_IT_ALL). */
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status QSPI_InterruptConfig(uint32_t mask, uint8_t enable);
 
 #ifdef __cplusplus

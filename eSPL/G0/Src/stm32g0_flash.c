@@ -1,8 +1,8 @@
 /* Ported from STM32G4 SPL Src/stm32g4_flash.c (G4 v0.13.2) and adapted to RM0444 Rev 6
  * section 3: busy = BSY1 | BSY2 | CFGBSY, no DCEN, geometry Table 9..12, latency Table 13,
- * ES0548 2.2.3 and 2.2.10. */
-/* Kutuphane birimi: spl_check.h karisma korumasi referansini bu birim de uretir; uretmeyen tek
- * birim stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
+ * ES0548 2.2.3 and 2.2.10. Public contract: stm32g0_flash.h. */
+/* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit
+ * that does not is stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
 #define SPL_LIBRARY_BUILD 1
 #include <stddef.h>
 #include "stm32g0_flash.h"
@@ -23,18 +23,18 @@
 
 #define FLASH_SIZE_KB_REG (*(const volatile uint16_t *)FLASHSIZE_BASE)
 
-/* Denetim seviyesi (A4 dalga 1, Docs/CHECK_LEVEL.md 5.4 FLASH tablosu): SPL_REQUIRE = normal sinif
- * (yalniz FULL), SPL_REQUIRE_SAFE = SAFE sinif (FULL ve MIX). Her seviyede kalanlar: SPL_BUSY,
- * bekleyen hata (ERR_HW), geri okuma, geri alinamaz islem anahtarlari (FLASH_KEY_*), yapisal
- * dallar (#if, SPL_ENABLE_IRREVERSIBLE), FLASH_CalcLatency'nin cevabi. Program / silme / koruma
- * API'lerinde geometri yalniz SAFE adres / bank denetimi icin okunur: FAST'ta okunmaz.
- * Butun makrolar ilk MMIO yazimindan once (METHOD 1.3). */
+/* Check level (A4 wave 1, Docs/CHECK_LEVEL.md 5.4 FLASH table): SPL_REQUIRE = checked at FULL only
+ * (not compiled at FAST). Kept at every level: SPL_BUSY, pending error (ERR_HW), read-back,
+ * irreversible-operation keys (FLASH_KEY_*), structural branches (#if, SPL_ENABLE_IRREVERSIBLE),
+ * the answer of FLASH_CalcLatency. In the program / erase / protection APIs the geometry is read
+ * only for the address / bank check: it is not read in FAST. All macros come before the first MMIO
+ * write (METHOD 1.3). */
 
 static SPL_Status Flash_ReadGeometry(FLASH_GeometryTypeDef *g);
 
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
-/* Bank 2 request on a device or configuration without bank 2: same rule as page erase. SAFE
- * denetimi (BKER / MER2 / WRP2 yok sayilir, bank 1 etkilenir); FAST'ta derlenmez. */
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
+/* Bank 2 request on a device or configuration without bank 2: same rule as page erase.
+ * Check (BKER / MER2 / WRP2 are ignored, bank 1 is affected); not compiled in FAST. */
 static SPL_Status Flash_Bank2Status(const FLASH_GeometryTypeDef *g)
 {
     if (g->banks == 2U)
@@ -82,8 +82,9 @@ static SPL_Status Flash_ReadGeometry(FLASH_GeometryTypeDef *g)
  * HardFault on G0, RM0444 3.7.5), pending errors -> ERR_HW (else PGSERR, RM0444 3.3.8). */
 static SPL_Status Flash_ReadyForOperation(void)
 {
-    /* SAFE: kilitliyken CR yazimi yok sayilir ve OK donerdi; programlama yazimi bus hatasi. */
-    SPL_REQUIRE_SAFE((FLASH->CR & FLASH_CR_LOCK) == 0U, SPL_ERR_STATE);
+    /* while locked a CR write is ignored and OK would be returned; a program write is a bus
+     * error. */
+    SPL_REQUIRE((FLASH->CR & FLASH_CR_LOCK) == 0U, SPL_ERR_STATE);
     if ((FLASH->SR & FLASH_SR_ANYBUSY) != 0U)
     {
         return SPL_BUSY;
@@ -100,10 +101,10 @@ SPL_Status FLASH_CalcLatency(uint32_t hclk_hz, FLASH_RangeTypeDef range, uint32_
     static const uint8_t max_mhz[2][3] = {{24U, 48U, 64U}, {8U, 16U, 0U}};
     uint32_t ws;
 
-    SPL_REQUIRE_SAFE(latency != NULL, SPL_ERR_PARAM);
-    SPL_REQUIRE(hclk_hz != 0U, SPL_ERR_PARAM); /* normal */
-    /* SAFE: range > Range 2 tablo disi okur, yanlis bekleme durumu doner. */
-    SPL_REQUIRE_SAFE((uint32_t)range <= (uint32_t)FLASH_RANGE2, SPL_ERR_PARAM);
+    SPL_REQUIRE(latency != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(hclk_hz != 0U, SPL_ERR_PARAM);
+    /* range > Range 2 reads outside the table and returns a wrong wait state. */
+    SPL_REQUIRE((uint32_t)range <= (uint32_t)FLASH_RANGE2, SPL_ERR_PARAM);
     for (ws = 0U; ws < 3U; ++ws)
     {
         const uint32_t max_hz = (uint32_t)max_mhz[(uint32_t)range][ws] * 1000000UL;
@@ -113,13 +114,13 @@ SPL_Status FLASH_CalcLatency(uint32_t hclk_hz, FLASH_RangeTypeDef range, uint32_
             return SPL_OK;
         }
     }
-    return SPL_ERR_PARAM; /* result: bu frekans bu aralikta olmaz (her seviyede) */
+    return SPL_ERR_PARAM; /* result: frequency not possible in this range (at every level) */
 }
 
 SPL_Status FLASH_SetLatency(uint32_t latency)
 {
-    /* SAFE: LATENCY'ye ayrilmis kod ya da ACR'de tasma. */
-    SPL_REQUIRE_SAFE(latency <= 2U, SPL_ERR_PARAM);
+    /* reserved code in LATENCY or overflow in ACR. */
+    SPL_REQUIRE(latency <= 2U, SPL_ERR_PARAM);
     FLASH->ACR = (FLASH->ACR & ~FLASH_ACR_LATENCY_Msk) | (latency << FLASH_ACR_LATENCY_Pos);
     /* RM0444 3.3.4: the new value is effective when it reads back. */
     if (((FLASH->ACR & FLASH_ACR_LATENCY_Msk) >> FLASH_ACR_LATENCY_Pos) != latency)
@@ -131,7 +132,7 @@ SPL_Status FLASH_SetLatency(uint32_t latency)
 
 SPL_Status FLASH_GetLatency(uint32_t *latency)
 {
-    SPL_REQUIRE_SAFE(latency != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(latency != NULL, SPL_ERR_PARAM);
     *latency = (FLASH->ACR & FLASH_ACR_LATENCY_Msk) >> FLASH_ACR_LATENCY_Pos;
     return SPL_OK;
 }
@@ -141,8 +142,8 @@ SPL_Status FLASH_ConfigAccelerator(uint8_t prefetch, uint8_t icache, uint8_t cod
     uint32_t acr;
 
     SPL_REQUIRE((prefetch <= 1U) && (icache <= 1U) && (code_in_one_bank <= 1U),
-                SPL_ERR_PARAM); /* normal: 1 gibi davranir */
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
+                SPL_ERR_PARAM); /* acts as 1 */
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
     {
         FLASH_GeometryTypeDef g;
         const SPL_Status st = Flash_ReadGeometry(&g);
@@ -153,9 +154,8 @@ SPL_Status FLASH_ConfigAccelerator(uint8_t prefetch, uint8_t icache, uint8_t cod
         }
         /* ERRATA ES0548 2.2.10: prefetch across banks may fetch wrong code; refuse unless the
          * caller states that execution never crosses the banks (no silent prefetch disable).
-         * SAFE (errata); geometri yalniz bu denetim icin okunur. */
-        SPL_REQUIRE_SAFE((prefetch == 0U) || (g.banks != 2U) || (code_in_one_bank != 0U),
-                         SPL_ERR_STATE);
+         * (errata); the geometry is read only for this check. */
+        SPL_REQUIRE((prefetch == 0U) || (g.banks != 2U) || (code_in_one_bank != 0U), SPL_ERR_STATE);
     }
 #else
     (void)code_in_one_bank;
@@ -175,8 +175,8 @@ SPL_Status FLASH_ConfigAccelerator(uint8_t prefetch, uint8_t icache, uint8_t cod
 
 SPL_Status FLASH_ResetICache(void)
 {
-    /* SAFE: ICRST acik onbellekte tanimsiz / yok sayilir. */
-    SPL_REQUIRE_SAFE((FLASH->ACR & FLASH_ACR_ICEN) == 0U, SPL_ERR_STATE);
+    /* ICRST with the cache enabled is undefined / ignored. */
+    SPL_REQUIRE((FLASH->ACR & FLASH_ACR_ICEN) == 0U, SPL_ERR_STATE);
     FLASH->ACR = FLASH->ACR | FLASH_ACR_ICRST;
     FLASH->ACR = FLASH->ACR & ~FLASH_ACR_ICRST;
     return SPL_OK;
@@ -187,7 +187,7 @@ SPL_Status FLASH_GetGeometry(FLASH_GeometryTypeDef *geometry)
     FLASH_GeometryTypeDef g;
     SPL_Status st;
 
-    SPL_REQUIRE_SAFE(geometry != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(geometry != NULL, SPL_ERR_PARAM);
     st = Flash_ReadGeometry(&g);
     if (st == SPL_OK)
     {
@@ -198,7 +198,7 @@ SPL_Status FLASH_GetGeometry(FLASH_GeometryTypeDef *geometry)
 
 SPL_Status FLASH_GetOptionRegister(uint32_t *optr)
 {
-    SPL_REQUIRE_SAFE(optr != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(optr != NULL, SPL_ERR_PARAM);
     *optr = FLASH->OPTR;
     return SPL_OK;
 }
@@ -241,9 +241,9 @@ SPL_Status FLASH_ErasePageStart(uint32_t bank, uint32_t page)
     SPL_Status st;
     uint32_t cr;
 
-    /* SAFE: baska bank / sayfa silinir ya da PNB tasar (CHECK_LEVEL.md 5.3). */
-    SPL_REQUIRE_SAFE((bank == FLASH_BANK_1) || (bank == FLASH_BANK_2), SPL_ERR_PARAM);
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
+    /* another bank / page is erased or PNB overflows (CHECK_LEVEL.md 5.3). */
+    SPL_REQUIRE((bank == FLASH_BANK_1) || (bank == FLASH_BANK_2), SPL_ERR_PARAM);
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
     {
         FLASH_GeometryTypeDef g;
 
@@ -252,7 +252,7 @@ SPL_Status FLASH_ErasePageStart(uint32_t bank, uint32_t page)
         {
             return st;
         }
-        /* SAFE: bank 2 yoksa BKER yok sayilir, bank 1'deki ayni sayfa silinir. 256 KB with
+        /* without bank 2, BKER is ignored and the same page in bank 1 is erased. 256 KB with
          * DUAL_BANK = 0 -> STATE (option byte); single-bank device -> UNSUPPORTED. */
         if (bank == FLASH_BANK_2)
         {
@@ -262,7 +262,7 @@ SPL_Status FLASH_ErasePageStart(uint32_t bank, uint32_t page)
                 return st;
             }
         }
-        SPL_REQUIRE_SAFE(page < g.pages_per_bank, SPL_ERR_PARAM);
+        SPL_REQUIRE(page < g.pages_per_bank, SPL_ERR_PARAM);
     }
 #endif
     st = Flash_ReadyForOperation();
@@ -288,10 +288,10 @@ SPL_Status FLASH_ProgramDoubleWordStart(uint32_t address, uint64_t data)
 {
     SPL_Status st;
 
-    SPL_REQUIRE_SAFE((address & 7U) == 0U, SPL_ERR_PARAM); /* SAFE: yanlis adres programlanir */
-    /* ERRATA ES0548 2.2.3: an all-ones program can never be overwritten by zero later. SAFE. */
-    SPL_REQUIRE_SAFE(data != 0xFFFFFFFFFFFFFFFFULL, SPL_ERR_PARAM);
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
+    SPL_REQUIRE((address & 7U) == 0U, SPL_ERR_PARAM); /* wrong address programmed */
+    /* ERRATA ES0548 2.2.3: an all-ones program can never be overwritten by zero later. */
+    SPL_REQUIRE(data != 0xFFFFFFFFFFFFFFFFULL, SPL_ERR_PARAM);
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
     {
         FLASH_GeometryTypeDef g;
 
@@ -300,10 +300,10 @@ SPL_Status FLASH_ProgramDoubleWordStart(uint32_t address, uint64_t data)
         {
             return st;
         }
-        /* Logical addresses: the hardware routes to the physical bank (RM0444 3.3.2). SAFE:
-         * ana bellek disi adres. */
-        SPL_REQUIRE_SAFE((address >= FLASH_BASE) && ((address - FLASH_BASE) < (g.size_kb * 1024U)),
-                         SPL_ERR_PARAM);
+        /* Logical addresses: the hardware routes to the physical bank (RM0444 3.3.2):
+         * address outside the main memory. */
+        SPL_REQUIRE((address >= FLASH_BASE) && ((address - FLASH_BASE) < (g.size_kb * 1024U)),
+                    SPL_ERR_PARAM);
     }
 #endif
     st = Flash_ReadyForOperation();
@@ -312,8 +312,8 @@ SPL_Status FLASH_ProgramDoubleWordStart(uint32_t address, uint64_t data)
         return st;
     }
     /* v0.3 (G4 v0.13.3 FL-21 backport): a non-erased target accepts only data == 0 (RM0444 3.3.8);
-     * refuse before PG is set so no PROGERR is left behind. normal (K-A4-2): denetim olmasa donanim
-     * PROGERR ile reddeder, hicbir sey yazilmaz, FLASH_PollOperation ERR_HW doner. */
+     * refuse before PG is set so no PROGERR is left behind. (K-A4-2): without the check the
+     * hardware refuses with PROGERR, nothing is written, FLASH_PollOperation returns ERR_HW. */
     SPL_REQUIRE((data == 0U) ||
                     ((*(const volatile uint32_t *)(uintptr_t)address == 0xFFFFFFFFUL) &&
                      (*(const volatile uint32_t *)(uintptr_t)(address + 4U) == 0xFFFFFFFFUL)),
@@ -347,7 +347,7 @@ SPL_Status FLASH_PollOperation(uint8_t *eop)
 
 SPL_Status FLASH_EndOperation(void)
 {
-    /* normal: kilitliyken islem biti kurulamaz, yazim etkisiz. */
+    /* while locked the operation bit cannot be set, the write has no effect. */
     SPL_REQUIRE((FLASH->CR & FLASH_CR_LOCK) == 0U, SPL_ERR_STATE);
     if ((FLASH->SR & FLASH_SR_ANYBUSY) != 0U)
     {
@@ -364,7 +364,7 @@ SPL_Status FLASH_GetEcc(FLASH_EccTypeDef *ecc)
     uint32_t eccr;
     uint8_t bank = (uint8_t)FLASH_BANK_1;
 
-    SPL_REQUIRE_SAFE(ecc != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(ecc != NULL, SPL_ERR_PARAM);
     eccr = FLASH->ECCR; /* single read: the fields belong to the same event */
 #if SPL_G0_HAS_FLASH_DUAL_BANK
     if ((eccr & FLASH_ECC_EVENTS) == 0U)
@@ -399,17 +399,17 @@ SPL_Status FLASH_ClearEcc(void)
 
 SPL_Status FLASH_GetFlags(uint32_t *flags)
 {
-    SPL_REQUIRE_SAFE(flags != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(flags != NULL, SPL_ERR_PARAM);
     *flags = FLASH->SR;
     return SPL_OK;
 }
 
 SPL_Status FLASH_ClearFlags(uint32_t mask)
 {
-    /* normal: etkisiz yazim (SR'de komsu birim yok). */
-    SPL_REQUIRE(mask != 0U, SPL_ERR_PARAM); /* normal: etkisiz */
-    /* SAFE (EDR-003): ayrilmis bite yazim. */
-    SPL_REQUIRE_SAFE((mask & ~FLASH_SR_CLEARABLE) == 0U, SPL_ERR_PARAM);
+    /* write with no effect (no neighbouring unit in SR). */
+    SPL_REQUIRE(mask != 0U, SPL_ERR_PARAM); /* no effect */
+    /* (EDR-003): write to a reserved bit. */
+    SPL_REQUIRE((mask & ~FLASH_SR_CLEARABLE) == 0U, SPL_ERR_PARAM);
     FLASH->SR = mask; /* rc_w1: write the mask only */
     /* Read back: the clear reaches the peripheral before return (METHOD 1.7, issue #23). */
     (void)FLASH->SR;
@@ -432,8 +432,8 @@ SPL_Status FLASH_ClearFlags(uint32_t mask)
 /* Option registers are written only with OPTLOCK = 0 and no operation running. */
 static SPL_Status Flash_OptionWritable(void)
 {
-    /* SAFE: OPTLOCK = 1 iken option register yazimi sessizce yok sayilir. */
-    SPL_REQUIRE_SAFE((FLASH->CR & FLASH_CR_OPTLOCK) == 0U, SPL_ERR_STATE);
+    /* while OPTLOCK = 1 an option register write is silently ignored. */
+    SPL_REQUIRE((FLASH->CR & FLASH_CR_OPTLOCK) == 0U, SPL_ERR_STATE);
     if ((FLASH->SR & FLASH_SR_ANYBUSY) != 0U)
     {
         return SPL_BUSY;
@@ -448,12 +448,12 @@ SPL_Status FLASH_MassEraseStart(uint32_t bank_mask, uint32_t key)
 
     if (key != FLASH_KEY_MASS_ERASE)
     {
-        return SPL_ERR_PARAM; /* geri alinamaz islem anahtari: her seviyede */
+        return SPL_ERR_PARAM; /* irreversible-operation key: at every level */
     }
-    /* normal: islem biti yok (PGSERR) / fazla bit atilir. */
+    /* no operation bit (PGSERR) / extra bits are dropped. */
     SPL_REQUIRE((bank_mask != 0U) && ((bank_mask & ~(FLASH_MASS_BANK1 | FLASH_MASS_BANK2)) == 0U),
                 SPL_ERR_PARAM);
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
     if ((bank_mask & FLASH_MASS_BANK2) != 0U)
     {
         FLASH_GeometryTypeDef g;
@@ -463,7 +463,7 @@ SPL_Status FLASH_MassEraseStart(uint32_t bank_mask, uint32_t key)
         {
             return st;
         }
-        st = Flash_Bank2Status(&g); /* SAFE */
+        st = Flash_Bank2Status(&g);
         if (st != SPL_OK)
         {
             return st;
@@ -498,15 +498,14 @@ SPL_Status FLASH_FastProgramRowStart(uint32_t address, const uint32_t *words)
     SPL_Status st;
     uint32_t i;
 
-    SPL_REQUIRE_SAFE(words != NULL, SPL_ERR_PARAM); /* SAFE: G0'da NULL sessiz (BULGU-03) */
-    /* SAFE: hizasiz satir yanlis adresi programlar. */
-    SPL_REQUIRE_SAFE((address & ((FLASH_ROW_WORDS * 4U) - 1U)) == 0U, SPL_ERR_PARAM);
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
-    /* ERRATA ES0548 2.2.3: no all-ones double word (same rule as the standard program). SAFE. */
+    SPL_REQUIRE(words != NULL, SPL_ERR_PARAM); /* NULL is silent on G0 (BULGU-03) */
+    /* an unaligned row programs the wrong address. */
+    SPL_REQUIRE((address & ((FLASH_ROW_WORDS * 4U) - 1U)) == 0U, SPL_ERR_PARAM);
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
+    /* ERRATA ES0548 2.2.3: no all-ones double word (same rule as the standard program). */
     for (i = 0U; i < FLASH_ROW_WORDS; i += 2U)
     {
-        SPL_REQUIRE_SAFE((words[i] != 0xFFFFFFFFUL) || (words[i + 1U] != 0xFFFFFFFFUL),
-                         SPL_ERR_PARAM);
+        SPL_REQUIRE((words[i] != 0xFFFFFFFFUL) || (words[i + 1U] != 0xFFFFFFFFUL), SPL_ERR_PARAM);
     }
     {
         FLASH_GeometryTypeDef g;
@@ -516,9 +515,9 @@ SPL_Status FLASH_FastProgramRowStart(uint32_t address, const uint32_t *words)
         {
             return st;
         }
-        /* Main memory only (RM0444 3.3.8). SAFE. */
-        SPL_REQUIRE_SAFE((address >= FLASH_BASE) && ((address - FLASH_BASE) < (g.size_kb * 1024U)),
-                         SPL_ERR_PARAM);
+        /* Main memory only (RM0444 3.3.8). */
+        SPL_REQUIRE((address >= FLASH_BASE) && ((address - FLASH_BASE) < (g.size_kb * 1024U)),
+                    SPL_ERR_PARAM);
     }
 #endif
     st = Flash_ReadyForOperation();
@@ -527,8 +526,8 @@ SPL_Status FLASH_FastProgramRowStart(uint32_t address, const uint32_t *words)
         return st;
     }
 #if SPL_CHECK_LEVEL == SPL_CHECK_FULL
-    /* Step 1: the row must be erased, else PGSERR; refuse before FSTPG is set. normal (K-A4-2):
-     * denetim olmasa donanim PGSERR ile reddeder, FLASH_PollOperation ERR_HW doner. */
+    /* Step 1: the row must be erased, else PGSERR; refuse before FSTPG is set. (K-A4-2):
+     * without the check the hardware refuses with PGSERR, FLASH_PollOperation returns ERR_HW. */
     for (i = 0U; i < FLASH_ROW_WORDS; ++i)
     {
         SPL_REQUIRE(*(const volatile uint32_t *)(uintptr_t)(address + (4U * i)) == 0xFFFFFFFFUL,
@@ -546,9 +545,9 @@ SPL_Status FLASH_FastProgramRowStart(uint32_t address, const uint32_t *words)
 
 SPL_Status FLASH_OptionUnlock(void)
 {
-    /* RM0444 3.4.2: FLASH_CR must be unlocked first. SAFE: yanlis sira OPTLOCK'u reset'e kadar
-     * kilitleyebilir. */
-    SPL_REQUIRE_SAFE((FLASH->CR & FLASH_CR_LOCK) == 0U, SPL_ERR_STATE);
+    /* RM0444 3.4.2: FLASH_CR must be unlocked first. a wrong order can lock OPTLOCK until
+     * reset. */
+    SPL_REQUIRE((FLASH->CR & FLASH_CR_LOCK) == 0U, SPL_ERR_STATE);
     if ((FLASH->CR & FLASH_CR_OPTLOCK) == 0U)
     {
         return SPL_OK;
@@ -583,8 +582,8 @@ SPL_Status FLASH_OptionLock(void)
 /* ERRATA ES0487 2.2.3 (ES0486 / ES0488 / ES0468 / ES0418 / ES0412 2.2.3): with RDP level 1, a boot
  * from main flash selected by the PA14-BOOT0 pin (nBOOT_SEL = 0) is taken as an intrusion and the
  * user code never runs; no workaround. An OPTR image with both -> refused (1). */
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
-/* SAFE denetimi (kart bir daha kullanici kodunu calistirmaz); FAST'ta derlenmez. Saf. */
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
+/* Check (the board never runs user code again); not compiled in FAST. Pure. */
 static uint8_t Flash_BootPinConflict(uint32_t optr)
 {
 #if SPL_G0_ERRATA_RDP1_BOOT0_PIN
@@ -601,29 +600,27 @@ static uint8_t Flash_BootPinConflict(uint32_t optr)
 }
 #define FLASH_BOOT_PIN_CONFLICT(optr) (Flash_BootPinConflict(optr) != 0U)
 #else
-#define FLASH_BOOT_PIN_CONFLICT(optr) (0) /* kapali seviyede degerlendirilmez */
+#define FLASH_BOOT_PIN_CONFLICT(optr) (0) /* not evaluated at a disabled level */
 #endif
 
 SPL_Status FLASH_OptionSetUser(uint32_t mask, uint32_t value)
 {
     SPL_Status st;
 
-    SPL_REQUIRE(mask != 0U, SPL_ERR_PARAM); /* normal: etkisiz yazim */
-    /* SAFE: kullanici bitleri disinda RDP dahil OPTR'nin baska alanlari degisir. */
-    SPL_REQUIRE_SAFE(((mask & ~FLASH_OPTR_USER_BITS) == 0U) && ((value & ~mask) == 0U),
-                     SPL_ERR_PARAM);
+    SPL_REQUIRE(mask != 0U, SPL_ERR_PARAM); /* write with no effect */
+    /* outside the user bits, other OPTR fields including RDP change. */
+    SPL_REQUIRE(((mask & ~FLASH_OPTR_USER_BITS) == 0U) && ((value & ~mask) == 0U), SPL_ERR_PARAM);
 #if defined(FLASH_OPTR_NRST_MODE)
-    /* RM0444 3.7.8: NRST_MODE = 00 is reserved. SAFE: reset pini tanimsiz, kart erisilemez. */
-    SPL_REQUIRE_SAFE(((mask & FLASH_OPTR_NRST_MODE) == 0U) ||
-                         ((value & FLASH_OPTR_NRST_MODE) != 0U),
-                     SPL_ERR_PARAM);
+    /* RM0444 3.7.8: NRST_MODE = 00 is reserved. reset pin undefined, board unreachable. */
+    SPL_REQUIRE(((mask & FLASH_OPTR_NRST_MODE) == 0U) || ((value & FLASH_OPTR_NRST_MODE) != 0U),
+                SPL_ERR_PARAM);
 #endif
     st = Flash_OptionWritable();
     if (st != SPL_OK)
     {
         return st;
     }
-    SPL_REQUIRE_SAFE(!FLASH_BOOT_PIN_CONFLICT((FLASH->OPTR & ~mask) | value), SPL_ERR_STATE);
+    SPL_REQUIRE(!FLASH_BOOT_PIN_CONFLICT((FLASH->OPTR & ~mask) | value), SPL_ERR_STATE);
     FLASH->OPTR = (FLASH->OPTR & ~mask) | value;
     return SPL_OK;
 }
@@ -668,8 +665,7 @@ SPL_Status FLASH_OptionSetRdp(uint32_t level, uint32_t key)
     {
         return st;
     }
-    SPL_REQUIRE_SAFE(!FLASH_BOOT_PIN_CONFLICT((FLASH->OPTR & ~FLASH_OPTR_RDP_Msk) | rdp),
-                     SPL_ERR_STATE);
+    SPL_REQUIRE(!FLASH_BOOT_PIN_CONFLICT((FLASH->OPTR & ~FLASH_OPTR_RDP_Msk) | rdp), SPL_ERR_STATE);
     FLASH->OPTR = (FLASH->OPTR & ~FLASH_OPTR_RDP_Msk) | rdp;
     return SPL_OK;
 }
@@ -677,8 +673,8 @@ SPL_Status FLASH_OptionSetRdp(uint32_t level, uint32_t key)
 /* WRP area register: 1A / 1B always, 2A / 2B only with bank 2. */
 static SPL_Status Flash_WrpRegister(uint32_t area, volatile uint32_t **reg)
 {
-    SPL_REQUIRE_SAFE(area <= FLASH_AREA_2B, SPL_ERR_PARAM); /* SAFE: yanlis alan register'i */
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
+    SPL_REQUIRE(area <= FLASH_AREA_2B, SPL_ERR_PARAM); /* wrong area register */
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
     if (area >= FLASH_AREA_2A)
     {
         FLASH_GeometryTypeDef g;
@@ -686,7 +682,7 @@ static SPL_Status Flash_WrpRegister(uint32_t area, volatile uint32_t **reg)
 
         if (st == SPL_OK)
         {
-            st = Flash_Bank2Status(&g); /* SAFE */
+            st = Flash_Bank2Status(&g);
         }
         if (st != SPL_OK)
         {
@@ -714,7 +710,7 @@ static SPL_Status Flash_WrpRegister(uint32_t area, volatile uint32_t **reg)
 #else
     else
     {
-        return SPL_ERR_UNSUPPORTED; /* FULL / MIX: Flash_Bank2Status refuses first; FAST: yapisal */
+        return SPL_ERR_UNSUPPORTED; /* FULL: Flash_Bank2Status refused it; FAST: structural */
     }
 #endif
     return SPL_OK;
@@ -726,8 +722,8 @@ SPL_Status FLASH_OptionSetWrp(uint32_t area, uint32_t start_page, uint32_t end_p
     SPL_Status st;
     const uint32_t width = FLASH_WRP1AR_WRP1A_STRT_Msk >> FLASH_WRP1AR_WRP1A_STRT_Pos;
 
-    /* SAFE: END alanina tasma, yanlis sayfa araligi korunur. */
-    SPL_REQUIRE_SAFE((start_page <= width) && (end_page <= width), SPL_ERR_PARAM);
+    /* overflow into the END field, a wrong page range is protected. */
+    SPL_REQUIRE((start_page <= width) && (end_page <= width), SPL_ERR_PARAM);
     st = Flash_WrpRegister(area, &reg);
     if (st != SPL_OK)
     {
@@ -747,8 +743,8 @@ SPL_Status FLASH_OptionSetWrp(uint32_t area, uint32_t start_page, uint32_t end_p
 static SPL_Status Flash_PcropRegisters(uint32_t area, volatile uint32_t **sr,
                                        volatile uint32_t **er)
 {
-    SPL_REQUIRE_SAFE(area <= FLASH_AREA_2B, SPL_ERR_PARAM); /* SAFE: yanlis alan register'i */
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
+    SPL_REQUIRE(area <= FLASH_AREA_2B, SPL_ERR_PARAM); /* wrong area register */
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
     if (area >= FLASH_AREA_2A)
     {
         FLASH_GeometryTypeDef g;
@@ -756,7 +752,7 @@ static SPL_Status Flash_PcropRegisters(uint32_t area, volatile uint32_t **sr,
 
         if (st == SPL_OK)
         {
-            st = Flash_Bank2Status(&g); /* SAFE */
+            st = Flash_Bank2Status(&g);
         }
         if (st != SPL_OK)
         {
@@ -806,13 +802,13 @@ SPL_Status FLASH_OptionSetPcrop(uint32_t area, uint32_t start_subpage, uint32_t 
 
     if (key != FLASH_KEY_PCROP)
     {
-        return SPL_ERR_PARAM; /* geri alinamaz islem anahtari: her seviyede */
+        return SPL_ERR_PARAM; /* irreversible-operation key: at every level */
     }
-    /* SAFE: alan genisligine tasma. RM0444 3.5.2: END = STRT protects the whole bank, not one
-     * subpage: refused (geri alinamaz). */
-    SPL_REQUIRE_SAFE((start_subpage <= width) && (end_subpage <= width) &&
-                         (start_subpage != end_subpage),
-                     SPL_ERR_PARAM);
+    /* overflow of the field width. RM0444 3.5.2: END = STRT protects the whole bank, not one
+     * subpage: refused (irreversible). */
+    SPL_REQUIRE((start_subpage <= width) && (end_subpage <= width) &&
+                    (start_subpage != end_subpage),
+                SPL_ERR_PARAM);
     st = Flash_PcropRegisters(area, &sr, &er);
     if (st != SPL_OK)
     {
@@ -821,7 +817,7 @@ SPL_Status FLASH_OptionSetPcrop(uint32_t area, uint32_t start_subpage, uint32_t 
     /* ERRATA ES0548 2.2.5: a PCROP read returns the previous bus value; ST recommends PCROP only
      * with RDP level 1 + PCROP_RDP = 1 (or level 2). RDP level 0 in OPTR -> STATE; PCROP_RDP is
      * always set (rs bit) so the area is erased on a level 1 -> 0 regression. */
-    SPL_REQUIRE_SAFE((FLASH->OPTR & FLASH_OPTR_RDP_Msk) != FLASH_RDP_LEVEL0, SPL_ERR_STATE);
+    SPL_REQUIRE((FLASH->OPTR & FLASH_OPTR_RDP_Msk) != FLASH_RDP_LEVEL0, SPL_ERR_STATE);
     st = Flash_OptionWritable();
     if (st != SPL_OK)
     {
@@ -849,13 +845,13 @@ SPL_Status FLASH_OptionSetSecurable(uint32_t sec_size, uint32_t sec_size2, uint8
 
     if (key != FLASH_KEY_SECURABLE)
     {
-        return SPL_ERR_PARAM; /* geri alinamaz islem anahtari: her seviyede */
+        return SPL_ERR_PARAM; /* irreversible-operation key: at every level */
     }
-    /* SAFE: boot_lock > 1 BOOT_LOCK'u kurar (yalniz RDP 0'da geri alinir); SEC_SIZE tasmasi. */
-    SPL_REQUIRE_SAFE((boot_lock <= 1U) &&
-                         (sec_size <= (FLASH_SECR_SEC_SIZE_Msk >> FLASH_SECR_SEC_SIZE_Pos)),
-                     SPL_ERR_PARAM);
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
+    /* boot_lock > 1 sets BOOT_LOCK (undone only in RDP 0); SEC_SIZE overflow. */
+    SPL_REQUIRE((boot_lock <= 1U) &&
+                    (sec_size <= (FLASH_SECR_SEC_SIZE_Msk >> FLASH_SECR_SEC_SIZE_Pos)),
+                SPL_ERR_PARAM);
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
     {
         FLASH_GeometryTypeDef g;
 
@@ -864,16 +860,16 @@ SPL_Status FLASH_OptionSetSecurable(uint32_t sec_size, uint32_t sec_size2, uint8
         {
             return st;
         }
-        SPL_REQUIRE_SAFE(sec_size <= g.pages_per_bank, SPL_ERR_PARAM); /* yanlis bolge guvenli */
+        SPL_REQUIRE(sec_size <= g.pages_per_bank, SPL_ERR_PARAM); /* wrong region secured */
 #if defined(FLASH_SECR_SEC_SIZE2)
         if (sec_size2 != 0U)
         {
-            st = Flash_Bank2Status(&g); /* SAFE */
+            st = Flash_Bank2Status(&g);
             if (st != SPL_OK)
             {
                 return st;
             }
-            SPL_REQUIRE_SAFE(sec_size2 <= g.pages_per_bank, SPL_ERR_PARAM);
+            SPL_REQUIRE(sec_size2 <= g.pages_per_bank, SPL_ERR_PARAM);
         }
 #endif
     }
@@ -912,7 +908,7 @@ SPL_Status FLASH_SecureAreaProtect(uint32_t bank_mask)
 #if defined(FLASH_CR_SEC_PROT)
     uint32_t set = 0U;
 
-    /* normal: etkisiz / fazla bit atilir. */
+    /* no effect / extra bits are dropped. */
     SPL_REQUIRE((bank_mask != 0U) && ((bank_mask & ~(FLASH_MASS_BANK1 | FLASH_MASS_BANK2)) == 0U),
                 SPL_ERR_PARAM);
     if ((bank_mask & FLASH_MASS_BANK1) != 0U)
@@ -948,8 +944,8 @@ SPL_Status FLASH_OptionStart(void)
     {
         return st;
     }
-    /* SAFE: kilitliyken OPTSTRT yok sayilir, OK donerdi. */
-    SPL_REQUIRE_SAFE((FLASH->CR & FLASH_CR_LOCK) == 0U, SPL_ERR_STATE);
+    /* while locked OPTSTRT is ignored, OK would be returned. */
+    SPL_REQUIRE((FLASH->CR & FLASH_CR_LOCK) == 0U, SPL_ERR_STATE);
     if ((FLASH->SR & FLASH_SR_ERRORS) != 0U)
     {
         return SPL_ERR_HW;
@@ -984,24 +980,24 @@ SPL_Status FLASH_OtpProgramStart(uint32_t address, uint64_t data, uint32_t key)
 
     if (key != FLASH_KEY_OTP)
     {
-        return SPL_ERR_PARAM; /* geri alinamaz islem anahtari: her seviyede */
+        return SPL_ERR_PARAM; /* irreversible-operation key: at every level */
     }
-    /* SAFE: ana bellege ya da yanlis OTP konumuna kalici yazim. */
-    SPL_REQUIRE_SAFE(((address & 7U) == 0U) && (address >= FLASH_OTP_BASE) &&
-                         (address <= (FLASH_OTP_BASE + FLASH_OTP_BYTES - 8U)),
-                     SPL_ERR_PARAM);
-    /* ERRATA ES0548 2.2.3 rule kept: an all-ones OTP double word is a wasted location. SAFE. */
-    SPL_REQUIRE_SAFE(data != 0xFFFFFFFFFFFFFFFFULL, SPL_ERR_PARAM);
+    /* permanent write to the main memory or to a wrong OTP location. */
+    SPL_REQUIRE(((address & 7U) == 0U) && (address >= FLASH_OTP_BASE) &&
+                    (address <= (FLASH_OTP_BASE + FLASH_OTP_BYTES - 8U)),
+                SPL_ERR_PARAM);
+    /* ERRATA ES0548 2.2.3 rule kept: an all-ones OTP double word is a wasted location. */
+    SPL_REQUIRE(data != 0xFFFFFFFFFFFFFFFFULL, SPL_ERR_PARAM);
     st = Flash_ReadyForOperation();
     if (st != SPL_OK)
     {
         return st;
     }
-    /* OTP cannot be erased: a double word already written -> STATE (RM0444 3.3.8). SAFE: data = 0
-     * yazimi konumu kalici olarak sifirlardi. */
-    SPL_REQUIRE_SAFE((*(const volatile uint32_t *)(uintptr_t)address == 0xFFFFFFFFUL) &&
-                         (*(const volatile uint32_t *)(uintptr_t)(address + 4U) == 0xFFFFFFFFUL),
-                     SPL_ERR_STATE);
+    /* OTP cannot be erased: a double word already written -> STATE (RM0444 3.3.8). writing
+     * data = 0 would clear the location permanently. */
+    SPL_REQUIRE((*(const volatile uint32_t *)(uintptr_t)address == 0xFFFFFFFFUL) &&
+                    (*(const volatile uint32_t *)(uintptr_t)(address + 4U) == 0xFFFFFFFFUL),
+                SPL_ERR_STATE);
     FLASH->CR = (FLASH->CR & ~(FLASH_CR_OPBITS | FLASH_CR_CMDBITS)) | FLASH_CR_PG;
     *(volatile uint32_t *)(uintptr_t)address = (uint32_t)data;
     *(volatile uint32_t *)(uintptr_t)(address + 4U) = (uint32_t)(data >> 32U);

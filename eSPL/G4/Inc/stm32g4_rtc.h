@@ -95,9 +95,9 @@ extern "C"
     /* --- Backup-domain clock (RCC_BDCR) --- */
     /* Start LSE. drive 0..3 (LSEDRV), bypass 0/1. STATE if LSE already on with a different
      * bypass/drive setting or BDRST is asserted. Does not wait for LSERDY. */
-    /* Seviye: PARAM[S] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status RTC_LSEStart(uint32_t drive, uint8_t bypass);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status RTC_LSEReady(uint8_t *ready);
     /* Select RTCCLK and set RTCEN. RTCSEL can be set only once: a different source than
      * the current non-zero RTCSEL is refused with STATE (use RTC_BackupDomainReset).
@@ -107,55 +107,55 @@ extern "C"
      * each BORRSTF power-up and restore RTC/backup registers.
      * ERRATA ES0431 2.2.8 / ES0430 2.2.8 / ES0523 2.2.6: LQFP/UFQFPN: toggling PC13 disturbs the
      * LSE crystal (no workaround): keep PC13 static while LSE runs. */
-    /* Seviye: PARAM[S] STATE[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] WOULD_BLOCK[r] */
     SPL_Status RTC_ClockConfig(uint32_t source);
     /* DESTRUCTIVE: pulses BDRST. Loses RTC calendar/alarms/wakeup/prescaler, all TAMP
      * backup registers, LSE on/drive/bypass, RTCSEL and RTCEN. LSCOEN/LSCOSEL are kept
      * (not reset by BDRST). key must be RTC_BDRST_KEY.
      * ERRATA ES0431 2.2.5 / ES0430 2.2.5 / ES0523 2.2.3: does not clear LSCO bits; for the
      * erratum's boot-time erase use RTC_BackupDomainFullReset. */
-    /* Seviye: PARAM[r] STATE[r] */
+    /* Level: PARAM[r] STATE[r] */
     SPL_Status RTC_BackupDomainReset(uint32_t key);
     /* DESTRUCTIVE, ERRATA ES0431 2.2.5 / ES0430 2.2.5 / ES0523 2.2.3 workaround step 3c: BDCR =
      * BDRST only (0x0001 0000), read back, BDCR = 0. Clears everything RTC_BackupDomainReset clears
      * plus LSCOEN/LSCOSEL. key must be RTC_BDRST_FULL_KEY (RTC_BDRST_KEY -> PARAM);
      * DBP = 0 -> STATE. Deciding that the boot follows a power-on (BORRSTF, backup
      * register marker/CRC, tamper flags) and RMVF are the caller's duty (contract). */
-    /* Seviye: PARAM[r] STATE[r] */
+    /* Level: PARAM[r] STATE[r] */
     SPL_Status RTC_BackupDomainFullReset(uint32_t key);
 
     /* --- RTC core --- */
-    /* Seviye: STATE[r] */
+    /* Level: STATE[r] */
     SPL_Status RTC_WriteProtectDisable(void);
-    /* Seviye: STATE[r] */
+    /* Level: STATE[r] */
     SPL_Status RTC_WriteProtectEnable(void);
     /* Request init mode (ICSR.INIT = 1); poll RTC_InitReady until INITF = 1.
      * ERRATA ES0431 2.10.1 / ES0430 2.14.1 / ES0523 2.10.1: with INIT = 0, BYPSHAD = 1 -> STATE
      * (clear it with RTC_SetBypassShadow(0)); RSF = 0 -> WOULD_BLOCK (retry; e.g. right after
      * RTC_ExitInit or an MCU reset), or STATE when RTCCLK is absent. Nothing written. */
-    /* Seviye: STATE[r] WOULD_BLOCK[r] */
+    /* Level: STATE[r] WOULD_BLOCK[r] */
     SPL_Status RTC_EnterInit(void);
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status RTC_InitReady(uint8_t *ready);
-    /* Seviye: STATE[r] */
+    /* Level: STATE[r] */
     SPL_Status RTC_ExitInit(void);
     /* INITF = 1 required. async_div 0..127 (PREDIV_A), sync_div 0..32767 (PREDIV_S). */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status RTC_SetPrescaler(uint32_t async_div, uint32_t sync_div);
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status RTC_SetHourFormat(uint32_t format);
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status RTC_SetTime(const RTC_TimeTypeDef *time);
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status RTC_SetDate(const RTC_DateTypeDef *date);
     /* BYPSHAD: 1 = read calendar counters directly (required when fPCLK < 7 x fRTCCLK). */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status RTC_SetBypassShadow(uint8_t enable);
     /* RSF query (BYPSHAD = 0 only). */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status RTC_SyncReady(uint8_t *synced);
     /* Clear RSF (e.g. after Stop/Standby wakeup), then poll RTC_SyncReady. */
-    /* Seviye: STATE[r] */
+    /* Level: STATE[r] */
     SPL_Status RTC_ClearSync(void);
     /* RTCCLK check (GetTimeDate with BYPSHAD = 0, AlarmAConfig, WakeupConfig,
      * WakeupEnable): when the awaited RSF/ALRAWF/WUTWF flag is 0 and RTCCLK is
@@ -164,71 +164,71 @@ extern "C"
      * Selected oscillator on but not ready (starting) stays WOULD_BLOCK. */
     /* Consistent read: TR then DR. BYPSHAD = 0: RSF must be set (else WOULD_BLOCK).
      * BYPSHAD = 1: TR/DR are read twice; a mismatch returns WOULD_BLOCK (retry). */
-    /* Seviye: PARAM[S] STATE[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] WOULD_BLOCK[r] */
     SPL_Status RTC_GetTimeDate(RTC_TimeTypeDef *time, RTC_DateTypeDef *date);
 
     /* --- Alarm A --- */
     /* ALRAE must be 0 (STATE). ALRAWF = 0 and INITF = 0 => WOULD_BLOCK. */
-    /* Seviye: PARAM[S,n] STATE[S,r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[F,r] WOULD_BLOCK[r] */
     SPL_Status RTC_AlarmAConfig(const RTC_AlarmTypeDef *alarm);
-    /* Seviye: PARAM[n] STATE[S] */
+    /* Level: PARAM[F] STATE[F] */
     SPL_Status RTC_AlarmAEnable(uint8_t interrupt);
-    /* Seviye: STATE[r] */
+    /* Level: STATE[r] */
     SPL_Status RTC_AlarmADisable(void);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status RTC_AlarmAFlag(uint8_t *set);
-    /* Seviye: STATE[r] */
+    /* Level: STATE[r] */
     SPL_Status RTC_AlarmAClearFlag(void);
 
     /* --- Alarm B and sub-second alarm comparison --- */
-    /* Seviye: PARAM[S,n] STATE[S,r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[F,r] WOULD_BLOCK[r] */
     SPL_Status RTC_AlarmBConfig(const RTC_AlarmTypeDef *alarm);
-    /* Seviye: PARAM[n] STATE[S] */
+    /* Level: PARAM[F] STATE[F] */
     SPL_Status RTC_AlarmBEnable(uint8_t interrupt);
-    /* Seviye: STATE[r] */
+    /* Level: STATE[r] */
     SPL_Status RTC_AlarmBDisable(void);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status RTC_AlarmBFlag(uint8_t *set);
-    /* Seviye: STATE[r] */
+    /* Level: STATE[r] */
     SPL_Status RTC_AlarmBClearFlag(void);
     /* alarm_b: 0=A, 1=B; subsecond <= 0x7fff; compare_bits 0..15. */
-    /* Seviye: PARAM[S,n] STATE[S,r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[F,r] WOULD_BLOCK[r] */
     SPL_Status RTC_AlarmSetSubsecond(uint8_t alarm_b, uint32_t subsecond, uint8_t compare_bits);
 
     /* --- Wakeup timer --- */
     /* WUTE must be 0 (STATE). WUTWF = 0 and INITF = 0 => WOULD_BLOCK.
      * clock_sel = WUCKSEL 0..7, reload = WUT 0..0xFFFF. */
-    /* Seviye: PARAM[S] STATE[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] WOULD_BLOCK[r] */
     SPL_Status RTC_WakeupConfig(uint32_t clock_sel, uint32_t reload);
-    /* Seviye: PARAM[S] STATE[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] WOULD_BLOCK[r] */
     SPL_Status RTC_WakeupEnable(uint8_t interrupt);
-    /* Seviye: STATE[r] */
+    /* Level: STATE[r] */
     SPL_Status RTC_WakeupDisable(void);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status RTC_WakeupFlag(uint8_t *set);
-    /* Seviye: STATE[r] */
+    /* Level: STATE[r] */
     SPL_Status RTC_WakeupClearFlag(void);
 
     /* --- TAMP backup registers, index 0..RTC_BACKUP_NB-1 --- */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status RTC_BackupWrite(uint32_t index, uint32_t value);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status RTC_BackupRead(uint32_t index, uint32_t *value);
 
     /* --- Timestamp, calibration, output and daylight saving --- */
     /* Caller duty (CCL-2 KSM-12): irq = 1 does not check TSF/ITSF; clear them first
      * (RTC_TimestampGet reads and clears them) before enabling the interrupt. */
-    /* Seviye: PARAM[n] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status RTC_TimestampConfig(uint8_t enable, uint8_t falling_edge, uint8_t internal,
                                    uint8_t irq);
-    /* Seviye: PARAM[S] STATE[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] WOULD_BLOCK[r] */
     SPL_Status RTC_TimestampGet(RTC_TimeTypeDef *time, RTC_DateTypeDef *date, uint32_t *subsecond,
                                 uint8_t *overflow);
-    /* Seviye: PARAM[S,n] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status RTC_SetCalibration(uint8_t add_512, uint32_t minus_pulses, uint32_t period);
-    /* Seviye: PARAM[S,n] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status RTC_OutputConfig(const RTC_OutputTypeDef *out);
-    /* Seviye: PARAM[n] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status RTC_DaylightSaving(int8_t hour_step, uint8_t backup_bit);
 
     /* --- TAMP external and internal event control --- */
@@ -241,16 +241,16 @@ extern "C"
      * independently when ITAMP3 is security relevant. */
     /* Caller duty (CCL-2 KSM-12): TAMP_InputConfig / TAMP_InternalConfig irq bits do not check
      * TAMP_SR; clear stale flags with TAMP_ClearFlags before enabling the interrupt. */
-    /* Seviye: PARAM[S,n] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status TAMP_InputConfig(uint8_t input, const TAMP_InputTypeDef *cfg);
-    /* Seviye: PARAM[S,n] STATE[S,r] */
+    /* Level: PARAM[F] STATE[F,r] */
     SPL_Status TAMP_FilterConfig(uint8_t frequency, uint8_t filter, uint8_t precharge,
                                  uint8_t pullup_disable);
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status TAMP_InternalConfig(uint32_t enable_mask, uint32_t irq_mask);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status TAMP_GetFlags(uint32_t *flags);
-    /* Seviye: PARAM[S,n] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status TAMP_ClearFlags(uint32_t flags);
 
 #ifdef __cplusplus

@@ -3,8 +3,9 @@
  * Butun aileler icin tek tanim. Ayni kaynak derleme zamaninda secilen seviyeyle calisma ani
  * dogrulamasinin ne kadarini derler:
  *   SPL_CHECK_FULL (0, varsayilan): butun dogrulamalar
- *   SPL_CHECK_MIX  (1): yalniz SAFE sinifi (denetim yoksa sessiz bozulma / donanim riski)
  *   SPL_CHECK_FAST (2): calisma ani dogrulamasi yok
+ * Ara seviye (eski MIX, 1) ve SAFE / normal sinif ayrimi 2026-11-16 kullanici karariyla kaldirildi:
+ * SPL_CHECK_LEVEL=1 derleme hatasi verir; FAST'in degeri 2 kaldi (proje tanimlari degismesin).
  * Her seviyede ayni kalanlar: sonuc kodlari (BUSY, WOULD_BLOCK, ERR_HW, ERR_TIMEOUT), gelen veri
  * ve donanim olayi denetimleri (result sinifi; makro KULLANILMAZ, duz if), register yazim sirasi,
  * errata adimlari, geri okumalar, geri alinamaz islem anahtarlari, yapisal SKU dallari.
@@ -19,7 +20,6 @@
 #include "spl_compiler.h"
 
 #define SPL_CHECK_FULL 0
-#define SPL_CHECK_MIX 1
 #define SPL_CHECK_FAST 2
 
 /* Tanimsiz makro #if icinde 0 sayilir: yapilandirmayi unutan en guvenli seviyeye (FULL) duser. */
@@ -27,9 +27,8 @@
 #define SPL_CHECK_LEVEL SPL_CHECK_FULL
 #endif
 
-#if (SPL_CHECK_LEVEL != SPL_CHECK_FULL) && (SPL_CHECK_LEVEL != SPL_CHECK_MIX) &&                   \
-    (SPL_CHECK_LEVEL != SPL_CHECK_FAST)
-#error "SPL_CHECK_LEVEL: 0 (SPL_CHECK_FULL), 1 (SPL_CHECK_MIX) ya da 2 (SPL_CHECK_FAST) olmali"
+#if (SPL_CHECK_LEVEL != SPL_CHECK_FULL) && (SPL_CHECK_LEVEL != SPL_CHECK_FAST)
+#error "SPL_CHECK_LEVEL: 0 (SPL_CHECK_FULL) ya da 2 (SPL_CHECK_FAST) olmali (1 = MIX kaldirildi)"
 #endif
 
 /* Dogrulama makrolari (MISRA sapmasi D-11, METHOD 5.2).
@@ -45,8 +44,7 @@
  * TANIMLANMAZ; tanimsiz yoklama fonksiyonu baglamada hata verir. */
 int spl_check_pure_probe_(int safe_class, int cond);
 #define SPL_REQUIRE(cond, err) ((void)spl_check_pure_probe_(0, (cond) ? 1 : 0))
-#define SPL_REQUIRE_SAFE(cond, err) ((void)spl_check_pure_probe_(1, (cond) ? 1 : 0))
-/* Normal sinif: denetim yoksa hata hemen ve acikca gorunur. Yalniz FULL. */
+/* Yalniz FULL'da derlenir. */
 #elif SPL_CHECK_LEVEL == SPL_CHECK_FULL
 #define SPL_REQUIRE(cond, err)                                                                     \
     do                                                                                             \
@@ -63,26 +61,10 @@ int spl_check_pure_probe_(int safe_class, int cond);
 /* Kutuphane kaynaginda yalniz denetim kosulunda gecen static inline yardimcilar (or. zamanlayici
  * tur / yetenek sorgulari) kapali seviyede yalniz sizeof icinde kalir; clang bunu "gereksiz,
  * uretilmeyecek" diye uyarir (-Wunneeded-internal-declaration). Istenen sonuc tam olarak budur:
- * uyari yalniz kutuphane birimlerinde (SPL_LIBRARY_BUILD) ve yalniz MIX / FAST'ta kapatilir.
+ * uyari yalniz kutuphane birimlerinde (SPL_LIBRARY_BUILD) ve yalniz FAST'ta kapatilir.
  * Uygulama kodu etkilenmez (A4 dalga 3, CHECK_LEVEL.md 7.5). */
 #if defined(__clang__) && defined(SPL_LIBRARY_BUILD) && (SPL_CHECK_LEVEL != SPL_CHECK_FULL)
 #pragma clang diagnostic ignored "-Wunneeded-internal-declaration"
-#endif
-
-/* SAFE sinif: denetim yoksa sessiz bozulma ya da donanim riski. FULL ve MIX. */
-#if defined(SPL_CHECK_PURITY_ANALYSIS)
-/* analiz kipinde yukarida tanimli */
-#elif SPL_CHECK_LEVEL <= SPL_CHECK_MIX
-#define SPL_REQUIRE_SAFE(cond, err)                                                                \
-    do                                                                                             \
-    {                                                                                              \
-        if (!(cond))                                                                               \
-        {                                                                                          \
-            return (err);                                                                          \
-        }                                                                                          \
-    } while (0)
-#else
-#define SPL_REQUIRE_SAFE(cond, err) ((void)sizeof(cond))
 #endif
 
 /* Karisma korumasi (CHECK_LEVEL.md 3.2, A2-0 deneyi).
@@ -101,8 +83,6 @@ int spl_check_pure_probe_(int safe_class, int cond);
  *   derler. Host'ta denemek icin SPL_CHECK_FORCE_LINK_GUARD tanimlanir (METHOD testi). */
 #if SPL_CHECK_LEVEL == SPL_CHECK_FULL
 #define SPL_CHECK_LEVEL_SYMBOL spl_check_level_full
-#elif SPL_CHECK_LEVEL == SPL_CHECK_MIX
-#define SPL_CHECK_LEVEL_SYMBOL spl_check_level_mix
 #else
 #define SPL_CHECK_LEVEL_SYMBOL spl_check_level_fast
 #endif

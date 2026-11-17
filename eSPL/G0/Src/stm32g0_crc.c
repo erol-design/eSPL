@@ -1,17 +1,15 @@
-/* Ported from STM32G4 SPL v0.13.3 (Autometry_Mcu_Spl 130de7a) and reviewed against RM0444 Rev 6:
- * same IP, register layout and rules; only references changed (v0.3). */
-/* Kutuphane birimi: spl_check.h karisma korumasi referansini bu birim de uretir; uretmeyen tek
- * birim stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
+/* CRC calculation unit driver implementation (RM0444 Rev 6 section 14); public contract in
+ * stm32g0_crc.h. Ported from STM32G4 SPL v0.13.3 (Autometry_Mcu_Spl 130de7a) and reviewed against
+ * RM0444 Rev 6: same IP, register layout and rules; only references changed (v0.3). */
+/* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit
+ * that does not is stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
 #define SPL_LIBRARY_BUILD 1
 #include "stm32g0_crc.h"
 
-/* RM0444 Rev 6 section 14. */
-
 #define CRC_CR_CONFIG_BITS (CRC_CR_REV_OUT | CRC_CR_REV_IN | CRC_CR_POLYSIZE)
 
-/* Denetim seviyesi (A4 dalga 2, Docs/CHECK_LEVEL.md 5.4 CRC tablosu): SPL_REQUIRE = normal sinif
- * (yalniz FULL), SPL_REQUIRE_SAFE = SAFE sinif (FULL ve MIX). Butun makrolar ilk MMIO yazimindan
- * once (METHOD 1.3). */
+/* Check level (A4 wave 2, Docs/CHECK_LEVEL.md 5.4 CRC table): SPL_REQUIRE = checked at FULL only
+ * (not compiled at FAST). All macros come before the first MMIO write (METHOD 1.3). */
 
 static uint32_t Crc_SizeMask(uint32_t polysize)
 {
@@ -40,16 +38,16 @@ SPL_Status CRC_Config(const CRC_ConfigTypeDef *config)
     uint32_t mask;
     volatile uint32_t discard;
 
-    SPL_REQUIRE_SAFE(config != (const CRC_ConfigTypeDef *)0, SPL_ERR_PARAM);
-    /* SAFE: CR'de komsu alana tasma. */
-    SPL_REQUIRE_SAFE((config->polysize <= CRC_POLYSIZE_7) && (config->rev_in <= CRC_REV_IN_WORD) &&
-                         (config->rev_out <= 1U),
-                     SPL_ERR_PARAM);
-    /* RM0444 14.3.3: even polynomials are not supported. SAFE: sessizce yanlis CRC. */
+    SPL_REQUIRE(config != (const CRC_ConfigTypeDef *)0, SPL_ERR_PARAM);
+    /* overflow into a neighbouring CR field. */
+    SPL_REQUIRE((config->polysize <= CRC_POLYSIZE_7) && (config->rev_in <= CRC_REV_IN_WORD) &&
+                    (config->rev_out <= 1U),
+                SPL_ERR_PARAM);
+    /* RM0444 14.3.3: even polynomials are not supported. silently wrong CRC. */
     mask = Crc_SizeMask(config->polysize);
-    SPL_REQUIRE_SAFE(((config->polynomial & 1U) != 0U) && ((config->polynomial & ~mask) == 0U) &&
-                         ((config->init & ~mask) == 0U),
-                     SPL_ERR_PARAM);
+    SPL_REQUIRE(((config->polynomial & 1U) != 0U) && ((config->polynomial & ~mask) == 0U) &&
+                    ((config->init & ~mask) == 0U),
+                SPL_ERR_PARAM);
 
     /* RM0444 14.3.3: the polynomial must not change during a computation;
      * a DR read ends any pending one. */
@@ -95,7 +93,7 @@ SPL_Status CRC_GetResult(uint32_t *result)
 {
     uint32_t polysize;
 
-    SPL_REQUIRE_SAFE(result != (uint32_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(result != (uint32_t *)0, SPL_ERR_PARAM);
     polysize = (CRC->CR & CRC_CR_POLYSIZE) >> CRC_CR_POLYSIZE_Pos;
     *result = CRC->DR & Crc_SizeMask(polysize);
     return SPL_OK;

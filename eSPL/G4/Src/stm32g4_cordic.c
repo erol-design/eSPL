@@ -189,8 +189,8 @@ static uint8_t Cordic_ArgsValid(uint32_t function, uint32_t scale, int32_t arg1,
 
 SPL_Status CORDIC_ContextInit(CORDIC_ContextTypeDef *ctx)
 {
-    /* SAFE: NULL context cannot hold outstanding count. */
-    SPL_REQUIRE_SAFE(ctx != NULL, SPL_ERR_PARAM);
+    /* NULL context cannot hold outstanding count. */
+    SPL_REQUIRE(ctx != NULL, SPL_ERR_PARAM);
     ctx->outstanding = 0U;
     return SPL_OK;
 }
@@ -200,18 +200,18 @@ SPL_Status CORDIC_Config(const CORDIC_ContextTypeDef *ctx, const CORDIC_ConfigTy
     Cordic_Fields f;
     uint32_t csr;
 
-    /* SAFE: NULL context. */
-    SPL_REQUIRE_SAFE(ctx != NULL, SPL_ERR_PARAM);
-    /* SAFE: NULL config. */
-    SPL_REQUIRE_SAFE(config != NULL, SPL_ERR_PARAM);
-    /* SAFE: Argument width must fit CSR. */
-    SPL_REQUIRE_SAFE(config->arg_size <= CORDIC_SIZE_16BIT, SPL_ERR_PARAM);
-    /* SAFE: Result width must fit CSR. */
-    SPL_REQUIRE_SAFE(config->res_size <= CORDIC_SIZE_16BIT, SPL_ERR_PARAM);
-    /* SAFE: Number of writes is encoded as writes-1. */
-    SPL_REQUIRE_SAFE((config->arg_writes >= 1U) && (config->arg_writes <= 2U), SPL_ERR_PARAM);
-    /* SAFE: Number of reads is encoded as reads-1. */
-    SPL_REQUIRE_SAFE((config->res_reads >= 1U) && (config->res_reads <= 2U), SPL_ERR_PARAM);
+    /* NULL context. */
+    SPL_REQUIRE(ctx != NULL, SPL_ERR_PARAM);
+    /* NULL config. */
+    SPL_REQUIRE(config != NULL, SPL_ERR_PARAM);
+    /* Argument width must fit CSR. */
+    SPL_REQUIRE(config->arg_size <= CORDIC_SIZE_16BIT, SPL_ERR_PARAM);
+    /* Result width must fit CSR. */
+    SPL_REQUIRE(config->res_size <= CORDIC_SIZE_16BIT, SPL_ERR_PARAM);
+    /* Number of writes is encoded as writes-1. */
+    SPL_REQUIRE((config->arg_writes >= 1U) && (config->arg_writes <= 2U), SPL_ERR_PARAM);
+    /* Number of reads is encoded as reads-1. */
+    SPL_REQUIRE((config->res_reads >= 1U) && (config->res_reads <= 2U), SPL_ERR_PARAM);
     f.function = config->function;
     f.precision = config->precision;
     f.scale = config->scale;
@@ -219,8 +219,8 @@ SPL_Status CORDIC_Config(const CORDIC_ContextTypeDef *ctx, const CORDIC_ConfigTy
     f.res16 = config->res_size;
     f.nargs = config->arg_writes - 1U;
     f.nres = config->res_reads - 1U;
-    /* SAFE: Invalid function/scale/width combination in CSR. */
-    SPL_REQUIRE_SAFE(Cordic_FieldsValid(&f) != 0U, SPL_ERR_PARAM);
+    /* Invalid function/scale/width combination in CSR. */
+    SPL_REQUIRE(Cordic_FieldsValid(&f) != 0U, SPL_ERR_PARAM);
 
     csr = CORDIC->CSR;
     /* RM0440 17.3.9: no configuration change during DMA. Driver choice S1:
@@ -241,8 +241,8 @@ SPL_Status CORDIC_InterruptConfig(uint8_t enable)
 {
     uint32_t csr;
 
-    /* SAFE: Boolean value outside the documented range. */
-    SPL_REQUIRE_SAFE(enable <= 1U, SPL_ERR_PARAM);
+    /* Boolean value outside the documented range. */
+    SPL_REQUIRE(enable <= 1U, SPL_ERR_PARAM);
     /* RM0440 17.3.7: CSR may change during a calculation. RRDY is read-only
      * and masked out together with the reserved bits. */
     csr = CORDIC->CSR & (CORDIC_CSR_RW_BITS & ~CORDIC_CSR_IEN);
@@ -260,12 +260,12 @@ SPL_Status CORDIC_DmaConfig(const CORDIC_ContextTypeDef *ctx, uint8_t read_enabl
     uint32_t csr;
     uint32_t dma = 0U;
 
-    /* SAFE: NULL context. */
-    SPL_REQUIRE_SAFE(ctx != NULL, SPL_ERR_PARAM);
-    /* SAFE: Invalid DMA read bit. */
-    SPL_REQUIRE_SAFE(read_enable <= 1U, SPL_ERR_PARAM);
-    /* SAFE: Invalid DMA write bit. */
-    SPL_REQUIRE_SAFE(write_enable <= 1U, SPL_ERR_PARAM);
+    /* NULL context. */
+    SPL_REQUIRE(ctx != NULL, SPL_ERR_PARAM);
+    /* Invalid DMA read bit. */
+    SPL_REQUIRE(read_enable <= 1U, SPL_ERR_PARAM);
+    /* Invalid DMA write bit. */
+    SPL_REQUIRE(write_enable <= 1U, SPL_ERR_PARAM);
     if (read_enable != 0U)
     {
         dma |= CORDIC_CSR_DMAREN;
@@ -294,8 +294,8 @@ SPL_Status CORDIC_TryWrite(CORDIC_ContextTypeDef *ctx, uint32_t wdata1, uint32_t
     int32_t arg2;
     uint8_t has_arg2;
 
-    /* SAFE: NULL context. */
-    SPL_REQUIRE_SAFE(ctx != NULL, SPL_ERR_PARAM);
+    /* NULL context. */
+    SPL_REQUIRE(ctx != NULL, SPL_ERR_PARAM);
     csr = CORDIC->CSR;
     Cordic_DecodeCsr(csr, &f);
     /* RM0440 17.3.9 note: no CPU access to WDATA with DMA enabled.
@@ -319,8 +319,8 @@ SPL_Status CORDIC_TryWrite(CORDIC_ContextTypeDef *ctx, uint32_t wdata1, uint32_t
         arg2 = Cordic_ToQ31(wdata2);
         has_arg2 = (uint8_t)f.nargs;
     }
-    /* SAFE: Argument outside supported CORDIC mathematical domain. */
-    SPL_REQUIRE_SAFE(Cordic_ArgsValid(f.function, f.scale, arg1, arg2, has_arg2) != 0U, SPL_ERR_PARAM);
+    /* Argument outside supported CORDIC mathematical domain. */
+    SPL_REQUIRE(Cordic_ArgsValid(f.function, f.scale, arg1, arg2, has_arg2) != 0U, SPL_ERR_PARAM);
 
     /* RM0440 17.3.6: ARG1 first, then ARG2; the last write starts or queues
      * the calculation. */
@@ -338,14 +338,14 @@ SPL_Status CORDIC_TryRead(CORDIC_ContextTypeDef *ctx, uint32_t *rdata1, uint32_t
     uint32_t csr;
     uint32_t res1;
 
-    /* SAFE: NULL context. */
-    SPL_REQUIRE_SAFE(ctx != NULL, SPL_ERR_PARAM);
-    /* SAFE: NULL output pointer. */
-    SPL_REQUIRE_SAFE(rdata1 != NULL, SPL_ERR_PARAM);
+    /* NULL context. */
+    SPL_REQUIRE(ctx != NULL, SPL_ERR_PARAM);
+    /* NULL output pointer. */
+    SPL_REQUIRE(rdata1 != NULL, SPL_ERR_PARAM);
     /* CSR reads never stall (RM0440 17.3.7 polling mode). */
     csr = CORDIC->CSR;
-    /* SAFE: Second output must be present when NRES is set. */
-    SPL_REQUIRE_SAFE(((csr & CORDIC_CSR_NRES) == 0U) || (rdata2 != NULL), SPL_ERR_PARAM);
+    /* Second output must be present when NRES is set. */
+    SPL_REQUIRE(((csr & CORDIC_CSR_NRES) == 0U) || (rdata2 != NULL), SPL_ERR_PARAM);
     /* RM0440 17.3.9 note: no CPU access to RDATA with DMA enabled. */
     if ((csr & CORDIC_CSR_DMA_BITS) != 0U)
     {
@@ -380,8 +380,8 @@ SPL_Status CORDIC_TryRead(CORDIC_ContextTypeDef *ctx, uint32_t *rdata1, uint32_t
 
 SPL_Status CORDIC_PackQ15(int16_t arg1, int16_t arg2, uint32_t *wdata)
 {
-    /* SAFE: NULL output pointer. */
-    SPL_REQUIRE_SAFE(wdata != NULL, SPL_ERR_PARAM);
+    /* NULL output pointer. */
+    SPL_REQUIRE(wdata != NULL, SPL_ERR_PARAM);
     /* Signed -> unsigned conversion is defined (modulo 2^16). */
     *wdata = (uint32_t)(uint16_t)arg1 | ((uint32_t)(uint16_t)arg2 << 16U);
     return SPL_OK;
@@ -399,8 +399,8 @@ static int16_t Cordic_HalfToQ15(uint32_t half)
 
 SPL_Status CORDIC_UnpackQ15(uint32_t rdata, int16_t *res1, int16_t *res2)
 {
-    /* SAFE: At least one result pointer is required. */
-    SPL_REQUIRE_SAFE((res1 != NULL) || (res2 != NULL), SPL_ERR_PARAM);
+    /* At least one result pointer is required. */
+    SPL_REQUIRE((res1 != NULL) || (res2 != NULL), SPL_ERR_PARAM);
     if (res1 != NULL)
     {
         *res1 = Cordic_HalfToQ15(rdata & 0x0000FFFFU);

@@ -44,10 +44,11 @@ typedef char Hrtim_FlagCheck
          : -1];
 
 /* Compile-time check (CCL-2 YAP-03): HRTIM_TIMER_COUNT matches the CMSIS timer array. */
-typedef char Hrtim_TimerCountCheck[((sizeof(((HRTIM_TypeDef *)0)->sTimerxRegs) /
-                                     sizeof(((HRTIM_TypeDef *)0)->sTimerxRegs[0])) == HRTIM_TIMER_COUNT)
-                                        ? 1
-                                        : -1];
+typedef char
+    Hrtim_TimerCountCheck[((sizeof(((HRTIM_TypeDef *)0)->sTimerxRegs) /
+                            sizeof(((HRTIM_TypeDef *)0)->sTimerxRegs[0])) == HRTIM_TIMER_COUNT)
+                              ? 1
+                              : -1];
 
 static HRTIM_Timerx_TypeDef *Hrtim_Timer(uint32_t timer)
 {
@@ -73,12 +74,13 @@ static const uint16_t hrtim_max[] = {0xFFDFU, 0xFFEFU, 0xFFF7U, 0xFFFBU,
 
 /* Compile-time check (CCL-2 YAP-03): HRTIM_CKPSC_MAX is the CK_PSC field maximum and both limit
  * tables have one entry per CK_PSC code 0..HRTIM_CKPSC_MAX. */
-typedef char Hrtim_CkpscTableCheck
-    [((HRTIM_CKPSC_MAX == (HRTIM_TIMCR_CK_PSC_Msk >> HRTIM_TIMCR_CK_PSC_Pos)) &&
-      ((sizeof(hrtim_min) / sizeof(hrtim_min[0])) == (HRTIM_CKPSC_MAX + 1U)) &&
-      ((sizeof(hrtim_max) / sizeof(hrtim_max[0])) == (HRTIM_CKPSC_MAX + 1U)))
-         ? 1
-         : -1];
+typedef char
+    Hrtim_CkpscTableCheck[((HRTIM_CKPSC_MAX ==
+                            (HRTIM_TIMCR_CK_PSC_Msk >> HRTIM_TIMCR_CK_PSC_Pos)) &&
+                           ((sizeof(hrtim_min) / sizeof(hrtim_min[0])) == (HRTIM_CKPSC_MAX + 1U)) &&
+                           ((sizeof(hrtim_max) / sizeof(hrtim_max[0])) == (HRTIM_CKPSC_MAX + 1U)))
+                              ? 1
+                              : -1];
 
 /* ckpsc 0..7, checked by the caller. */
 static uint32_t Hrtim_InRange(uint32_t ckpsc, uint32_t value)
@@ -108,16 +110,17 @@ SPL_Status HRTIM_DllCalibrationStart(void)
 
 SPL_Status HRTIM_DllReady(uint8_t *ready)
 {
-    /* SAFE: NULL isaretci okuma/yazma etkisi hedef mimaride guvenilir bir hata degildir. */
-    SPL_REQUIRE_SAFE(!(ready == (uint8_t *)0), SPL_ERR_PARAM);
+    /* NULL isaretci okuma/yazma etkisi hedef mimaride guvenilir bir hata degildir. */
+    SPL_REQUIRE(!(ready == (uint8_t *)0), SPL_ERR_PARAM);
     *ready = (uint8_t)Hrtim_DllReadyFlag();
     return SPL_OK;
 }
 
 SPL_Status HRTIM_DllPeriodic(uint8_t enable, uint32_t rate)
 {
-    /* SAFE: gecersiz alan / maske register semantigini bozabilir veya yanlis donanim durumuna yol acar. */
-    SPL_REQUIRE_SAFE(!((enable > 1U) || ((enable != 0U) && (rate > HRTIM_CALRTE_MAX))), SPL_ERR_PARAM);
+    /* Gecersiz alan / maske register semantigini bozabilir veya yanlis donanim durumuna yol
+     * acar. */
+    SPL_REQUIRE(!((enable > 1U) || ((enable != 0U) && (rate > HRTIM_CALRTE_MAX))), SPL_ERR_PARAM);
     if (enable == 0U)
     {
         HRTIM1->sCommonRegs.DLLCR = 0U;
@@ -157,12 +160,15 @@ SPL_Status HRTIM_TimerInit(uint32_t timer, const HRTIM_TimerInitTypeDef *cfg)
     HRTIM_Timerx_TypeDef *t;
     uint32_t cr;
 
-    /* SAFE: NULL isaretci okuma/yazma etkisi hedef mimaride guvenilir bir hata degildir. */
-    SPL_REQUIRE_SAFE(!((timer >= HRTIM_TIMER_COUNT) || (cfg == (const HRTIM_TimerInitTypeDef *)0)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz alan / maske register semantigini bozabilir veya yanlis donanim durumuna yol acar. */
-    SPL_REQUIRE_SAFE(!((cfg->prescaler > HRTIM_CKPSC_MAX) || (cfg->repetition > HRTIM_REP_MAX) ||
-        (cfg->continuous > 1U) || (cfg->retrigger > 1U) || (cfg->preload > 1U) ||
-        (cfg->update_on_rep > 1U) || (Hrtim_InRange(cfg->prescaler, cfg->period) == 0U)), SPL_ERR_PARAM);
+    /* NULL isaretci okuma/yazma etkisi hedef mimaride guvenilir bir hata degildir. */
+    SPL_REQUIRE(!((timer >= HRTIM_TIMER_COUNT) || (cfg == (const HRTIM_TimerInitTypeDef *)0)),
+                SPL_ERR_PARAM);
+    /* Gecersiz alan / maske register semantigini bozabilir veya yanlis donanim durumuna yol
+     * acar. */
+    SPL_REQUIRE(!((cfg->prescaler > HRTIM_CKPSC_MAX) || (cfg->repetition > HRTIM_REP_MAX) ||
+                  (cfg->continuous > 1U) || (cfg->retrigger > 1U) || (cfg->preload > 1U) ||
+                  (cfg->update_on_rep > 1U) || (Hrtim_InRange(cfg->prescaler, cfg->period) == 0U)),
+                SPL_ERR_PARAM);
     /* RM0440 28.3.3: the prescaler cannot be modified once the timer is enabled. */
     if (Hrtim_Running(timer) != 0U)
     {
@@ -192,11 +198,12 @@ SPL_Status HRTIM_SetPeriod(uint32_t timer, uint32_t period)
 {
     HRTIM_Timerx_TypeDef *t;
 
-    /* SAFE: gecersiz timer secimi register erisimini / olay maskesini bozabilir. */
-    SPL_REQUIRE_SAFE(!(timer >= HRTIM_TIMER_COUNT), SPL_ERR_PARAM);
+    /* Gecersiz timer secimi register erisimini / olay maskesini bozabilir. */
+    SPL_REQUIRE(!(timer >= HRTIM_TIMER_COUNT), SPL_ERR_PARAM);
     t = Hrtim_Timer(timer);
-    /* SAFE: gecersiz alan / maske register semantigini bozabilir veya yanlis donanim durumuna yol acar. */
-    SPL_REQUIRE_SAFE(!(Hrtim_InRange(Hrtim_Ckpsc(t), period) == 0U), SPL_ERR_PARAM);
+    /* Gecersiz alan / maske register semantigini bozabilir veya yanlis donanim durumuna yol
+     * acar. */
+    SPL_REQUIRE(!(Hrtim_InRange(Hrtim_Ckpsc(t), period) == 0U), SPL_ERR_PARAM);
     /* Running with PREEN = 0: PERxR takes effect at once. A period at or below the moving
      * counter would let it run to 0xFFFF before it wraps, and a counter read races the write
      * (CCL-2 ZMN-02): every shrink is refused (STATE, no write). Use PREEN = 1 or stop the
@@ -219,16 +226,17 @@ SPL_Status HRTIM_SetCompare(uint32_t timer, uint32_t unit, uint32_t value)
     volatile uint32_t *reg;
     uint32_t ok;
 
-    /* SAFE: gecersiz timer secimi register erisimini / olay maskesini bozabilir. */
-    SPL_REQUIRE_SAFE(!((timer >= HRTIM_TIMER_COUNT) || (unit < 1U) || (unit > 4U)), SPL_ERR_PARAM);
+    /* Gecersiz timer secimi register erisimini / olay maskesini bozabilir. */
+    SPL_REQUIRE(!((timer >= HRTIM_TIMER_COUNT) || (unit < 1U) || (unit > 4U)), SPL_ERR_PARAM);
     t = Hrtim_Timer(timer);
     /* RM0440 28.3.4: 0 skips a pulse, allowed in CMP1 and CMP3 only. */
     ok = ((value == 0U) && ((unit == 1U) || (unit == 3U))) ? 1U
                                                            : Hrtim_InRange(Hrtim_Ckpsc(t), value);
     /* Issue #27 politikasi: PER ile iliski sinanmaz; CMP > PER gecerli (periyot icinde
      * eslesme olmaz, olay uretilmez). HRTIM_SetPeriod ile ayni kural. */
-    /* SAFE: gecersiz alan / maske register semantigini bozabilir veya yanlis donanim durumuna yol acar. */
-    SPL_REQUIRE_SAFE(!(ok == 0U), SPL_ERR_PARAM);
+    /* Gecersiz alan / maske register semantigini bozabilir veya yanlis donanim durumuna yol
+     * acar. */
+    SPL_REQUIRE(!(ok == 0U), SPL_ERR_PARAM);
     reg = (unit == 1U)   ? &t->CMP1xR
           : (unit == 2U) ? &t->CMP2xR
           : (unit == 3U) ? &t->CMP3xR
@@ -249,13 +257,16 @@ SPL_Status HRTIM_OutputConfig(uint32_t timer, uint32_t output, const HRTIM_Outpu
     uint32_t value;
     uint32_t field;
 
-    /* SAFE: NULL isaretci okuma/yazma etkisi hedef mimaride guvenilir bir hata degildir. */
-    SPL_REQUIRE_SAFE(!((timer >= HRTIM_TIMER_COUNT) || (output < 1U) || (output > 2U) ||
-        (cfg == (const HRTIM_OutputTypeDef *)0)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz alan / maske register semantigini bozabilir veya yanlis donanim durumuna yol acar. */
-    SPL_REQUIRE_SAFE(!(((cfg->set_sources & HRTIM_SW_TRIGGER) != 0U) ||
-        ((cfg->reset_sources & HRTIM_SW_TRIGGER) != 0U) || (cfg->polarity > 1U) ||
-        (cfg->idle_level > 1U) || (cfg->fault_state > HRTIM_FAULT_MAX)), SPL_ERR_PARAM);
+    /* NULL isaretci okuma/yazma etkisi hedef mimaride guvenilir bir hata degildir. */
+    SPL_REQUIRE(!((timer >= HRTIM_TIMER_COUNT) || (output < 1U) || (output > 2U) ||
+                  (cfg == (const HRTIM_OutputTypeDef *)0)),
+                SPL_ERR_PARAM);
+    /* Gecersiz alan / maske register semantigini bozabilir veya yanlis donanim durumuna yol
+     * acar. */
+    SPL_REQUIRE(!(((cfg->set_sources & HRTIM_SW_TRIGGER) != 0U) ||
+                  ((cfg->reset_sources & HRTIM_SW_TRIGGER) != 0U) || (cfg->polarity > 1U) ||
+                  (cfg->idle_level > 1U) || (cfg->fault_state > HRTIM_FAULT_MAX)),
+                SPL_ERR_PARAM);
     /* RM0440 28.5.52: POL and FAULT are fixed once the timer runs, IDLES before the HRTIM
      * controls the output. */
     if ((Hrtim_Running(timer) != 0U) ||
@@ -288,16 +299,20 @@ SPL_Status HRTIM_DeadTimeConfig(uint32_t timer, const HRTIM_DeadTimeTypeDef *cfg
 {
     HRTIM_Timerx_TypeDef *t;
 
-    /* SAFE: NULL isaretci okuma/yazma etkisi hedef mimaride guvenilir bir hata degildir. */
-    SPL_REQUIRE_SAFE(!((timer >= HRTIM_TIMER_COUNT) || (cfg == (const HRTIM_DeadTimeTypeDef *)0)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz alan / maske register semantigini bozabilir veya yanlis donanim durumuna yol acar. */
-    SPL_REQUIRE_SAFE(!((cfg->enable > 1U) ||
-        ((cfg->enable != 0U) && ((cfg->prescaler > HRTIM_DTPRSC_MAX) ||
-                                 (cfg->rising > HRTIM_DT_MAX) || (cfg->falling > HRTIM_DT_MAX)))), SPL_ERR_PARAM);
-    /* SAFE: a zero rising or falling dead time with DTEN = 1 lets both switches of a bridge leg
+    /* NULL isaretci okuma/yazma etkisi hedef mimaride guvenilir bir hata degildir. */
+    SPL_REQUIRE(!((timer >= HRTIM_TIMER_COUNT) || (cfg == (const HRTIM_DeadTimeTypeDef *)0)),
+                SPL_ERR_PARAM);
+    /* Gecersiz alan / maske register semantigini bozabilir veya yanlis donanim durumuna yol
+     * acar. */
+    SPL_REQUIRE(
+        !((cfg->enable > 1U) ||
+          ((cfg->enable != 0U) && ((cfg->prescaler > HRTIM_DTPRSC_MAX) ||
+                                   (cfg->rising > HRTIM_DT_MAX) || (cfg->falling > HRTIM_DT_MAX)))),
+        SPL_ERR_PARAM);
+    /* A zero rising or falling dead time with DTEN = 1 lets both switches of a bridge leg
      * conduct at the same edge (CCL-2 ZMN-09; TIM_ComplementaryEnable rejects DTG = 0 too). */
-    SPL_REQUIRE_SAFE(!((cfg->enable != 0U) && ((cfg->rising == 0U) || (cfg->falling == 0U))),
-                     SPL_ERR_PARAM);
+    SPL_REQUIRE(!((cfg->enable != 0U) && ((cfg->rising == 0U) || (cfg->falling == 0U))),
+                SPL_ERR_PARAM);
     t = Hrtim_Timer(timer);
     /* RM0440 28.5.52 DTEN: not while the timer runs or its outputs are enabled; 28.5.26: the
      * lock bits make value, sign and prescaler read-only. */
@@ -323,8 +338,9 @@ SPL_Status HRTIM_ForceOutput(uint32_t timer, uint32_t output, uint8_t active)
     HRTIM_Timerx_TypeDef *t;
     volatile uint32_t *reg;
 
-    /* SAFE: gecersiz timer secimi register erisimini / olay maskesini bozabilir. */
-    SPL_REQUIRE_SAFE(!((timer >= HRTIM_TIMER_COUNT) || (output < 1U) || (output > 2U) || (active > 1U)), SPL_ERR_PARAM);
+    /* Gecersiz timer secimi register erisimini / olay maskesini bozabilir. */
+    SPL_REQUIRE(!((timer >= HRTIM_TIMER_COUNT) || (output < 1U) || (output > 2U) || (active > 1U)),
+                SPL_ERR_PARAM);
     t = Hrtim_Timer(timer);
     if (output == 1U)
     {
@@ -341,24 +357,24 @@ SPL_Status HRTIM_ForceOutput(uint32_t timer, uint32_t output, uint8_t active)
 
 SPL_Status HRTIM_OutputEnable(uint32_t mask)
 {
-    /* SAFE: gecersiz bayrak/maske ayrilmis bitlere yazim yapabilir. */
-    SPL_REQUIRE_SAFE(!((mask == 0U) || ((mask & ~HRTIM_OUTPUT_ALL) != 0U)), SPL_ERR_PARAM);
+    /* Gecersiz bayrak/maske ayrilmis bitlere yazim yapabilir. */
+    SPL_REQUIRE(!((mask == 0U) || ((mask & ~HRTIM_OUTPUT_ALL) != 0U)), SPL_ERR_PARAM);
     HRTIM1->sCommonRegs.OENR = mask; /* writing 0 has no effect: no read-modify-write */
     return SPL_OK;
 }
 
 SPL_Status HRTIM_OutputDisable(uint32_t mask)
 {
-    /* SAFE: gecersiz bayrak/maske ayrilmis bitlere yazim yapabilir. */
-    SPL_REQUIRE_SAFE(!((mask == 0U) || ((mask & ~HRTIM_OUTPUT_ALL) != 0U)), SPL_ERR_PARAM);
+    /* Gecersiz bayrak/maske ayrilmis bitlere yazim yapabilir. */
+    SPL_REQUIRE(!((mask == 0U) || ((mask & ~HRTIM_OUTPUT_ALL) != 0U)), SPL_ERR_PARAM);
     HRTIM1->sCommonRegs.ODISR = mask;
     return SPL_OK;
 }
 
 SPL_Status HRTIM_OutputStatus(uint32_t *enabled, uint32_t *disable_status)
 {
-    /* SAFE: NULL isaretci okuma/yazma etkisi hedef mimaride guvenilir bir hata degildir. */
-    SPL_REQUIRE_SAFE(!((enabled == (uint32_t *)0) || (disable_status == (uint32_t *)0)), SPL_ERR_PARAM);
+    /* NULL isaretci okuma/yazma etkisi hedef mimaride guvenilir bir hata degildir. */
+    SPL_REQUIRE(!((enabled == (uint32_t *)0) || (disable_status == (uint32_t *)0)), SPL_ERR_PARAM);
     *enabled = HRTIM1->sCommonRegs.OENR & HRTIM_OUTPUT_ALL;
     *disable_status = HRTIM1->sCommonRegs.ODSR & HRTIM_OUTPUT_ALL;
     return SPL_OK;
@@ -368,8 +384,9 @@ SPL_Status HRTIM_CounterEnable(uint32_t timer_mask, uint8_t enable)
 {
     const uint32_t bits = timer_mask << HRTIM_MCR_TCEN_POS;
 
-    /* SAFE: gecersiz timer secimi register erisimini / olay maskesini bozabilir. */
-    SPL_REQUIRE_SAFE(!((timer_mask == 0U) || ((timer_mask & ~HRTIM_TIMER_ALL) != 0U) || (enable > 1U)), SPL_ERR_PARAM);
+    /* Gecersiz timer secimi register erisimini / olay maskesini bozabilir. */
+    SPL_REQUIRE(!((timer_mask == 0U) || ((timer_mask & ~HRTIM_TIMER_ALL) != 0U) || (enable > 1U)),
+                SPL_ERR_PARAM);
     if (enable == 0U)
     {
         HRTIM1->sMasterRegs.MCR &= ~bits;
@@ -386,8 +403,8 @@ SPL_Status HRTIM_CounterEnable(uint32_t timer_mask, uint8_t enable)
 
 static SPL_Status Hrtim_Cr2Trigger(uint32_t timer_mask, uint32_t pos)
 {
-    /* SAFE: gecersiz timer secimi register erisimini / olay maskesini bozabilir. */
-    SPL_REQUIRE_SAFE(!((timer_mask == 0U) || ((timer_mask & ~HRTIM_TIMER_ALL) != 0U)), SPL_ERR_PARAM);
+    /* Gecersiz timer secimi register erisimini / olay maskesini bozabilir. */
+    SPL_REQUIRE(!((timer_mask == 0U) || ((timer_mask & ~HRTIM_TIMER_ALL) != 0U)), SPL_ERR_PARAM);
     /* Only the SWPx bits are read/write state; no pending trigger is copied back. */
     HRTIM1->sCommonRegs.CR2 = (HRTIM1->sCommonRegs.CR2 & HRTIM_CR2_SWP_ALL) | (timer_mask << pos);
     return SPL_OK;
@@ -405,16 +422,18 @@ SPL_Status HRTIM_SoftwareReset(uint32_t timer_mask)
 
 SPL_Status HRTIM_GetFlags(uint32_t timer, uint32_t *flags)
 {
-    /* SAFE: NULL isaretci okuma/yazma etkisi hedef mimaride guvenilir bir hata degildir. */
-    SPL_REQUIRE_SAFE(!((timer >= HRTIM_TIMER_COUNT) || (flags == (uint32_t *)0)), SPL_ERR_PARAM);
+    /* NULL isaretci okuma/yazma etkisi hedef mimaride guvenilir bir hata degildir. */
+    SPL_REQUIRE(!((timer >= HRTIM_TIMER_COUNT) || (flags == (uint32_t *)0)), SPL_ERR_PARAM);
     *flags = Hrtim_Timer(timer)->TIMxISR;
     return SPL_OK;
 }
 
 SPL_Status HRTIM_ClearFlags(uint32_t timer, uint32_t flags)
 {
-    /* SAFE: gecersiz timer secimi register erisimini / olay maskesini bozabilir. */
-    SPL_REQUIRE_SAFE(!((timer >= HRTIM_TIMER_COUNT) || (flags == 0U) || ((flags & ~HRTIM_TIMFLAG_ALL) != 0U)), SPL_ERR_PARAM);
+    /* Gecersiz timer secimi register erisimini / olay maskesini bozabilir. */
+    SPL_REQUIRE(
+        !((timer >= HRTIM_TIMER_COUNT) || (flags == 0U) || ((flags & ~HRTIM_TIMFLAG_ALL) != 0U)),
+        SPL_ERR_PARAM);
     Hrtim_Timer(timer)->TIMxICR = flags; /* W1C: no read-modify-write */
     /* Read back: the clear reaches the peripheral before return (METHOD 1.7, issue #23). */
     (void)Hrtim_Timer(timer)->TIMxISR;
@@ -423,16 +442,16 @@ SPL_Status HRTIM_ClearFlags(uint32_t timer, uint32_t flags)
 
 SPL_Status HRTIM_GetCommonFlags(uint32_t *flags)
 {
-    /* SAFE: NULL isaretci okuma/yazma etkisi hedef mimaride guvenilir bir hata degildir. */
-    SPL_REQUIRE_SAFE(!(flags == (uint32_t *)0), SPL_ERR_PARAM);
+    /* NULL isaretci okuma/yazma etkisi hedef mimaride guvenilir bir hata degildir. */
+    SPL_REQUIRE(!(flags == (uint32_t *)0), SPL_ERR_PARAM);
     *flags = HRTIM1->sCommonRegs.ISR;
     return SPL_OK;
 }
 
 SPL_Status HRTIM_ClearCommonFlags(uint32_t flags)
 {
-    /* SAFE: gecersiz bayrak/maske ayrilmis bitlere yazim yapabilir. */
-    SPL_REQUIRE_SAFE(!((flags == 0U) || ((flags & ~HRTIM_COMMON_CLEARABLE) != 0U)), SPL_ERR_PARAM);
+    /* Gecersiz bayrak/maske ayrilmis bitlere yazim yapabilir. */
+    SPL_REQUIRE(!((flags == 0U) || ((flags & ~HRTIM_COMMON_CLEARABLE) != 0U)), SPL_ERR_PARAM);
     HRTIM1->sCommonRegs.ICR = flags;
     /* Read back: the clear reaches the peripheral before return (METHOD 1.7, issue #23). */
     (void)HRTIM1->sCommonRegs.ISR;

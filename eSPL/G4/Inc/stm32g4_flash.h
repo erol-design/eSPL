@@ -64,22 +64,22 @@ extern "C"
     } FLASH_EccTypeDef;
 
     /* Wait states required for hclk_hz in the given range (pure calculation). */
-    /* Seviye: PARAM[S,r] */
+    /* Level: PARAM[F,r] */
     SPL_Status FLASH_CalcLatency(uint32_t hclk_hz, FLASH_RangeTypeDef range, uint32_t *latency);
     /* Program ACR.LATENCY (0..15) and verify by read-back (ERR_HW on mismatch). */
-    /* Seviye: PARAM[S] HW[r] */
+    /* Level: PARAM[F] HW[r] */
     SPL_Status FLASH_SetLatency(uint32_t latency);
     /* Prefetch / instruction cache / data cache enable bits (each 0 or 1). */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status FLASH_ConfigAccelerator(uint8_t prefetch, uint8_t icache, uint8_t dcache);
     /* Reset both caches; requires ICEN=0 and DCEN=0 (else ERR_STATE). */
-    /* Seviye: STATE[r] */
+    /* Level: STATE[r] */
     SPL_Status FLASH_ResetCaches(void);
 
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status FLASH_GetGeometry(FLASH_GeometryTypeDef *geometry);
     /* Raw FLASH_OPTR value (read-only access). */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status FLASH_GetOptionRegister(uint32_t *optr);
 
     /* KEY1/KEY2 sequence. Already unlocked: OK, no write. A wrong sequence
@@ -87,10 +87,10 @@ extern "C"
      * Caller duty (CCL-2 FL-03a): this driver never locks by itself; after every FLASH_Unlock
      * the caller calls FLASH_Lock on every exit path of its sequence, including error and
      * timeout branches (retry FLASH_Lock while it returns BUSY, or end with a reset). */
-    /* Seviye: HW[r] */
+    /* Level: HW[r] */
     SPL_Status FLASH_Unlock(void);
     /* Clears the operation bits and sets LOCK. BUSY while BSY=1. */
-    /* Seviye: BUSY[r] */
+    /* Level: BUSY[r] */
     SPL_Status FLASH_Lock(void);
 
     /* ERRATA ES0430 2.2.2 (ErasePageStart, ProgramDoubleWordStart): OPTR.DBANK = 1 with
@@ -104,27 +104,27 @@ extern "C"
      * Caller duty (CCL-2 FL-07b): one page per call, no range service; for a range the caller
      * takes page_size from FLASH_GetGeometry, first page = start / page_size, last page =
      * (start + length - 1) / page_size (rounds up), and erases first..last inclusive. */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] HW[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] HW[r] BUSY[r] */
     SPL_Status FLASH_ErasePageStart(uint32_t bank, uint32_t page);
     /* Start one 64-bit program at an 8-byte aligned main-memory address.
      * The double word must be erased (both words 0xFFFFFFFF) unless data is
      * all zero: otherwise SPL_ERR_STATE before any write (v0.13.3, would give
      * PROGERR, RM0440 3.3.7). The check reads the target double word. */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] HW[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] HW[r] BUSY[r] */
     SPL_Status FLASH_ProgramDoubleWordStart(uint32_t address, uint64_t data);
     /* BUSY while BSY=1, ERR_HW if error flags are pending, else OK.
      * eop (optional, may be NULL) receives SR.EOP (set only if EOPIE=1). */
-    /* Seviye: HW[r] BUSY[r] */
+    /* Level: HW[r] BUSY[r] */
     SPL_Status FLASH_PollOperation(uint8_t *eop);
     /* Clear PG/PER/MER/FSTPG/PNB/BKER after the last operation. */
-    /* Seviye: STATE[r] BUSY[r] */
+    /* Level: STATE[r] BUSY[r] */
     SPL_Status FLASH_EndOperation(void);
 
     /* Raw SR (BSY and all flags). */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status FLASH_GetFlags(uint32_t *flags);
     /* W1C clear of a non-empty subset of FLASH_SR_CLEARABLE. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status FLASH_ClearFlags(uint32_t mask);
 
     /* v0.13.4 (issue #12): ECC diagnosis. A double error (ECCD) raises the NMI; the CMSIS
@@ -133,9 +133,9 @@ extern "C"
      * error: read it, then clear it.
      * FLASH_GetEcc: one ECCR read, no write. FLASH_ClearEcc: writes 1 to every ECC flag
      * (ECCD, ECCC and on DBANK SKUs ECCD2, ECCC2), ECCCIE kept, reserved bits 0. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status FLASH_GetEcc(FLASH_EccTypeDef *ecc);
-    /* Seviye: - */
+    /* Level: - */
     SPL_Status FLASH_ClearEcc(void);
 
 #ifdef __cplusplus

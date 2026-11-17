@@ -14,7 +14,9 @@
  * PendSV and SysTick. NMI, HardFault and any other number -> SPL_ERR_PARAM.
  * Context: Enable/Disable/SetPending/ClearPending use the write-1 registers and are safe from any
  * context. SetIrqPriority is a read-modify-write of a shared IPR word (four IRQs per word on
- * ARMv6-M): serialise priority changes (start-up code). */
+ * ARMv6-M): serialise priority changes (start-up code).
+ * Caller duties (all APIs): a handler for every enabled IRQ (the startup default loops); the
+ * handler clears the peripheral source flag; serialise priority changes (see above). */
 
 #ifdef __cplusplus
 extern "C"
@@ -41,29 +43,41 @@ typedef enum
     NVIC_SYSTICK_CLK_HCLK = 1
 } NVIC_SysTickClockTypeDef;
 
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status NVIC_SetIrqPriority(IRQn_Type irq, uint32_t priority);
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status NVIC_GetIrqPriority(IRQn_Type irq, uint32_t *priority);
-/* Seviye: PARAM[S] */
+/* Caller: set the priority and clear stale peripheral flags and the NVIC pending bit
+ * (NVIC_ClearPending) before enabling. */
+/* Level: PARAM[F] */
 SPL_Status NVIC_Enable(IRQn_Type irq);
 /* ICER write followed by DSB/ISB (CMSIS): the IRQ cannot be taken after the return. */
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status NVIC_Disable(IRQn_Type irq);
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status NVIC_IsEnabled(IRQn_Type irq, uint8_t *enabled);
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status NVIC_SetPending(IRQn_Type irq);
-/* Seviye: PARAM[S] */
+/* Caller: clear the peripheral source flag first, else a level request pends again. */
+/* Level: PARAM[F] */
 SPL_Status NVIC_ClearPending(IRQn_Type irq);
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status NVIC_GetPending(IRQn_Type irq, uint8_t *pending);
 /* LOAD = reload (1..0x00FFFFFF), VAL = 0, CTRL = CLKSOURCE | TICKINT | ENABLE. SysTick already
  * enabled -> STATE (owner may be an RTOS: stop it first). Priority is not touched. */
-/* Seviye: PARAM[S,n] STATE[S] */
+/* Caller: compute reload from the current HCLK and the selected divider (recompute after clock
+ * changes); with interrupt = 1 set the SysTick priority and provide SysTick_Handler. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status NVIC_SysTickConfig(uint32_t reload, NVIC_SysTickClockTypeDef clock, uint8_t interrupt);
 /* Clears ENABLE and TICKINT; LOAD, VAL and CLKSOURCE unchanged. */
-/* Seviye: - */
+/* Caller: none beyond the file-header duties. */
+/* Level: - */
 SPL_Status NVIC_SysTickStop(void);
 
 #ifdef __cplusplus

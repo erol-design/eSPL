@@ -70,7 +70,7 @@ SPL_Status RCC_GetClocks(uint32_t hse_hz, RCC_ClocksTypeDef *clocks)
     uint32_t apb1_div;
     uint32_t apb2_div;
 
-    SPL_REQUIRE_SAFE(clocks != (RCC_ClocksTypeDef *)0, SPL_ERR_PARAM); /* SAFE: gecersiz cikti isaretcisi */
+    SPL_REQUIRE(clocks != (RCC_ClocksTypeDef *)0, SPL_ERR_PARAM); /* Gecersiz cikti isaretcisi */
 
     cfgr = RCC->CFGR;
     src = cfgr & RCC_CFGR_SWS;
@@ -157,8 +157,9 @@ SPL_Status RCC_GetUsartKernelClock(const USART_TypeDef *instance, uint32_t hse_h
     RCC_ClocksTypeDef clocks;
     SPL_Status result;
 
-    SPL_REQUIRE_SAFE(instance != (const USART_TypeDef *)0, SPL_ERR_PARAM); /* SAFE: gecersiz MMIO taban adresi */
-    SPL_REQUIRE_SAFE(kernel_hz != (uint32_t *)0, SPL_ERR_PARAM); /* SAFE: gecersiz cikti isaretcisi */
+    SPL_REQUIRE(instance != (const USART_TypeDef *)0,
+                SPL_ERR_PARAM);                             /* Gecersiz MMIO taban adresi */
+    SPL_REQUIRE(kernel_hz != (uint32_t *)0, SPL_ERR_PARAM); /* Gecersiz cikti isaretcisi */
 
     if (instance == USART1)
     {
@@ -764,7 +765,7 @@ SPL_Status RCC_GetOscReady(RCC_OscTypeDef osc, uint8_t *ready)
     uint32_t on_bit;
     uint32_t rdy_bit;
 
-    SPL_REQUIRE_SAFE(ready != (uint8_t *)0, SPL_ERR_PARAM); /* SAFE: gecersiz cikti adresi */
+    SPL_REQUIRE(ready != (uint8_t *)0, SPL_ERR_PARAM); /* Gecersiz cikti adresi */
     switch (osc)
     {
     case RCC_OSC_HSI16:
@@ -804,7 +805,7 @@ SPL_Status RCC_SetHseBypass(uint8_t bypass)
     uint32_t cr;
     uint32_t want;
 
-    SPL_REQUIRE_SAFE(bypass <= 1U, SPL_ERR_PARAM); /* SAFE: HSEBYP icin yalniz 0/1 */
+    SPL_REQUIRE(bypass <= 1U, SPL_ERR_PARAM); /* HSEBYP icin yalniz 0/1 */
     cr = RCC->CR;
     want = (bypass != 0U) ? RCC_CR_HSEBYP : 0U;
     if ((cr & RCC_CR_HSEBYP) == want)
@@ -841,44 +842,42 @@ SPL_Status RCC_ConfigPll(const RCC_PllConfigTypeDef *config, uint32_t hse_hz)
     uint32_t pllcfgr;
     uint32_t cr;
 
-    SPL_REQUIRE_SAFE(config != (const RCC_PllConfigTypeDef *)0, SPL_ERR_PARAM); /* SAFE: gecersiz PLL konfig adresi */
+    SPL_REQUIRE(config != (const RCC_PllConfigTypeDef *)0,
+                SPL_ERR_PARAM); /* Gecersiz PLL konfig adresi */
     if (config->source == (uint32_t)RCC_PLLSRC_HSI16)
     {
         src_hz = RCC_HSI16_HZ;
     }
     else if (config->source == (uint32_t)RCC_PLLSRC_HSE)
     {
-        SPL_REQUIRE_SAFE((hse_hz >= RCC_HSE_MIN_HZ) && (hse_hz <= RCC_HSE_MAX_HZ),
-                         SPL_ERR_PARAM); /* SAFE: HSE frekansi PLL calisma sinirlarini belirler. */
+        SPL_REQUIRE((hse_hz >= RCC_HSE_MIN_HZ) && (hse_hz <= RCC_HSE_MAX_HZ),
+                    SPL_ERR_PARAM); /* HSE frekansi PLL calisma sinirlarini belirler. */
         src_hz = hse_hz;
     }
     else
     {
         return SPL_ERR_PARAM;
     }
-    SPL_REQUIRE_SAFE((config->m >= 1U) && (config->m <= 16U) &&
-                     (config->n >= 8U) && (config->n <= 127U),
-                     SPL_ERR_PARAM); /* SAFE: PLLM/PLLN kodlamasi ve sifira bolme riski. */
-    SPL_REQUIRE_SAFE((config->p >= 2U) && (config->p <= 31U) &&
-                     (Rcc_IsEvenDivider(config->q) != 0U) &&
-                     (Rcc_IsEvenDivider(config->r) != 0U),
-                     SPL_ERR_PARAM); /* SAFE: PLL cikis bolenleri gecerli olmali. */
-    SPL_REQUIRE_SAFE((config->p_enable <= 1U) && (config->q_enable <= 1U) &&
-                     (config->r_enable <= 1U),
-                     SPL_ERR_PARAM); /* SAFE: PLL cikis secimi yanlis anlasilmasin. */
+    SPL_REQUIRE((config->m >= 1U) && (config->m <= 16U) && (config->n >= 8U) && (config->n <= 127U),
+                SPL_ERR_PARAM); /* PLLM/PLLN kodlamasi ve sifira bolme riski. */
+    SPL_REQUIRE((config->p >= 2U) && (config->p <= 31U) && (Rcc_IsEvenDivider(config->q) != 0U) &&
+                    (Rcc_IsEvenDivider(config->r) != 0U),
+                SPL_ERR_PARAM); /* PLL cikis bolenleri gecerli olmali. */
+    SPL_REQUIRE((config->p_enable <= 1U) && (config->q_enable <= 1U) && (config->r_enable <= 1U),
+                SPL_ERR_PARAM); /* PLL cikis secimi yanlis anlasilmasin. */
 
     /* Exact integer range checks: f_in = src / m, f_vco = src * n / m,
      * f_out = f_vco / div. Every output divider is checked, enabled or not. */
     m = config->m;
     src_n = src_hz * (uint64_t)config->n;
-    SPL_REQUIRE_SAFE((src_hz >= (uint64_t)RCC_PLL_VCO_IN_MIN_HZ * m) &&
-                     (src_hz <= (uint64_t)RCC_PLL_VCO_IN_MAX_HZ * m) &&
-                     (src_n >= (uint64_t)RCC_PLL_VCO_MIN_HZ * m) &&
-                     (src_n <= (uint64_t)RCC_PLL_VCO_MAX_HZ * m) &&
-                     (src_n <= (uint64_t)RCC_PLL_OUT_MAX_HZ * m * config->p) &&
-                     (src_n <= (uint64_t)RCC_PLL_OUT_MAX_HZ * m * config->q) &&
-                     (src_n <= (uint64_t)RCC_PLL_OUT_MAX_HZ * m * config->r),
-                     SPL_ERR_PARAM); /* SAFE: VCO ve tum PLL cikislari elektriksel sinirda. */
+    SPL_REQUIRE((src_hz >= (uint64_t)RCC_PLL_VCO_IN_MIN_HZ * m) &&
+                    (src_hz <= (uint64_t)RCC_PLL_VCO_IN_MAX_HZ * m) &&
+                    (src_n >= (uint64_t)RCC_PLL_VCO_MIN_HZ * m) &&
+                    (src_n <= (uint64_t)RCC_PLL_VCO_MAX_HZ * m) &&
+                    (src_n <= (uint64_t)RCC_PLL_OUT_MAX_HZ * m * config->p) &&
+                    (src_n <= (uint64_t)RCC_PLL_OUT_MAX_HZ * m * config->q) &&
+                    (src_n <= (uint64_t)RCC_PLL_OUT_MAX_HZ * m * config->r),
+                SPL_ERR_PARAM); /* VCO ve tum PLL cikislari elektriksel sinirda. */
 
     /* RM0440 7.2.4: configuration only while the PLL is fully stopped. */
     cr = RCC->CR;
@@ -972,7 +971,7 @@ SPL_Status RCC_GetPllReady(uint8_t *ready)
 {
     uint32_t cr;
 
-    SPL_REQUIRE_SAFE(ready != (uint8_t *)0, SPL_ERR_PARAM); /* SAFE: gecersiz cikti adresi */
+    SPL_REQUIRE(ready != (uint8_t *)0, SPL_ERR_PARAM); /* Gecersiz cikti adresi */
     cr = RCC->CR;
     *ready = ((cr & RCC_CR_PLLRDY) != 0U) ? 1U : 0U;
     if ((cr & (RCC_CR_PLLON | RCC_CR_PLLRDY)) == 0U)
@@ -1063,7 +1062,7 @@ SPL_Status RCC_GetSysclkSource(RCC_SysclkTypeDef *source)
 {
     uint32_t sws;
 
-    SPL_REQUIRE_SAFE(source != (RCC_SysclkTypeDef *)0, SPL_ERR_PARAM); /* SAFE: cikti isaretcisi gecersiz */
+    SPL_REQUIRE(source != (RCC_SysclkTypeDef *)0, SPL_ERR_PARAM); /* Cikti isaretcisi gecersiz */
     sws = RCC->CFGR & RCC_CFGR_SWS;
     if (sws == RCC_CFGR_SWS_HSI)
     {
@@ -1212,7 +1211,8 @@ SPL_Status RCC_GetPeriphClock(RCC_PeriphTypeDef periph, uint8_t *enabled)
     const Rcc_PeriphEntry *entry = (const Rcc_PeriphEntry *)0;
     SPL_Status result;
 
-    SPL_REQUIRE_SAFE(enabled != (uint8_t *)0, SPL_ERR_PARAM); /* SAFE: peripheral clock output pointer invalid */
+    SPL_REQUIRE(enabled != (uint8_t *)0,
+                SPL_ERR_PARAM); /* Peripheral clock output pointer invalid */
     result = Rcc_PeriphLookup(periph, &entry);
     if (result != SPL_OK)
     {
@@ -1314,7 +1314,8 @@ SPL_Status RCC_GetKernelSource(RCC_KernelTypeDef kernel, RCC_KernelSrcTypeDef *s
     uint32_t src;
     SPL_Status result;
 
-    SPL_REQUIRE_SAFE(source != (RCC_KernelSrcTypeDef *)0, SPL_ERR_PARAM); /* SAFE: kernel source output pointer invalid */
+    SPL_REQUIRE(source != (RCC_KernelSrcTypeDef *)0,
+                SPL_ERR_PARAM); /* Kernel source output pointer invalid */
     result = Rcc_KernelLookup(kernel, &entry);
     if (result != SPL_OK)
     {
@@ -1401,7 +1402,7 @@ SPL_Status RCC_GetKernelClock(RCC_KernelTypeDef kernel, uint32_t hse_hz, uint32_
     uint32_t value = 0U;
     SPL_Status result;
 
-    SPL_REQUIRE_SAFE(hz != (uint32_t *)0, SPL_ERR_PARAM); /* SAFE: kernel frequency output pointer invalid */
+    SPL_REQUIRE(hz != (uint32_t *)0, SPL_ERR_PARAM); /* Kernel frequency output pointer invalid */
     result = Rcc_KernelLookup(kernel, &entry);
     if (result != SPL_OK)
     {
@@ -1527,7 +1528,7 @@ SPL_Status RCC_EnableCss(void)
 
 SPL_Status RCC_GetCssFlag(uint8_t *set)
 {
-    SPL_REQUIRE_SAFE(set != (uint8_t *)0, SPL_ERR_PARAM); /* SAFE: CSS fault cikti isaretcisi gecersiz */
+    SPL_REQUIRE(set != (uint8_t *)0, SPL_ERR_PARAM); /* CSS fault cikti isaretcisi gecersiz */
     *set = ((RCC->CIFR & RCC_CIFR_CSSF) != 0U) ? 1U : 0U;
     return SPL_OK;
 }
@@ -1543,7 +1544,8 @@ SPL_Status RCC_ClearCssFlag(void)
 
 SPL_Status RCC_GetResetFlags(uint32_t *flags)
 {
-    SPL_REQUIRE_SAFE(flags != (uint32_t *)0, SPL_ERR_PARAM); /* SAFE: reset nedenleri cikti isaretcisi gecersiz */
+    SPL_REQUIRE(flags != (uint32_t *)0,
+                SPL_ERR_PARAM); /* Reset nedenleri cikti isaretcisi gecersiz */
     *flags = RCC->CSR & RCC_RESET_FLAGS;
     return SPL_OK;
 }

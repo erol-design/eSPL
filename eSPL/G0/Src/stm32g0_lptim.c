@@ -1,8 +1,9 @@
-/* Ported from STM32G4 SPL v0.13.4 (Autometry_Mcu_Spl 4994f2b); reviewed against RM0444 Rev 6
- * section 26 (Table 135) and ES0548 2.9.1 / 2.9.2. G0 changes: LPTIM1 and LPTIM2, encoder on
- * LPTIM1 only, TRIGSEL[2:0], RCC reset through RCC_APBRSTR1 per instance. */
-/* Kutuphane birimi: spl_check.h karisma korumasi referansini bu birim de uretir; uretmeyen tek
- * birim stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
+/* LPTIM driver implementation; public contract: Inc/stm32g0_lptim.h. Ported from STM32G4 SPL
+ * v0.13.4 (Autometry_Mcu_Spl 4994f2b); reviewed against RM0444 Rev 6 section 26 (Table 135) and
+ * ES0548 2.9.1 / 2.9.2. G0 changes: LPTIM1 and LPTIM2, encoder on LPTIM1 only, TRIGSEL[2:0], RCC
+ * reset through RCC_APBRSTR1 per instance. */
+/* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit
+ * that does not is stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
 #define SPL_LIBRARY_BUILD 1
 #include "stm32g0_lptim.h"
 
@@ -13,10 +14,10 @@
 #define LPTIM_PRESC_MAX 7U
 #define LPTIM_REG16_MAX 0xFFFFUL
 
-/* Denetim seviyesi (A4 dalga 3, Docs/CHECK_LEVEL.md 5.4 LPTIM tablosu): SPL_REQUIRE = normal sinif
- * (yalniz FULL), SPL_REQUIRE_SAFE = SAFE sinif (FULL ve MIX). CFGR alanlari (0 / 1 bayraklari
- * dahil) dogrudan kaydirilir: hepsi SAFE (Lptim_ValidInit tek SAFE denetimi). Yardimcilar static
- * inline (saf). ARROK / CMPOK beklemesi ve kararsiz sayac (BUSY) result: her seviyede. */
+/* Check level (A4 wave 3, Docs/CHECK_LEVEL.md 5.4 LPTIM table): SPL_REQUIRE = checked at FULL only
+ * (not compiled at FAST). CFGR fields (0 / 1 flags included) are shifted directly: all are checked
+ * at FULL (Lptim_ValidInit is one check). Helpers are static inline (pure). The ARROK / CMPOK wait
+ * and the unstable counter (BUSY) are result: at every level. */
 
 static inline uint8_t Lptim_ValidInstance(const LPTIM_TypeDef *lptim)
 {
@@ -112,17 +113,17 @@ static uint32_t Lptim_EncodeCfgr(const LPTIM_InitTypeDef *init)
 
 SPL_Status LPTIM_Init(LPTIM_TypeDef *lptim, const LPTIM_InitTypeDef *init)
 {
-    SPL_REQUIRE_SAFE(Lptim_ValidInstance(lptim) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(init != (const LPTIM_InitTypeDef *)0, SPL_ERR_PARAM);
-    /* SAFE: alan tasmasi (bayraklar da kaydirilir) ve RM0444 26.4.12 / 26.4.15 yasak birlesimleri.
-     */
-    SPL_REQUIRE_SAFE(Lptim_ValidInit(init) != 0U, SPL_ERR_PARAM);
-    /* RM0444 Table 135: encoder mode on LPTIM1 only (ENC is reserved on LPTIM2). SAFE. */
-    SPL_REQUIRE_SAFE((lptim != LPTIM2) || (init->encoder == 0U), SPL_ERR_UNSUPPORTED);
-    /* SAFE (ornek yetenegi): kaynagi SKU'da olmayan tetik hic gelmez. */
-    SPL_REQUIRE_SAFE(Lptim_TriggerExists(lptim, init) != 0U, SPL_ERR_UNSUPPORTED);
-    /* RM0444 26.4.13 / 26.7.4: CFGR only with ENABLE=0. SAFE: yazim sessizce yok sayilir. */
-    SPL_REQUIRE_SAFE(Lptim_IsEnabled(lptim) == 0U, SPL_ERR_STATE);
+    SPL_REQUIRE(Lptim_ValidInstance(lptim) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(init != (const LPTIM_InitTypeDef *)0, SPL_ERR_PARAM);
+    /* field overflow (the flags are shifted too) and combinations forbidden by RM0444
+     * 26.4.12 / 26.4.15. */
+    SPL_REQUIRE(Lptim_ValidInit(init) != 0U, SPL_ERR_PARAM);
+    /* RM0444 Table 135: encoder mode on LPTIM1 only (ENC is reserved on LPTIM2). */
+    SPL_REQUIRE((lptim != LPTIM2) || (init->encoder == 0U), SPL_ERR_UNSUPPORTED);
+    /* (instance capability): a trigger whose source is absent on the SKU never fires. */
+    SPL_REQUIRE(Lptim_TriggerExists(lptim, init) != 0U, SPL_ERR_UNSUPPORTED);
+    /* RM0444 26.4.13 / 26.7.4: CFGR only with ENABLE=0. the write is silently ignored. */
+    SPL_REQUIRE(Lptim_IsEnabled(lptim) == 0U, SPL_ERR_STATE);
 
     lptim->CFGR = Lptim_EncodeCfgr(init);
     return SPL_OK;
@@ -130,15 +131,16 @@ SPL_Status LPTIM_Init(LPTIM_TypeDef *lptim, const LPTIM_InitTypeDef *init)
 
 SPL_Status LPTIM_InterruptConfig(LPTIM_TypeDef *lptim, uint32_t mask)
 {
-    SPL_REQUIRE_SAFE(Lptim_ValidInstance(lptim) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    /* SAFE: ARROK / CMPOK IE (ERRATA ES0548 2.9.2: kesme takili kalir) ya da ayrilmis bit. */
-    SPL_REQUIRE_SAFE((mask & ~LPTIM_IT_ALLOWED) == 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(Lptim_ValidInstance(lptim) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    /* ARROK / CMPOK IE (ERRATA ES0548 2.9.2: the interrupt stays stuck) or a reserved bit.
+     */
+    SPL_REQUIRE((mask & ~LPTIM_IT_ALLOWED) == 0U, SPL_ERR_PARAM);
     /* RM0444 26.7.3: UPIE / DOWNIE are reserved on an LPTIM without encoder mode (LPTIM2, Table
-     * 135). SAFE (ornek yetenegi). 2026-11-14 yetenek taramasi. */
-    SPL_REQUIRE_SAFE((lptim != LPTIM2) || ((mask & (LPTIM_IER_UPIE | LPTIM_IER_DOWNIE)) == 0U),
-                     SPL_ERR_UNSUPPORTED);
-    /* RM0444 26.4.13 / 26.7.3: IER only with ENABLE=0. SAFE. */
-    SPL_REQUIRE_SAFE(Lptim_IsEnabled(lptim) == 0U, SPL_ERR_STATE);
+     * 135). (instance capability). 2026-11-14 capability audit. */
+    SPL_REQUIRE((lptim != LPTIM2) || ((mask & (LPTIM_IER_UPIE | LPTIM_IER_DOWNIE)) == 0U),
+                SPL_ERR_UNSUPPORTED);
+    /* RM0444 26.4.13 / 26.7.3: IER only with ENABLE=0. */
+    SPL_REQUIRE(Lptim_IsEnabled(lptim) == 0U, SPL_ERR_STATE);
 
     lptim->IER = mask;
     return SPL_OK;
@@ -146,7 +148,7 @@ SPL_Status LPTIM_InterruptConfig(LPTIM_TypeDef *lptim, uint32_t mask)
 
 SPL_Status LPTIM_Enable(LPTIM_TypeDef *lptim)
 {
-    SPL_REQUIRE_SAFE(Lptim_ValidInstance(lptim) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(Lptim_ValidInstance(lptim) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     /* COUNTRST, CNTSTRT, SNGSTRT are set-only/self-clearing: never copied. */
     lptim->CR = (lptim->CR & LPTIM_CR_RSTARE) | LPTIM_CR_ENABLE;
     return SPL_OK;
@@ -154,7 +156,7 @@ SPL_Status LPTIM_Enable(LPTIM_TypeDef *lptim)
 
 SPL_Status LPTIM_Disable(LPTIM_TypeDef *lptim)
 {
-    SPL_REQUIRE_SAFE(Lptim_ValidInstance(lptim) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(Lptim_ValidInstance(lptim) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     if (lptim->IER != 0U)
     {
         /* ERRATA ES0548 2.9.1: clearing ENABLE near an LPTIM interrupt can freeze the wake-up
@@ -172,7 +174,7 @@ SPL_Status LPTIM_Start(LPTIM_TypeDef *lptim, uint32_t mode)
 {
     uint32_t start;
 
-    SPL_REQUIRE_SAFE(Lptim_ValidInstance(lptim) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(Lptim_ValidInstance(lptim) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     if (mode == LPTIM_START_CONTINUOUS)
     {
         start = LPTIM_CR_CNTSTRT;
@@ -183,13 +185,13 @@ SPL_Status LPTIM_Start(LPTIM_TypeDef *lptim, uint32_t mode)
     }
     else
     {
-        return SPL_ERR_PARAM; /* yapisal: gecersiz kip (start tanimsiz kalirdi) */
+        return SPL_ERR_PARAM; /* structural: invalid mode (start would stay undefined) */
     }
-    /* RM0444 26.4.8: start bits written with ENABLE=0 are discarded. SAFE. */
-    SPL_REQUIRE_SAFE(Lptim_IsEnabled(lptim) != 0U, SPL_ERR_STATE);
-    /* RM0444 26.4.15: encoder mode runs in continuous mode only. SAFE. */
-    SPL_REQUIRE_SAFE((start != LPTIM_CR_SNGSTRT) || ((lptim->CFGR & LPTIM_CFGR_ENC) == 0U),
-                     SPL_ERR_STATE);
+    /* RM0444 26.4.8: start bits written with ENABLE=0 are discarded. */
+    SPL_REQUIRE(Lptim_IsEnabled(lptim) != 0U, SPL_ERR_STATE);
+    /* RM0444 26.4.15: encoder mode runs in continuous mode only. */
+    SPL_REQUIRE((start != LPTIM_CR_SNGSTRT) || ((lptim->CFGR & LPTIM_CFGR_ENC) == 0U),
+                SPL_ERR_STATE);
 
     lptim->CR = (lptim->CR & (LPTIM_CR_ENABLE | LPTIM_CR_RSTARE)) | start;
     return SPL_OK;
@@ -206,11 +208,11 @@ static inline uint32_t Lptim_WriteGateOpen(const LPTIM_TypeDef *lptim)
 static SPL_Status Lptim_SyncedWrite(LPTIM_TypeDef *lptim, uint32_t *pending, uint32_t ok_flag,
                                     volatile uint32_t *reg, uint32_t value)
 {
-    SPL_REQUIRE_SAFE(Lptim_IsEnabled(lptim) != 0U, SPL_ERR_STATE); /* SAFE: yazim yok sayilir */
+    SPL_REQUIRE(Lptim_IsEnabled(lptim) != 0U, SPL_ERR_STATE); /* the write is ignored */
     /* ERRATA ES0548 2.9.2: with an LPTIM interrupt enabled, the
      * thread-context ICR clear of ARROK/CMPOK (their IE is never set) can leave
-     * the IRQ stuck high. ARR/CMP are written only while IER = 0. SAFE (errata). */
-    SPL_REQUIRE_SAFE(lptim->IER == 0U, SPL_ERR_STATE);
+     * the IRQ stuck high. ARR/CMP are written only while IER = 0. (errata). */
+    SPL_REQUIRE(lptim->IER == 0U, SPL_ERR_STATE);
     if ((*pending != 0U) && ((lptim->ISR & ok_flag) == 0U))
     {
         return SPL_BUSY;
@@ -226,29 +228,29 @@ static SPL_Status Lptim_SyncedWrite(LPTIM_TypeDef *lptim, uint32_t *pending, uin
 
 SPL_Status LPTIM_SetAutoReload(LPTIM_TypeDef *lptim, LPTIM_SyncTypeDef *sync, uint32_t arr)
 {
-    SPL_REQUIRE_SAFE(Lptim_ValidInstance(lptim) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(sync != (LPTIM_SyncTypeDef *)0, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((arr != 0U) && (arr <= LPTIM_REG16_MAX), SPL_ERR_PARAM); /* SAFE */
+    SPL_REQUIRE(Lptim_ValidInstance(lptim) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(sync != (LPTIM_SyncTypeDef *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE((arr != 0U) && (arr <= LPTIM_REG16_MAX), SPL_ERR_PARAM);
     /* RM0444 26.4.10: ARR strictly greater than CMP (checked only when the
-     * write gate is open, so ENABLE=0 and IER != 0 still report STATE first). SAFE. */
-    SPL_REQUIRE_SAFE((Lptim_WriteGateOpen(lptim) == 0U) || (arr > (lptim->CMP & LPTIM_CMP_CMP)),
-                     SPL_ERR_PARAM);
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
+     * write gate is open, so ENABLE=0 and IER != 0 still report STATE first). */
+    SPL_REQUIRE((Lptim_WriteGateOpen(lptim) == 0U) || (arr > (lptim->CMP & LPTIM_CMP_CMP)),
+                SPL_ERR_PARAM);
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
     /* RM0444 26.4.11: PRELOAD=0 updates ARR at once; an ARR at or below the
      * running counter makes the period run to 0xFFFF. With RSTARE=1 the
-     * counter cannot be read (a read resets it): shrinking is refused. SAFE; blok yalniz bu
-     * denetim icin (sayac okumasi dahil): FAST'ta derlenmez. */
+     * counter cannot be read (a read resets it): shrinking is refused.; the block exists
+     * only for this check (counter read included): not compiled at FAST. */
     if (((lptim->CFGR & LPTIM_CFGR_PRELOAD) == 0U) && (arr < (lptim->ARR & LPTIM_ARR_ARR)) &&
         (Lptim_WriteGateOpen(lptim) != 0U))
     {
         uint32_t count;
 
-        SPL_REQUIRE_SAFE((lptim->CR & LPTIM_CR_RSTARE) == 0U, SPL_ERR_STATE);
+        SPL_REQUIRE((lptim->CR & LPTIM_CR_RSTARE) == 0U, SPL_ERR_STATE);
         if (LPTIM_ReadCounter(lptim, &count) != SPL_OK)
         {
             return SPL_BUSY; /* counter moving faster than three reads */
         }
-        SPL_REQUIRE_SAFE(arr > count, SPL_ERR_STATE);
+        SPL_REQUIRE(arr > count, SPL_ERR_STATE);
     }
 #endif
     return Lptim_SyncedWrite(lptim, &sync->arr_pending, LPTIM_ISR_ARROK, &lptim->ARR, arr);
@@ -256,12 +258,12 @@ SPL_Status LPTIM_SetAutoReload(LPTIM_TypeDef *lptim, LPTIM_SyncTypeDef *sync, ui
 
 SPL_Status LPTIM_SetCompare(LPTIM_TypeDef *lptim, LPTIM_SyncTypeDef *sync, uint32_t cmp)
 {
-    SPL_REQUIRE_SAFE(Lptim_ValidInstance(lptim) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(sync != (LPTIM_SyncTypeDef *)0, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(cmp <= LPTIM_REG16_MAX, SPL_ERR_PARAM); /* SAFE */
-    /* RM0444 26.4.10: CMP strictly below ARR (STATE gates of Lptim_SyncedWrite first). SAFE. */
-    SPL_REQUIRE_SAFE((Lptim_WriteGateOpen(lptim) == 0U) || (cmp < (lptim->ARR & LPTIM_ARR_ARR)),
-                     SPL_ERR_PARAM);
+    SPL_REQUIRE(Lptim_ValidInstance(lptim) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(sync != (LPTIM_SyncTypeDef *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(cmp <= LPTIM_REG16_MAX, SPL_ERR_PARAM);
+    /* RM0444 26.4.10: CMP strictly below ARR (STATE gates of Lptim_SyncedWrite first). */
+    SPL_REQUIRE((Lptim_WriteGateOpen(lptim) == 0U) || (cmp < (lptim->ARR & LPTIM_ARR_ARR)),
+                SPL_ERR_PARAM);
     return Lptim_SyncedWrite(lptim, &sync->cmp_pending, LPTIM_ISR_CMPOK, &lptim->CMP, cmp);
 }
 
@@ -269,8 +271,8 @@ SPL_Status LPTIM_SyncStatus(LPTIM_TypeDef *lptim, LPTIM_SyncTypeDef *sync)
 {
     uint32_t isr;
 
-    SPL_REQUIRE_SAFE(Lptim_ValidInstance(lptim) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(sync != (LPTIM_SyncTypeDef *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(Lptim_ValidInstance(lptim) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(sync != (LPTIM_SyncTypeDef *)0, SPL_ERR_PARAM);
     isr = lptim->ISR;
     if ((isr & LPTIM_ISR_ARROK) != 0U)
     {
@@ -293,10 +295,10 @@ SPL_Status LPTIM_ReadCounter(LPTIM_TypeDef *lptim, uint32_t *count)
     uint32_t second;
     uint32_t third;
 
-    SPL_REQUIRE_SAFE(Lptim_ValidInstance(lptim) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(count != (uint32_t *)0, SPL_ERR_PARAM);
-    /* RM0444 26.4.14: with RSTARE=1 every CNT read resets the counter. SAFE (yikici okuma). */
-    SPL_REQUIRE_SAFE((lptim->CR & LPTIM_CR_RSTARE) == 0U, SPL_ERR_STATE);
+    SPL_REQUIRE(Lptim_ValidInstance(lptim) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(count != (uint32_t *)0, SPL_ERR_PARAM);
+    /* RM0444 26.4.14: with RSTARE=1 every CNT read resets the counter. (destructive read). */
+    SPL_REQUIRE((lptim->CR & LPTIM_CR_RSTARE) == 0U, SPL_ERR_STATE);
 
     first = lptim->CNT & LPTIM_CNT_CNT;
     second = lptim->CNT & LPTIM_CNT_CNT;
@@ -316,8 +318,8 @@ SPL_Status LPTIM_ReadCounter(LPTIM_TypeDef *lptim, uint32_t *count)
 
 SPL_Status LPTIM_GetFlags(LPTIM_TypeDef *lptim, uint32_t *flags)
 {
-    SPL_REQUIRE_SAFE(Lptim_ValidInstance(lptim) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(flags != (uint32_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(Lptim_ValidInstance(lptim) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(flags != (uint32_t *)0, SPL_ERR_PARAM);
     *flags = lptim->ISR & LPTIM_FLAGS_ALL;
     return SPL_OK;
 }
@@ -326,17 +328,17 @@ SPL_Status LPTIM_ClearFlags(LPTIM_TypeDef *lptim, uint32_t flags)
 {
     uint32_t ier;
 
-    SPL_REQUIRE_SAFE(Lptim_ValidInstance(lptim) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE(flags != 0U, SPL_ERR_PARAM);                           /* normal: etkisiz */
-    /* SAFE (EDR-003): ayrilmis bite yazim. */
-    SPL_REQUIRE_SAFE((flags & ~LPTIM_FLAGS_CLEARABLE) == 0U, SPL_ERR_PARAM);
-    /* RM0444 26.7.2: UPCF / DOWNCF are reserved on LPTIM2 (no encoder mode). SAFE. */
-    SPL_REQUIRE_SAFE((lptim != LPTIM2) || ((flags & (LPTIM_ISR_UP | LPTIM_ISR_DOWN)) == 0U),
-                     SPL_ERR_UNSUPPORTED);
+    SPL_REQUIRE(Lptim_ValidInstance(lptim) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(flags != 0U, SPL_ERR_PARAM);                      /* no effect */
+    /* (EDR-003): write to a reserved bit. */
+    SPL_REQUIRE((flags & ~LPTIM_FLAGS_CLEARABLE) == 0U, SPL_ERR_PARAM);
+    /* RM0444 26.7.2: UPCF / DOWNCF are reserved on LPTIM2 (no encoder mode). */
+    SPL_REQUIRE((lptim != LPTIM2) || ((flags & (LPTIM_ISR_UP | LPTIM_ISR_DOWN)) == 0U),
+                SPL_ERR_UNSUPPORTED);
     /* ERRATA ES0548 2.9.2: in interrupt mode (IER != 0) clear
-     * only flags whose interrupt is enabled (ISR and IER bit positions match). SAFE. */
+     * only flags whose interrupt is enabled (ISR and IER bit positions match). */
     ier = lptim->IER;
-    SPL_REQUIRE_SAFE((ier == 0U) || ((flags & ~ier) == 0U), SPL_ERR_STATE);
+    SPL_REQUIRE((ier == 0U) || ((flags & ~ier) == 0U), SPL_ERR_STATE);
     /* W1C register: write only the requested clear bits. */
     lptim->ICR = flags;
     /* Read back: the clear reaches the peripheral before return (METHOD 1.7, issue #23). */

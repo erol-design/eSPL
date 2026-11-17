@@ -102,70 +102,70 @@ extern "C"
 
     /* Changes what is aliased at 0x00000000 (also the vector table when VTOR=0).
      * MEM_MODE only; FB_MODE kept. */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status SYSCFG_SetMemoryMode(SYSCFG_MemoryModeTypeDef mode);
     /* Raw MEM_MODE (0..7); after reset it reflects BOOT0/nBOOT0/BOOT1. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status SYSCFG_GetMemoryMode(uint32_t *mode);
 
     /* MEMRMP.FB_MODE (dual-bank SKUs only, FLASH_OPTR_DBANK in CMSIS; else
      * UNSUPPORTED). DANGER: swaps the banks under the running code and changes
      * which bank the WRP/PCROP registers protect (RM0440 3.5.2/3.5.3); call only from code
      * running in RAM, or when both banks hold matching images. swap 0/1. */
-    /* Seviye: PARAM[n] STATE[r] UNSUPPORTED[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status SYSCFG_SetFlashBankSwap(uint8_t swap);
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status SYSCFG_GetFlashBankSwap(uint8_t *swapped);
 
     /* Starts a hardware CCM SRAM erase: SKR=0xCA, SKR=0x53, SCSR=CCMER
      * (RM0440 10.2.7/10.2.10). CCMBSY or CCMER set -> BUSY, no write. Destroys
      * all CCM SRAM content (and the SRAM2-end alias): never while stack, data
      * or code live there. Non-blocking: poll SYSCFG_CcmEraseStatus. */
-    /* Seviye: STATE[r] BUSY[r] */
+    /* Level: STATE[r] BUSY[r] */
     SPL_Status SYSCFG_CcmEraseStart(void);
     /* BUSY while CCMBSY or CCMER is set, OK when no erase is running. */
-    /* Seviye: STATE[r] BUSY[r] */
+    /* Level: STATE[r] BUSY[r] */
     SPL_Status SYSCFG_CcmEraseStatus(void);
 
     /* Sets PxWP for each page in 'pages' (subset of SYSCFG_CCM_PAGES_ALL, non-zero).
      * Write-once: protection is removed only by a system reset. Pages already
      * protected are accepted; if all are, nothing is written. */
-    /* Seviye: PARAM[S,n] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status SYSCFG_CcmWriteProtect(uint32_t pages);
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status SYSCFG_GetCcmWriteProtect(uint32_t *pages);
 
     /* Sets CFGR1.FPU_IE[5:0] to exactly 'mask' (subset of SYSCFG_FPU_IE_ALL).
      * The FPU interrupt also needs NVIC_Enable(FPU_IRQn). */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status SYSCFG_SetFpuInterrupts(uint32_t mask);
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status SYSCFG_GetFpuInterrupts(uint32_t *mask);
 
     /* Writes BOOSTEN/ANASWVDD for the I/O analog switch supply. */
-    /* Seviye: PARAM[r] STATE[r] */
+    /* Level: PARAM[r] STATE[r] */
     SPL_Status SYSCFG_SetAnalogSwitchSupply(SYSCFG_AnalogSwitchTypeDef supply);
 
     /* Sets (enable=1) or clears (enable=0) the given Fm+ bits (subset of
      * SYSCFG_FMP_ALL, non-zero). Program after the GPIO AF selection; with Fm+
      * the pin OSPEEDR setting is ignored (RM0440 10.2.2). */
-    /* Seviye: PARAM[S,n] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status SYSCFG_SetFastModePlus(uint32_t mask, uint8_t enable);
 
     /* Sets the given CFGR2 lock bits (subset of SYSCFG_LOCK_ALL, non-zero).
      * Write-once until system reset. Never writes SPF=1. If all requested
      * locks are already set, nothing is written. */
-    /* Seviye: PARAM[S,n] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status SYSCFG_Lock(uint32_t locks);
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status SYSCFG_GetLocks(uint32_t *locks);
 
     /* SRAM1/CCM SRAM parity error flag SPF (rc_w1). Not cleared by Get. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status SYSCFG_GetParityError(uint8_t *flag);
     /* Writes SPF=1 (clear); lock bits are written back as read (no effect,
      * rs bits), so no lock is set or lost. */
-    /* Seviye: STATE[r] */
+    /* Level: STATE[r] */
     SPL_Status SYSCFG_ClearParityError(void);
 
 #ifdef __cplusplus

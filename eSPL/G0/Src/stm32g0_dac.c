@@ -1,7 +1,7 @@
 /* DAC driver for STM32G0B1 (RM0444 Rev 6 section 16, ES0548 Rev 4 section 2.7), ported from the
- * G4 SPL v0.13.5 DAC driver (Autometry_Mcu_Spl 13c21ce). */
-/* Kutuphane birimi: spl_check.h karisma korumasi referansini bu birim de uretir; uretmeyen tek
- * birim stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
+ * G4 SPL v0.13.5 DAC driver (Autometry_Mcu_Spl 13c21ce); public contract: Inc/stm32g0_dac.h. */
+/* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit
+ * that does not is stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
 #define SPL_LIBRARY_BUILD 1
 #include <stddef.h>
 #include "stm32g0_dac.h"
@@ -16,9 +16,9 @@
 #define DAC_DHR12L_MAX 0xFFF0U
 #define DAC_DHR12L_LOW_BITS 0x000FU
 
-/* Denetim seviyesi (A4 dalga 5, Docs/CHECK_LEVEL.md 5.4 DAC tablosu): SPL_REQUIRE = normal sinif
- * (yalniz FULL), SPL_REQUIRE_SAFE = SAFE sinif (FULL ve MIX). DAC_WriteData'nin gecersiz hizalama
- * dali yapisal: her seviyede. */
+/* Check level (A4 wave 5, Docs/CHECK_LEVEL.md 5.4 DAC table): SPL_REQUIRE = checked at FULL only
+ * (not compiled at FAST). The invalid-alignment branch of DAC_WriteData is structural: at every
+ * level. */
 
 /* Per-channel bit masks, all taken from CMSIS. */
 typedef struct
@@ -54,10 +54,10 @@ static SPL_Status Dac_Check(const DAC_TypeDef *dac, uint32_t channel, const Dac_
          DAC_CR_MAMP2_Msk, DAC_CR_DMAEN2, DAC_CR_DMAUDRIE2, DAC_MCR_MODE2_Msk, DAC_MCR_MODE2_Pos,
          DAC_SR_DMAUDR2, DAC_SWTRIGR_SWTRIG2}};
 
-    /* SAFE: rastgele adres / kanal tablosu disi okuma. */
-    SPL_REQUIRE_SAFE((Dac_Valid(dac) != 0U) &&
-                         ((channel == DAC_CHANNEL_1) || (channel == DAC_CHANNEL_2)),
-                     SPL_ERR_PARAM);
+    /* arbitrary address / read outside the channel table. */
+    SPL_REQUIRE((Dac_Valid(dac) != 0U) &&
+                    ((channel == DAC_CHANNEL_1) || (channel == DAC_CHANNEL_2)),
+                SPL_ERR_PARAM);
     *bits = &dac_bits[channel - 1U];
     return SPL_OK;
 }
@@ -74,18 +74,18 @@ SPL_Status DAC_ChannelConfig(DAC_TypeDef *dac, uint32_t channel,
     {
         return status;
     }
-    SPL_REQUIRE_SAFE(config != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(config != NULL, SPL_ERR_PARAM);
     SPL_REQUIRE((config->trigger_enable <= 1U) && (config->dma_enable <= 1U) &&
                     (config->dma_underrun_irq <= 1U),
                 SPL_ERR_PARAM);
-    /* SAFE: TSEL / MODE tasmasi; tetik kapaliyken TSEL sessizce kullanilmaz. */
-    SPL_REQUIRE_SAFE((config->trigger_sel <= DAC_TSEL_MAX) &&
-                         (((DAC_TSEL_CONNECTED >> config->trigger_sel) & 1U) != 0U) &&
-                         ((config->trigger_enable != 0U) || (config->trigger_sel == 0U)) &&
-                         (config->mode <= DAC_MODE_INT_UNBUFFERED),
-                     SPL_ERR_PARAM);
-    /* RM0444 16.7.16: MODEx writes are ignored while ENx = 1 or CENx = 1 (SAFE). */
-    SPL_REQUIRE_SAFE((dac->CR & (bits->en | bits->cen)) == 0U, SPL_ERR_STATE);
+    /* TSEL / MODE overflow; with the trigger off TSEL would be silently unused. */
+    SPL_REQUIRE((config->trigger_sel <= DAC_TSEL_MAX) &&
+                    (((DAC_TSEL_CONNECTED >> config->trigger_sel) & 1U) != 0U) &&
+                    ((config->trigger_enable != 0U) || (config->trigger_sel == 0U)) &&
+                    (config->mode <= DAC_MODE_INT_UNBUFFERED),
+                SPL_ERR_PARAM);
+    /* RM0444 16.7.16: MODEx writes are ignored while ENx = 1 or CENx = 1. */
+    SPL_REQUIRE((dac->CR & (bits->en | bits->cen)) == 0U, SPL_ERR_STATE);
 
     cr = dac->CR & (uint32_t)~(bits->ten | bits->tsel_msk | bits->wave | bits->mamp | bits->dmaen |
                                bits->dmaudrie);
@@ -128,7 +128,7 @@ SPL_Status DAC_Enable(DAC_TypeDef *dac, uint32_t channel)
     {
         return status;
     }
-    SPL_REQUIRE_SAFE((dac->CR & bits->cen) == 0U, SPL_ERR_STATE); /* SAFE: kalibrasyon kipinde */
+    SPL_REQUIRE((dac->CR & bits->cen) == 0U, SPL_ERR_STATE); /* in calibration mode */
     dac->CR = dac->CR | bits->en;
     return SPL_OK;
 }
@@ -156,29 +156,29 @@ SPL_Status DAC_WriteData(DAC_TypeDef *dac, uint32_t channel, uint32_t align, uin
     {
         return status;
     }
-    /* SAFE (5.3): deger hizalamaya sigmazsa cikis sessizce yanlis. */
+    /* (5.3): a value that does not fit the alignment gives a silently wrong output. */
     if (align == DAC_ALIGN_12R)
     {
-        SPL_REQUIRE_SAFE(value <= DAC_DHR12R1_DACC1DHR_Msk, SPL_ERR_PARAM);
+        SPL_REQUIRE(value <= DAC_DHR12R1_DACC1DHR_Msk, SPL_ERR_PARAM);
         reg = (channel == DAC_CHANNEL_1) ? &dac->DHR12R1 : &dac->DHR12R2;
     }
     else if (align == DAC_ALIGN_12L)
     {
-        SPL_REQUIRE_SAFE((value <= DAC_DHR12L_MAX) && ((value & DAC_DHR12L_LOW_BITS) == 0U),
-                         SPL_ERR_PARAM);
+        SPL_REQUIRE((value <= DAC_DHR12L_MAX) && ((value & DAC_DHR12L_LOW_BITS) == 0U),
+                    SPL_ERR_PARAM);
         reg = (channel == DAC_CHANNEL_1) ? &dac->DHR12L1 : &dac->DHR12L2;
     }
     else if (align == DAC_ALIGN_8R)
     {
-        SPL_REQUIRE_SAFE(value <= DAC_DHR8R1_DACC1DHR_Msk, SPL_ERR_PARAM);
+        SPL_REQUIRE(value <= DAC_DHR8R1_DACC1DHR_Msk, SPL_ERR_PARAM);
         reg = (channel == DAC_CHANNEL_1) ? &dac->DHR8R1 : &dac->DHR8R2;
     }
     else
     {
-        return SPL_ERR_PARAM; /* yapisal: hedef register secilemez, her seviyede */
+        return SPL_ERR_PARAM; /* structural: no target register can be selected, at every level */
     }
-    /* SAFE (5.3): DMA ile elle yazma yarisir. */
-    SPL_REQUIRE_SAFE((dac->CR & bits->dmaen) == 0U, SPL_ERR_STATE);
+    /* (5.3): a manual write races the DMA. */
+    SPL_REQUIRE((dac->CR & bits->dmaen) == 0U, SPL_ERR_STATE);
     *reg = value;
     return SPL_OK;
 }
@@ -192,9 +192,8 @@ SPL_Status DAC_SoftwareTrigger(DAC_TypeDef *dac, uint32_t channel)
     {
         return status;
     }
-    /* SAFE: SWTRIG sessizce yok sayilir. */
-    SPL_REQUIRE_SAFE(((dac->CR & bits->ten) != 0U) && ((dac->CR & bits->tsel_msk) == 0U),
-                     SPL_ERR_STATE);
+    /* SWTRIG is silently ignored. */
+    SPL_REQUIRE(((dac->CR & bits->ten) != 0U) && ((dac->CR & bits->tsel_msk) == 0U), SPL_ERR_STATE);
     /* SWTRIGx is set by software and cleared by hardware: write only this bit. */
     dac->SWTRIGR = bits->swtrig;
     return SPL_OK;
@@ -209,7 +208,7 @@ SPL_Status DAC_ReadOutput(DAC_TypeDef *dac, uint32_t channel, uint32_t *value)
     {
         return status;
     }
-    SPL_REQUIRE_SAFE(value != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(value != NULL, SPL_ERR_PARAM);
     if (channel == DAC_CHANNEL_1)
     {
         *value = dac->DOR1 & DAC_DOR1_DACC1DOR_Msk;
@@ -230,7 +229,7 @@ SPL_Status DAC_UnderrunFlag(DAC_TypeDef *dac, uint32_t channel, uint8_t *set)
     {
         return status;
     }
-    SPL_REQUIRE_SAFE(set != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(set != NULL, SPL_ERR_PARAM);
     *set = ((dac->SR & bits->dmaudr) != 0U) ? 1U : 0U;
     return SPL_OK;
 }
@@ -269,12 +268,12 @@ SPL_Status DAC_WaveConfig(DAC_TypeDef *dac, uint32_t channel, uint32_t wave, uin
     {
         return status;
     }
-    SPL_REQUIRE_SAFE(wave <= DAC_WAVE_TRIANGLE, SPL_ERR_PARAM); /* SAFE: WAVE ayrilmis kodu */
-    /* normal: MAMP codes above 1011 give the same as 1011 (RM0444 16.7.1) */
+    SPL_REQUIRE(wave <= DAC_WAVE_TRIANGLE, SPL_ERR_PARAM); /* reserved WAVE code */
+    /* MAMP codes above 1011 give the same as 1011 (RM0444 16.7.1) */
     SPL_REQUIRE(amplitude <= 11U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((dac->CR & (bits->en | bits->cen)) == 0U, SPL_ERR_STATE); /* SAFE */
-    /* RM0444 16.7.1: wave generation is only used with TENx = 1 (SAFE). */
-    SPL_REQUIRE_SAFE((wave == DAC_WAVE_NONE) || ((dac->CR & bits->ten) != 0U), SPL_ERR_STATE);
+    SPL_REQUIRE((dac->CR & (bits->en | bits->cen)) == 0U, SPL_ERR_STATE);
+    /* RM0444 16.7.1: wave generation is only used with TENx = 1. */
+    SPL_REQUIRE((wave == DAC_WAVE_NONE) || ((dac->CR & bits->ten) != 0U), SPL_ERR_STATE);
     dac->CR = (dac->CR & ~(bits->wave | bits->mamp)) | ((wave << DAC_CR_WAVE1_Pos) << shift) |
               ((amplitude << DAC_CR_MAMP1_Pos) << shift);
     return SPL_OK;
@@ -291,13 +290,13 @@ SPL_Status DAC_SampleHoldConfig(DAC_TypeDef *dac, uint32_t channel, uint32_t mod
     {
         return status;
     }
-    /* SAFE: SHSR kesilir; SHHR / SHRR kanal 2 alanina tasar. */
-    SPL_REQUIRE_SAFE((mode <= DAC_MODE_INT_UNBUFFERED) && (sample <= 1023U) && (hold <= 1023U) &&
-                         (refresh <= 255U),
-                     SPL_ERR_PARAM);
+    /* SHSR would be truncated; SHHR / SHRR would spill into the channel 2 field. */
+    SPL_REQUIRE((mode <= DAC_MODE_INT_UNBUFFERED) && (sample <= 1023U) && (hold <= 1023U) &&
+                    (refresh <= 255U),
+                SPL_ERR_PARAM);
     /* SHHR / SHRR / MODEx are writable only with ENx = 0 and CENx = 0 (RM0444 16.7.16 .. 16.7.20);
-     * SAFE. */
-    SPL_REQUIRE_SAFE((dac->CR & (bits->en | bits->cen)) == 0U, SPL_ERR_STATE);
+     * */
+    SPL_REQUIRE((dac->CR & (bits->en | bits->cen)) == 0U, SPL_ERR_STATE);
     /* ERRATA ES0548 2.7.1: one data register write before MODEx is programmed. */
     if (channel == DAC_CHANNEL_1)
     {
@@ -318,36 +317,36 @@ SPL_Status DAC_SampleHoldConfig(DAC_TypeDef *dac, uint32_t channel, uint32_t mod
 
 SPL_Status DAC_WriteDual(DAC_TypeDef *dac, uint32_t align, uint32_t value1, uint32_t value2)
 {
-    SPL_REQUIRE_SAFE(Dac_Valid(dac) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    /* SAFE (5.3): deger hizalamaya sigmazsa kanal 2'ye tasar; gecersiz hizalamada hicbir sey
-     * yazilmaz, OK donerdi. */
+    SPL_REQUIRE(Dac_Valid(dac) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    /* (5.3): a value that does not fit the alignment spills into channel 2; with an invalid
+     * alignment nothing would be written and OK returned. */
     if (align == DAC_ALIGN_12R)
     {
-        SPL_REQUIRE_SAFE((value1 <= 0xFFFU) && (value2 <= 0xFFFU), SPL_ERR_PARAM);
+        SPL_REQUIRE((value1 <= 0xFFFU) && (value2 <= 0xFFFU), SPL_ERR_PARAM);
         dac->DHR12RD = value1 | (value2 << 16U);
     }
     else if (align == DAC_ALIGN_12L)
     {
-        SPL_REQUIRE_SAFE((value1 <= DAC_DHR12L_MAX) && (value2 <= DAC_DHR12L_MAX) &&
-                             (((value1 | value2) & DAC_DHR12L_LOW_BITS) == 0U),
-                         SPL_ERR_PARAM);
+        SPL_REQUIRE((value1 <= DAC_DHR12L_MAX) && (value2 <= DAC_DHR12L_MAX) &&
+                        (((value1 | value2) & DAC_DHR12L_LOW_BITS) == 0U),
+                    SPL_ERR_PARAM);
         dac->DHR12LD = value1 | (value2 << 16U);
     }
     else if (align == DAC_ALIGN_8R)
     {
-        SPL_REQUIRE_SAFE((value1 <= 0xFFU) && (value2 <= 0xFFU), SPL_ERR_PARAM);
+        SPL_REQUIRE((value1 <= 0xFFU) && (value2 <= 0xFFU), SPL_ERR_PARAM);
         dac->DHR8RD = value1 | (value2 << 8U); /* RM0444 16.7.11: DACC2DHR at bits 15:8 */
     }
     else
     {
-        SPL_REQUIRE_SAFE(0, SPL_ERR_PARAM);
+        SPL_REQUIRE(0, SPL_ERR_PARAM);
     }
     return SPL_OK;
 }
 
 SPL_Status DAC_SoftwareTriggerDual(DAC_TypeDef *dac)
 {
-    SPL_REQUIRE_SAFE(Dac_Valid(dac) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(Dac_Valid(dac) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     dac->SWTRIGR = DAC_SWTRIGR_SWTRIG1 | DAC_SWTRIGR_SWTRIG2;
     return SPL_OK;
 }
@@ -362,9 +361,9 @@ SPL_Status DAC_SetOffsetTrim(DAC_TypeDef *dac, uint32_t channel, uint32_t trim)
     {
         return status;
     }
-    SPL_REQUIRE_SAFE(trim <= 31U, SPL_ERR_PARAM); /* SAFE: OTRIM tasmasi */
-    /* trimming is done with the channel disabled (RM0444 16.4.12); SAFE. */
-    SPL_REQUIRE_SAFE((dac->CR & bits->en) == 0U, SPL_ERR_STATE);
+    SPL_REQUIRE(trim <= 31U, SPL_ERR_PARAM); /* OTRIM overflow */
+    /* trimming is done with the channel disabled (RM0444 16.4.12); */
+    SPL_REQUIRE((dac->CR & bits->en) == 0U, SPL_ERR_STATE);
     dac->CCR = (dac->CCR & ~(DAC_CCR_OTRIM1_Msk << shift)) | (trim << shift);
     return SPL_OK;
 }
@@ -379,7 +378,7 @@ SPL_Status DAC_CalibrationMode(DAC_TypeDef *dac, uint32_t channel, uint8_t enabl
         return status;
     }
     SPL_REQUIRE(enable <= 1U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((dac->CR & bits->en) == 0U, SPL_ERR_STATE); /* CENx only with ENx = 0; SAFE */
+    SPL_REQUIRE((dac->CR & bits->en) == 0U, SPL_ERR_STATE); /* CENx only with ENx = 0 */
     dac->CR = (dac->CR & ~bits->cen) | ((enable != 0U) ? bits->cen : 0U);
     return SPL_OK;
 }
@@ -394,7 +393,7 @@ SPL_Status DAC_CalibrationFlag(DAC_TypeDef *dac, uint32_t channel, uint8_t *high
     {
         return status;
     }
-    SPL_REQUIRE_SAFE(high != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(high != NULL, SPL_ERR_PARAM);
     *high = ((dac->SR & (DAC_SR_CAL_FLAG1 << Dac_Shift(channel))) != 0U) ? 1U : 0U;
     return SPL_OK;
 }

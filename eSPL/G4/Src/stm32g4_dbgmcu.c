@@ -136,8 +136,8 @@ SPL_Status DBGMCU_GetFreeze(DBGMCU_FreezeTypeDef id, uint8_t *frozen)
     const Dbgmcu_FreezeBit *bit = NULL;
     SPL_Status st;
 
-    /* SAFE: gecersiz cikti isaretcisi. */
-    SPL_REQUIRE_SAFE(frozen != NULL, SPL_ERR_PARAM);
+    /* Gecersiz cikti isaretcisi. */
+    SPL_REQUIRE(frozen != NULL, SPL_ERR_PARAM);
     st = Dbgmcu_Lookup(id, &bit);
     if (st != SPL_OK)
     {
@@ -149,15 +149,15 @@ SPL_Status DBGMCU_GetFreeze(DBGMCU_FreezeTypeDef id, uint8_t *frozen)
 
 SPL_Status DBGMCU_SetLowPowerDebug(uint32_t modes)
 {
-    /* SAFE: baska CR alanlarina tasma. */
-    SPL_REQUIRE_SAFE((modes & ~DBGMCU_LP_ALL) == 0U, SPL_ERR_PARAM);
+    /* Baska CR alanlarina tasma. */
+    SPL_REQUIRE((modes & ~DBGMCU_LP_ALL) == 0U, SPL_ERR_PARAM);
     DBGMCU->CR = (DBGMCU->CR & ~DBGMCU_LP_ALL) | modes;
     return SPL_OK;
 }
 
 SPL_Status DBGMCU_GetLowPowerDebug(uint32_t *modes)
 {
-    SPL_REQUIRE_SAFE(modes != NULL, SPL_ERR_PARAM); /* SAFE: cikti isaretcisi */
+    SPL_REQUIRE(modes != NULL, SPL_ERR_PARAM); /* Cikti isaretcisi */
     *modes = DBGMCU->CR & DBGMCU_LP_ALL;
     return SPL_OK;
 }

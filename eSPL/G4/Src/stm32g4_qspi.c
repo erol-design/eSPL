@@ -322,22 +322,22 @@ SPL_Status QSPI_Init(const QSPI_InitTypeDef *init)
     uint32_t cr;
     uint32_t sr;
 
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(init == (const QSPI_InitTypeDef *)0), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(init->fifo_threshold > 15U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(init->sample_shift > 1U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(init->dual_flash > 1U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(init->flash_select > 1U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(init->flash_size > 31U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(init->cs_high_time > 7U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(init->clock_mode > 1U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(init == (const QSPI_InitTypeDef *)0), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(init->fifo_threshold > 15U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(init->sample_shift > 1U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(init->dual_flash > 1U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(init->flash_select > 1U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(init->flash_size > 31U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(init->cs_high_time > 7U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(init->clock_mode > 1U), SPL_ERR_PARAM);
     cr = QUADSPI->CR;
     sr = QUADSPI->SR;
     if ((cr & QUADSPI_CR_EN) != 0U)
@@ -402,10 +402,10 @@ SPL_Status QSPI_CommConfig(const QSPI_CommTypeDef *cmd)
     uint32_t prescaler;
     SPL_Status status;
 
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(cmd == (const QSPI_CommTypeDef *)0), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(Qspi_CommValid(cmd) == 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(cmd == (const QSPI_CommTypeDef *)0), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(Qspi_CommValid(cmd) == 0U), SPL_ERR_PARAM);
     cr = QUADSPI->CR;
     sr = QUADSPI->SR;
     ccr = QUADSPI->CCR;
@@ -451,16 +451,16 @@ SPL_Status QSPI_CommConfig(const QSPI_CommTypeDef *cmd)
 
 SPL_Status QSPI_GetStartTrigger(const QSPI_CommTypeDef *cmd, uint32_t *trigger)
 {
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(cmd == (const QSPI_CommTypeDef *)0), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(trigger == (uint32_t *)0), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(cmd->fmode > 3U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(cmd->admode > 3U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(cmd->dmode > 3U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(cmd == (const QSPI_CommTypeDef *)0), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(trigger == (uint32_t *)0), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(cmd->fmode > 3U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(cmd->admode > 3U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(cmd->dmode > 3U), SPL_ERR_PARAM);
     *trigger = Qspi_TriggerOf(cmd->fmode, cmd->admode, cmd->dmode);
     return SPL_OK;
 }
@@ -474,8 +474,8 @@ SPL_Status QSPI_SetDataLength(uint32_t dlr)
     {
         return status;
     }
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!((Qspi_Fmode(ccr) == QSPI_FMODE_AUTO_POLLING) && (dlr > 3U)), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!((Qspi_Fmode(ccr) == QSPI_FMODE_AUTO_POLLING) && (dlr > 3U)), SPL_ERR_PARAM);
     QUADSPI->DLR = dlr;
     return SPL_OK;
 }
@@ -512,8 +512,8 @@ SPL_Status QSPI_SetAddress(uint32_t address)
         return SPL_ERR_STATE;
     }
     /* RM0440 20.5.7: ADDRESS[0] is stuck at 0 in dual-flash mode. */
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(((cr & QUADSPI_CR_DFM) != 0U) && ((address & 1U) != 0U)), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(((cr & QUADSPI_CR_DFM) != 0U) && ((address & 1U) != 0U)), SPL_ERR_PARAM);
     if (Qspi_TriggerOf(fmode, admode, dmode) == QSPI_TRIGGER_AR)
     {
         status = Qspi_TriggerGate(cr, sr);
@@ -566,8 +566,8 @@ SPL_Status QSPI_TryRead8(uint8_t *data)
 {
     SPL_Status status;
 
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(data == (uint8_t *)0), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(data == (uint8_t *)0), SPL_ERR_PARAM);
     status = Qspi_ReadGate(1U);
     if (status == SPL_OK)
     {
@@ -580,8 +580,8 @@ SPL_Status QSPI_TryRead16(uint16_t *data)
 {
     SPL_Status status;
 
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(data == (uint16_t *)0), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(data == (uint16_t *)0), SPL_ERR_PARAM);
     status = Qspi_ReadGate(2U);
     if (status == SPL_OK)
     {
@@ -594,8 +594,8 @@ SPL_Status QSPI_TryRead32(uint32_t *data)
 {
     SPL_Status status;
 
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(data == (uint32_t *)0), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(data == (uint32_t *)0), SPL_ERR_PARAM);
     status = Qspi_ReadGate(4U);
     if (status == SPL_OK)
     {
@@ -606,18 +606,18 @@ SPL_Status QSPI_TryRead32(uint32_t *data)
 
 SPL_Status QSPI_GetStatus(uint32_t *sr)
 {
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(sr == (uint32_t *)0), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(sr == (uint32_t *)0), SPL_ERR_PARAM);
     *sr = QUADSPI->SR;
     return SPL_OK;
 }
 
 SPL_Status QSPI_ClearFlags(uint32_t flags)
 {
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(flags == 0U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!((flags & ~QSPI_FLAGS_CLEARABLE) != 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(flags == 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!((flags & ~QSPI_FLAGS_CLEARABLE) != 0U), SPL_ERR_PARAM);
     /* FCR is write-only W1C (RM0440 20.5.4): plain write, no RMW. */
     QUADSPI->FCR = flags;
     /* Read back: the clear reaches the peripheral before return (METHOD 1.7, issue #23). */
@@ -656,12 +656,12 @@ SPL_Status QSPI_AutoPollingConfig(const QSPI_AutoPollTypeDef *cfg)
     uint32_t set = 0U;
     SPL_Status status;
 
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(cfg == (const QSPI_AutoPollTypeDef *)0), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(cfg->match_or > 1U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(cfg->stop_on_match > 1U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(cfg == (const QSPI_AutoPollTypeDef *)0), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(cfg->match_or > 1U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(cfg->stop_on_match > 1U), SPL_ERR_PARAM);
     cr = QUADSPI->CR;
     status = Qspi_BusyGate(cr, QUADSPI->SR, QUADSPI->CCR);
     if (status != SPL_OK)
@@ -688,8 +688,8 @@ SPL_Status QSPI_MemoryMappedTimeout(uint16_t timeout, uint8_t enable)
     uint32_t cr;
     SPL_Status status;
 
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(enable > 1U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(enable > 1U), SPL_ERR_PARAM);
     cr = QUADSPI->CR;
     status = Qspi_BusyGate(cr, QUADSPI->SR, QUADSPI->CCR);
     if (status != SPL_OK)
@@ -711,20 +711,20 @@ SPL_Status QSPI_MemoryMappedTimeout(uint16_t timeout, uint8_t enable)
 
 SPL_Status QSPI_DmaConfig(uint8_t enable)
 {
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(enable > 1U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(enable > 1U), SPL_ERR_PARAM);
     return (enable != 0U) ? Qspi_CrUpdate(0U, QUADSPI_CR_DMAEN)
                           : Qspi_CrUpdate(QUADSPI_CR_DMAEN, 0U);
 }
 
 SPL_Status QSPI_InterruptConfig(uint32_t mask, uint8_t enable)
 {
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(mask == 0U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!((mask & ~QSPI_IT_ALL) != 0U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(enable > 1U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(mask == 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!((mask & ~QSPI_IT_ALL) != 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(enable > 1U), SPL_ERR_PARAM);
     return (enable != 0U) ? Qspi_CrUpdate(0U, mask) : Qspi_CrUpdate(mask, 0U);
 }
 

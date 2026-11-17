@@ -222,8 +222,8 @@ SPL_Status ADC_PowerRegulator(ADC_TypeDef *adc)
 {
     SPL_Status status;
 
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!(Adc_Valid(adc) == 0U), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!(Adc_Valid(adc) == 0U), SPL_ERR_PARAM);
     /* RM0440 ADC_CR: DEEPPWD/ADVREGEN may be written only when ADCAL,
      * JADSTART, JADSTP, ADSTART, ADSTP, ADDIS and ADEN are all zero.
      * Pending stop/disable commands clear by themselves: report BUSY. */
@@ -234,12 +234,13 @@ SPL_Status ADC_PowerRegulator(ADC_TypeDef *adc)
     }
 
     /* RM0440 21.4.6: first exit Deep-power-down, then enable the regulator.
-     * Read/set (RS) command bits are known zero here and stay zero. */
+     * Read/set (RS) command bits are known zero here and stay zero. Masked anyway so no command bit
+     * can be written back (rmw_check, METHOD 1.4); the written value is unchanged. */
     if ((adc->CR & ADC_CR_DEEPPWD) != 0U)
     {
-        adc->CR = adc->CR & (uint32_t)~ADC_CR_DEEPPWD;
+        adc->CR = adc->CR & (uint32_t)~(ADC_CR_DEEPPWD | ADC_CR_COMMANDS);
     }
-    adc->CR = adc->CR | ADC_CR_ADVREGEN;
+    adc->CR = (adc->CR & (uint32_t)~ADC_CR_COMMANDS) | ADC_CR_ADVREGEN;
 
     /* Caller must wait the reference-manual regulator startup time. */
     return SPL_OK;
@@ -247,22 +248,22 @@ SPL_Status ADC_PowerRegulator(ADC_TypeDef *adc)
 
 SPL_Status ADC_StartCalibration(ADC_TypeDef *adc)
 {
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!(Adc_Valid(adc) == 0U), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!(Adc_Valid(adc) == 0U), SPL_ERR_PARAM);
     return Adc_StartCal(adc, 0U);
 }
 
 SPL_Status ADC_StartCalibrationMode(ADC_TypeDef *adc, uint32_t mode)
 {
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((Adc_Valid(adc) == 0U) || (mode > ADC_CAL_DIFF)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((Adc_Valid(adc) == 0U) || (mode > ADC_CAL_DIFF)), SPL_ERR_PARAM);
     return Adc_StartCal(adc, (mode == ADC_CAL_DIFF) ? ADC_CR_ADCALDIF : 0U);
 }
 
 SPL_Status ADC_CalibrationDone(ADC_TypeDef *adc, uint8_t *done)
 {
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((Adc_Valid(adc) == 0U) || (done == (uint8_t *)0)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((Adc_Valid(adc) == 0U) || (done == (uint8_t *)0)), SPL_ERR_PARAM);
 
     *done = (uint8_t)(((adc->CR & ADC_CR_ADCAL) == 0U) ? 1U : 0U);
     return SPL_OK;
@@ -294,8 +295,9 @@ SPL_Status ADC_RegularSingleInit(ADC_TypeDef *adc, uint8_t channel, uint8_t samp
     const uint32_t cfgr_clear = ADC_CFGR_RES | ADC_CFGR_ALIGN | ADC_CFGR_CONT | ADC_CFGR_EXTEN |
                                 ADC_CFGR_DMAEN | ADC_CFGR_DMACFG;
 
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((Adc_Valid(adc) == 0U) || (channel > ADC_CHANNEL_MAX) || (sample_code > 7U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((Adc_Valid(adc) == 0U) || (channel > ADC_CHANNEL_MAX) || (sample_code > 7U)),
+                SPL_ERR_PARAM);
     if ((adc->CR & (ADC_CR_ADEN | ADC_CR_ADSTART | ADC_CR_JADSTART)) != 0U)
     {
         return SPL_ERR_STATE;
@@ -317,8 +319,8 @@ SPL_Status ADC_RegularSingleInit(ADC_TypeDef *adc, uint8_t channel, uint8_t samp
 
 SPL_Status ADC_Enable(ADC_TypeDef *adc)
 {
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!(Adc_Valid(adc) == 0U), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!(Adc_Valid(adc) == 0U), SPL_ERR_PARAM);
     /* RM0440 21.7.3 ADEN note: ADEN may be set only with ADVREGEN = 1 (and the regulator
      * start-up time elapsed). With ADVREGEN = 0 ADRDY would never set. */
     if (((adc->CR & (ADC_CR_DEEPPWD | ADC_CR_ADCAL)) != 0U) || ((adc->CR & ADC_CR_ADVREGEN) == 0U))
@@ -358,8 +360,8 @@ SPL_Status ADC_Enable(ADC_TypeDef *adc)
 
 SPL_Status ADC_Ready(ADC_TypeDef *adc, uint8_t *ready)
 {
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((Adc_Valid(adc) == 0U) || (ready == (uint8_t *)0)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((Adc_Valid(adc) == 0U) || (ready == (uint8_t *)0)), SPL_ERR_PARAM);
 
     *ready = (uint8_t)(((adc->ISR & ADC_ISR_ADRDY) != 0U) ? 1U : 0U);
     return SPL_OK;
@@ -367,8 +369,8 @@ SPL_Status ADC_Ready(ADC_TypeDef *adc, uint8_t *ready)
 
 SPL_Status ADC_Start(ADC_TypeDef *adc)
 {
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!(Adc_Valid(adc) == 0U), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!(Adc_Valid(adc) == 0U), SPL_ERR_PARAM);
     /* Pending stop/disable commands take precedence over readiness. */
     if ((adc->CR & ADC_CR_PENDING) != 0U)
     {
@@ -404,8 +406,8 @@ SPL_Status ADC_Start(ADC_TypeDef *adc)
 
 SPL_Status ADC_TryRead(ADC_TypeDef *adc, uint16_t *value)
 {
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((Adc_Valid(adc) == 0U) || (value == (uint16_t *)0)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((Adc_Valid(adc) == 0U) || (value == (uint16_t *)0)), SPL_ERR_PARAM);
     if ((adc->ISR & ADC_ISR_OVR) != 0U)
     {
         return SPL_ERR_HW;
@@ -442,8 +444,8 @@ SPL_Status ADC_EnableDma(ADC_TypeDef *adc, uint8_t circular)
 {
     const uint32_t dma_bits = ADC_CFGR_DMAEN | ADC_CFGR_DMACFG;
 
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((Adc_Valid(adc) == 0U) || (circular > 1U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((Adc_Valid(adc) == 0U) || (circular > 1U)), SPL_ERR_PARAM);
     /* RM0440 21.7.4: DMAEN/DMACFG writable only with ADSTART = 0 and JADSTART = 0. */
     if ((adc->CR & (ADC_CR_ADSTART | ADC_CR_JADSTART)) != 0U)
     {
@@ -460,8 +462,8 @@ SPL_Status ADC_DisableDma(ADC_TypeDef *adc)
 {
     const uint32_t dma_bits = ADC_CFGR_DMAEN | ADC_CFGR_DMACFG;
 
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!(Adc_Valid(adc) == 0U), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!(Adc_Valid(adc) == 0U), SPL_ERR_PARAM);
     if ((adc->CR & (ADC_CR_ADSTART | ADC_CR_JADSTART)) != 0U)
     {
         return SPL_ERR_STATE;
@@ -473,8 +475,8 @@ SPL_Status ADC_DisableDma(ADC_TypeDef *adc)
 
 SPL_Status ADC_ClearErrors(ADC_TypeDef *adc)
 {
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!(Adc_Valid(adc) == 0U), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!(Adc_Valid(adc) == 0U), SPL_ERR_PARAM);
 
     /* ISR is W1C. Do not use a read-modify-write on error flags. */
     adc->ISR = ADC_ISR_OVR;
@@ -488,11 +490,13 @@ SPL_Status ADC_CommonClockConfig(ADC_TypeDef *adc, uint32_t ckmode, uint32_t pre
     ADC_Common_TypeDef *common;
     SPL_Status status;
 
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((Adc_Valid(adc) == 0U) || (ckmode > ADC_CLOCK_SYNC_DIV4) || (presc > ADC_PRESC_MAX)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(
+        !((Adc_Valid(adc) == 0U) || (ckmode > ADC_CLOCK_SYNC_DIV4) || (presc > ADC_PRESC_MAX)),
+        SPL_ERR_PARAM);
     /* PRESC is applied only in asynchronous mode (RM0440 21.8.2). */
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((ckmode != ADC_CLOCK_ASYNC) && (presc != 0U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((ckmode != ADC_CLOCK_ASYNC) && (presc != 0U)), SPL_ERR_PARAM);
     /* CKMODE/PRESC writable only when every ADC of the pair is disabled. */
     status = Adc_PairIdle(adc);
     if (status != SPL_OK)
@@ -511,8 +515,8 @@ SPL_Status ADC_InternalChannelsConfig(ADC_TypeDef *adc, uint32_t mask)
     const uint32_t valid_bits = ADC_CCR_VREFEN | ADC_CCR_VSENSESEL | ADC_CCR_VBATSEL;
     ADC_Common_TypeDef *common;
 
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((Adc_Valid(adc) == 0U) || ((mask & ~valid_bits) != 0U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((Adc_Valid(adc) == 0U) || ((mask & ~valid_bits) != 0U)), SPL_ERR_PARAM);
 
     /* RM0440 21.8.2 gives no write condition for these bits. */
     common = Adc_Common(adc);
@@ -527,8 +531,7 @@ static const uint8_t k_pos[] = {
     ADC_SQR2_SQ9_Pos,  ADC_SQR3_SQ10_Pos, ADC_SQR3_SQ11_Pos, ADC_SQR3_SQ12_Pos,
     ADC_SQR3_SQ13_Pos, ADC_SQR3_SQ14_Pos, ADC_SQR4_SQ15_Pos, ADC_SQR4_SQ16_Pos};
 /* Register index per rank: SQR1 ranks 1..4, SQR2 5..9, SQR3 10..14, SQR4 15..16. */
-static const uint8_t k_reg[] = {0U, 0U, 0U, 0U, 1U, 1U, 1U, 1U,
-                                1U, 2U, 2U, 2U, 2U, 2U, 3U, 3U};
+static const uint8_t k_reg[] = {0U, 0U, 0U, 0U, 1U, 1U, 1U, 1U, 1U, 2U, 2U, 2U, 2U, 2U, 3U, 3U};
 
 /* Compile-time check (CCL-2 YAP-03): one k_pos/k_reg entry per rank 1..ADC_SEQ_MAX, and
  * ADC_SEQ_MAX - 1 equals the SQR1.L field maximum (16 hardware ranks, L = length - 1). */
@@ -544,13 +547,14 @@ SPL_Status ADC_RegularSequenceConfig(ADC_TypeDef *adc, const uint8_t *channels, 
     uint32_t i;
     SPL_Status status;
 
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((Adc_Valid(adc) == 0U) || (channels == (const uint8_t *)0) || (length == 0U) ||
-        (length > ADC_SEQ_MAX)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((Adc_Valid(adc) == 0U) || (channels == (const uint8_t *)0) || (length == 0U) ||
+                  (length > ADC_SEQ_MAX)),
+                SPL_ERR_PARAM);
     for (i = 0U; i < length; ++i)
     {
-        /* SAFE: reject invalid parameters before peripheral register access. */
-        SPL_REQUIRE_SAFE(!(channels[i] > ADC_CHANNEL_MAX), SPL_ERR_PARAM);
+        /* Reject invalid parameters before peripheral register access. */
+        SPL_REQUIRE(!(channels[i] > ADC_CHANNEL_MAX), SPL_ERR_PARAM);
     }
     status = Adc_NoConversion(adc, ADC_CR_ADSTART);
     if (status != SPL_OK)
@@ -577,8 +581,9 @@ SPL_Status ADC_SetSamplingTime(ADC_TypeDef *adc, uint8_t channel, uint8_t sample
 {
     SPL_Status status;
 
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((Adc_Valid(adc) == 0U) || (channel > ADC_CHANNEL_MAX) || (sample_code > 7U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((Adc_Valid(adc) == 0U) || (channel > ADC_CHANNEL_MAX) || (sample_code > 7U)),
+                SPL_ERR_PARAM);
     status = Adc_NoConversion(adc, ADC_CR_ADSTART | ADC_CR_JADSTART);
     if (status != SPL_OK)
     {
@@ -596,18 +601,22 @@ SPL_Status ADC_RegularConfig(ADC_TypeDef *adc, const ADC_RegularConfigTypeDef *c
     uint32_t value;
     SPL_Status status;
 
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((Adc_Valid(adc) == 0U) || (config == (const ADC_RegularConfigTypeDef *)0)), SPL_ERR_PARAM);
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((config->resolution > ADC_RES_6BIT) || (config->align > ADC_ALIGN_LEFT) ||
-        (config->continuous > 1U) || (config->disc_count > 8U) || (config->ext_sel > 31U) ||
-        (config->ext_edge > ADC_EDGE_BOTH) || (config->overrun_overwrite > 1U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((Adc_Valid(adc) == 0U) || (config == (const ADC_RegularConfigTypeDef *)0)),
+                SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((config->resolution > ADC_RES_6BIT) || (config->align > ADC_ALIGN_LEFT) ||
+                  (config->continuous > 1U) || (config->disc_count > 8U) ||
+                  (config->ext_sel > 31U) || (config->ext_edge > ADC_EDGE_BOTH) ||
+                  (config->overrun_overwrite > 1U)),
+                SPL_ERR_PARAM);
     /* RM0440 21.7.4: CONT = 1 together with DISCEN = 1 is forbidden. */
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((config->continuous != 0U) && (config->disc_count != 0U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((config->continuous != 0U) && (config->disc_count != 0U)), SPL_ERR_PARAM);
     /* Library rule: a trigger source without an edge would be silently ignored. */
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((config->ext_edge == ADC_EDGE_SOFTWARE) && (config->ext_sel != 0U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((config->ext_edge == ADC_EDGE_SOFTWARE) && (config->ext_sel != 0U)),
+                SPL_ERR_PARAM);
     /* RES and ALIGN also require JADSTART = 0. */
     status = Adc_NoConversion(adc, ADC_CR_ADSTART | ADC_CR_JADSTART);
     if (status != SPL_OK)
@@ -655,9 +664,10 @@ SPL_Status ADC_SetDifferentialChannels(ADC_TypeDef *adc, uint32_t mask)
     const uint32_t writable = ADC_DIFSEL_DIFSEL & ~1UL;
     SPL_Status status;
 
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((Adc_Valid(adc) == 0U) || ((mask & ~writable) != 0U) ||
-        ((mask & Adc_InternalChannels(adc)) != 0U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((Adc_Valid(adc) == 0U) || ((mask & ~writable) != 0U) ||
+                  ((mask & Adc_InternalChannels(adc)) != 0U)),
+                SPL_ERR_PARAM);
     status = Adc_Idle(adc);
     if (status != SPL_OK)
     {
@@ -672,8 +682,9 @@ SPL_Status ADC_GetCalibrationFactors(ADC_TypeDef *adc, uint8_t *single, uint8_t 
 {
     uint32_t calfact;
 
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((Adc_Valid(adc) == 0U) || (single == (uint8_t *)0) || (diff == (uint8_t *)0)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((Adc_Valid(adc) == 0U) || (single == (uint8_t *)0) || (diff == (uint8_t *)0)),
+                SPL_ERR_PARAM);
     if ((adc->CR & ADC_CR_ADCAL) != 0U)
     {
         return SPL_BUSY;
@@ -690,8 +701,8 @@ SPL_Status ADC_SetCalibrationFactors(ADC_TypeDef *adc, uint8_t single, uint8_t d
     const uint32_t max = ADC_CALFACT_CALFACT_S_Msk >> ADC_CALFACT_CALFACT_S_Pos;
     SPL_Status status;
 
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((Adc_Valid(adc) == 0U) || (single > max) || (diff > max)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((Adc_Valid(adc) == 0U) || (single > max) || (diff > max)), SPL_ERR_PARAM);
     /* RM0440 21.7.22: ADEN = 1, ADSTART = 0 and JADSTART = 0. */
     if (((adc->CR & ADC_CR_ADEN) == 0U) || ((adc->CR & ADC_CR_ADDIS) != 0U))
     {
@@ -713,18 +724,21 @@ SPL_Status ADC_OversamplingConfig(ADC_TypeDef *adc, const ADC_OversamplingTypeDe
     const uint32_t fields = ADC_CFGR2_ROVSE | ADC_CFGR2_OVSR | ADC_CFGR2_OVSS | ADC_CFGR2_TROVS;
     SPL_Status status;
 
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((Adc_Valid(adc) == 0U) || (config == (const ADC_OversamplingTypeDef *)0)), SPL_ERR_PARAM);
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((config->enable > 1U) || (config->ratio > 7U) || (config->shift > 8U) ||
-        (config->triggered > 1U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((Adc_Valid(adc) == 0U) || (config == (const ADC_OversamplingTypeDef *)0)),
+                SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((config->enable > 1U) || (config->ratio > 7U) || (config->shift > 8U) ||
+                  (config->triggered > 1U)),
+                SPL_ERR_PARAM);
     /* RM0440 21.4.29: result wider than 16 bits after the shift is truncated
      * without saturation. Checked when regular (this call) or injected
      * (CFGR2.JOVSE, same OVSR/OVSS) oversampling is on. */
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!(((config->enable != 0U) || ((adc->CFGR2 & ADC_CFGR2_JOVSE) != 0U)) &&
-        (Adc_OvsFits((adc->CFGR & ADC_CFGR_RES) >> ADC_CFGR_RES_Pos, config->ratio,
-                     config->shift) == 0U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!(((config->enable != 0U) || ((adc->CFGR2 & ADC_CFGR2_JOVSE) != 0U)) &&
+                  (Adc_OvsFits((adc->CFGR & ADC_CFGR_RES) >> ADC_CFGR_RES_Pos, config->ratio,
+                               config->shift) == 0U)),
+                SPL_ERR_PARAM);
     /* ROVSE requires ADSTART = 0 and JADSTART = 0 (RM0440 21.7.5). */
     status = Adc_NoConversion(adc, ADC_CR_ADSTART | ADC_CR_JADSTART);
     if (status != SPL_OK)
@@ -746,18 +760,22 @@ SPL_Status ADC_Awd1Config(ADC_TypeDef *adc, const ADC_Awd1ConfigTypeDef *config)
     uint32_t lsb_mask;
     SPL_Status status;
 
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((Adc_Valid(adc) == 0U) || (config == (const ADC_Awd1ConfigTypeDef *)0)), SPL_ERR_PARAM);
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((config->enable > 1U) || (config->single > 1U) || (config->channel > ADC_CHANNEL_MAX) ||
-        (config->filter > 7U) || (config->low > 0xFFFU) || (config->high > 0xFFFU) ||
-        (config->low > config->high)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((Adc_Valid(adc) == 0U) || (config == (const ADC_Awd1ConfigTypeDef *)0)),
+                SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((config->enable > 1U) || (config->single > 1U) ||
+                  (config->channel > ADC_CHANNEL_MAX) || (config->filter > 7U) ||
+                  (config->low > 0xFFFU) || (config->high > 0xFFFU) ||
+                  (config->low > config->high)),
+                SPL_ERR_PARAM);
     /* RM0440 Table 173: thresholds are compared with left-aligned 12-bit data; for 10/8/6-bit
      * resolution the low 2/4/6 threshold bits must be zero. */
     res = (adc->CFGR & ADC_CFGR_RES) >> ADC_CFGR_RES_Pos;
     lsb_mask = (1U << (2U * res)) - 1U;
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((((uint32_t)config->low | (uint32_t)config->high) & lsb_mask) != 0U), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((((uint32_t)config->low | (uint32_t)config->high) & lsb_mask) != 0U),
+                SPL_ERR_PARAM);
     status = Adc_NoConversion(adc, ADC_CR_ADSTART | ADC_CR_JADSTART);
     if (status != SPL_OK)
     {
@@ -775,8 +793,8 @@ SPL_Status ADC_Awd1Config(ADC_TypeDef *adc, const ADC_Awd1ConfigTypeDef *config)
 
 SPL_Status ADC_GetFlags(ADC_TypeDef *adc, uint32_t *flags)
 {
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((Adc_Valid(adc) == 0U) || (flags == (uint32_t *)0)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((Adc_Valid(adc) == 0U) || (flags == (uint32_t *)0)), SPL_ERR_PARAM);
 
     *flags = adc->ISR & ADC_ISR_ALL;
     return SPL_OK;
@@ -784,8 +802,10 @@ SPL_Status ADC_GetFlags(ADC_TypeDef *adc, uint32_t *flags)
 
 SPL_Status ADC_ClearFlags(ADC_TypeDef *adc, uint32_t flags)
 {
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((Adc_Valid(adc) == 0U) || (flags == 0U) || ((flags & ~ADC_FLAGS_CLEARABLE) != 0U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(
+        !((Adc_Valid(adc) == 0U) || (flags == 0U) || ((flags & ~ADC_FLAGS_CLEARABLE) != 0U)),
+        SPL_ERR_PARAM);
 
     /* W1C: write only the selected flags, never read-modify-write. */
     adc->ISR = flags;
@@ -798,8 +818,8 @@ SPL_Status ADC_StopRegular(ADC_TypeDef *adc)
 {
     uint32_t cr;
 
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!(Adc_Valid(adc) == 0U), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!(Adc_Valid(adc) == 0U), SPL_ERR_PARAM);
     cr = adc->CR;
     /* Already stopping, or nothing to stop (RM: ADSTP only with ADSTART = 1). */
     if (((cr & ADC_CR_ADSTP) != 0U) || ((cr & ADC_CR_ADSTART) == 0U))
@@ -818,8 +838,8 @@ SPL_Status ADC_StopRegular(ADC_TypeDef *adc)
 
 SPL_Status ADC_RegularStopped(ADC_TypeDef *adc, uint8_t *stopped)
 {
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((Adc_Valid(adc) == 0U) || (stopped == (uint8_t *)0)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((Adc_Valid(adc) == 0U) || (stopped == (uint8_t *)0)), SPL_ERR_PARAM);
 
     *stopped = (uint8_t)(((adc->CR & (ADC_CR_ADSTART | ADC_CR_ADSTP)) == 0U) ? 1U : 0U);
     return SPL_OK;
@@ -829,8 +849,8 @@ SPL_Status ADC_Disable(ADC_TypeDef *adc)
 {
     uint32_t cr;
 
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!(Adc_Valid(adc) == 0U), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!(Adc_Valid(adc) == 0U), SPL_ERR_PARAM);
     cr = adc->CR;
     if ((cr & ADC_CR_ADDIS) != 0U)
     {
@@ -860,8 +880,8 @@ SPL_Status ADC_Disable(ADC_TypeDef *adc)
 
 SPL_Status ADC_Disabled(ADC_TypeDef *adc, uint8_t *disabled)
 {
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((Adc_Valid(adc) == 0U) || (disabled == (uint8_t *)0)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((Adc_Valid(adc) == 0U) || (disabled == (uint8_t *)0)), SPL_ERR_PARAM);
 
     *disabled = (uint8_t)(((adc->CR & (ADC_CR_ADEN | ADC_CR_ADDIS)) == 0U) ? 1U : 0U);
     return SPL_OK;

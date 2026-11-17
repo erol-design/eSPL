@@ -1,18 +1,17 @@
-/* Ported from STM32G4 SPL v0.13.3 (Autometry_Mcu_Spl 130de7a); reviewed against RM0444 Rev 6
+/* CRS driver (RM0444 Rev 6 section 6), built only where SPL_G0_HAS_CRS; public contract in
+ * stm32g0_crs.h.
+ * Ported from STM32G4 SPL v0.13.3 (Autometry_Mcu_Spl 130de7a); reviewed against RM0444 Rev 6
  * section 6: same CRS IP. G0 change: USB SOF availability guard (USB_DRD_FS). */
-/* Kutuphane birimi: spl_check.h karisma korumasi referansini bu birim de uretir; uretmeyen tek
- * birim stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
+/* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit
+ * that does not is stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
 #define SPL_LIBRARY_BUILD 1
 #include "stm32g0_crs.h"
 
 #if SPL_G0_HAS_CRS
 
-/* Denetim seviyesi (A4 dalga 5, Docs/CHECK_LEVEL.md 5.4 CRS tablosu): SPL_REQUIRE = normal
- * sinif (yalniz FULL), SPL_REQUIRE_SAFE = SAFE sinif (FULL ve MIX). Hesaplayicilarin (CalcReload,
- * CalcErrorLimit) cevaplari, SWSYNC bekliyor, hata bayraklari ve WOULD_BLOCK result; USB
- * SOF `#if` yapisal: her seviyede. */
-
-/* RM0444 Rev 6 section 6 (CRS). */
+/* Check level (A4 wave 5, Docs/CHECK_LEVEL.md 5.4 CRS table): SPL_REQUIRE = checked at FULL only
+ * (not compiled at FAST). The calculators' answers (CalcReload, CalcErrorLimit), SWSYNC pending,
+ * the error flags and WOULD_BLOCK are results; the USB SOF `#if` is structural: at every level. */
 
 /* CR bits that are kept on read-modify-write. SWSYNC (bit 7, self-clearing
  * command) and reserved bits are never written back. */
@@ -39,7 +38,7 @@ SPL_Status CRS_CalcReload(uint32_t target_hz, uint32_t sync_hz, uint32_t *reload
 {
     uint32_t ratio = 0U;
 
-    SPL_REQUIRE_SAFE(reload != (uint32_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(reload != (uint32_t *)0, SPL_ERR_PARAM);
     if (Crs_Ratio(target_hz, sync_hz, &ratio) != SPL_OK)
     {
         return SPL_ERR_PARAM;
@@ -59,10 +58,10 @@ SPL_Status CRS_CalcErrorLimit(uint32_t target_hz, uint32_t sync_hz, uint32_t ste
     uint64_t product;
     uint64_t felim;
 
-    SPL_REQUIRE_SAFE(error_limit != (uint32_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(error_limit != (uint32_t *)0, SPL_ERR_PARAM);
     if ((step_centi_pct == 0U) || (step_centi_pct > CRS_STEP_MAX))
     {
-        return SPL_ERR_PARAM; /* result: hesaplayicinin cevabi */
+        return SPL_ERR_PARAM; /* result: the calculator's answer */
     }
     if (Crs_Ratio(target_hz, sync_hz, &ratio) != SPL_OK)
     {
@@ -84,16 +83,16 @@ SPL_Status CRS_Config(const CRS_InitTypeDef *init)
     uint32_t cfgr;
     uint32_t cr;
 
-    SPL_REQUIRE_SAFE(init != (const CRS_InitTypeDef *)0, SPL_ERR_PARAM);
-    /* SAFE: kaydirilan CFGR / CR alanlari. */
-    SPL_REQUIRE_SAFE((init->sync_source <= CRS_SYNCSRC_USB_SOF) &&
-                         (init->sync_divider <= CRS_SYNCDIV_MAX) && (init->sync_polarity <= 1U) &&
-                         (init->reload <= CRS_RELOAD_MAX) && (init->error_limit != 0U) &&
-                         (init->error_limit <= CRS_FELIM_MAX) && (init->trim <= CRS_TRIM_MAX),
-                     SPL_ERR_PARAM);
+    SPL_REQUIRE(init != (const CRS_InitTypeDef *)0, SPL_ERR_PARAM);
+    /* shifted CFGR / CR fields. */
+    SPL_REQUIRE((init->sync_source <= CRS_SYNCSRC_USB_SOF) &&
+                    (init->sync_divider <= CRS_SYNCDIV_MAX) && (init->sync_polarity <= 1U) &&
+                    (init->reload <= CRS_RELOAD_MAX) && (init->error_limit != 0U) &&
+                    (init->error_limit <= CRS_FELIM_MAX) && (init->trim <= CRS_TRIM_MAX),
+                SPL_ERR_PARAM);
     SPL_REQUIRE(init->auto_trim <= 1U, SPL_ERR_PARAM);
-    /* RM0444 6.4.6: RELOAD must be greater than the OUTRANGE limit (SAFE). */
-    SPL_REQUIRE_SAFE(init->reload > (CRS_OUTRANGE_FACTOR * init->error_limit), SPL_ERR_PARAM);
+    /* RM0444 6.4.6: RELOAD must be greater than the OUTRANGE limit. */
+    SPL_REQUIRE(init->reload > (CRS_OUTRANGE_FACTOR * init->error_limit), SPL_ERR_PARAM);
     /* G0 port fix: G0B1/G0C1 CMSIS names the USB instance USB_DRD_FS, not USB; the G4 guard
      * alone would reject the reset-default USB SOF source on G0B1 (CRS-T7). */
 #if !defined(USB) && !defined(USB_DRD_FS)
@@ -103,8 +102,8 @@ SPL_Status CRS_Config(const CRS_InitTypeDef *init)
     }
 #endif
     cr = CRS->CR & CRS_CR_KEEP;
-    /* RM0444 6.7.2: CFGR is write-protected while CEN=1 (SAFE). */
-    SPL_REQUIRE_SAFE((cr & CRS_CR_CEN) == 0U, SPL_ERR_STATE);
+    /* RM0444 6.7.2: CFGR is write-protected while CEN=1. */
+    SPL_REQUIRE((cr & CRS_CR_CEN) == 0U, SPL_ERR_STATE);
 
     cfgr = (init->sync_polarity << CRS_CFGR_SYNCPOL_Pos) |
            (init->sync_source << CRS_CFGR_SYNCSRC_Pos) |
@@ -144,7 +143,7 @@ SPL_Status CRS_GenerateSwSync(void)
 {
     uint32_t cr = CRS->CR;
 
-    SPL_REQUIRE_SAFE((cr & CRS_CR_CEN) != 0U, SPL_ERR_STATE); /* SAFE: SWSYNC yok sayilir */
+    SPL_REQUIRE((cr & CRS_CR_CEN) != 0U, SPL_ERR_STATE); /* SWSYNC ignored */
     if ((cr & CRS_CR_SWSYNC) != 0U)
     {
         return SPL_BUSY;
@@ -171,16 +170,16 @@ SPL_Status CRS_SetTrim(uint32_t trim)
 {
     uint32_t cr;
 
-    SPL_REQUIRE_SAFE(trim <= CRS_TRIM_MAX, SPL_ERR_PARAM); /* SAFE: TRIM tasmasi */
+    SPL_REQUIRE(trim <= CRS_TRIM_MAX, SPL_ERR_PARAM); /* TRIM overflow */
     cr = CRS->CR & CRS_CR_KEEP;
-    SPL_REQUIRE_SAFE((cr & CRS_CR_AUTOTRIMEN) == 0U, SPL_ERR_STATE); /* SAFE: TRIM salt okunur */
+    SPL_REQUIRE((cr & CRS_CR_AUTOTRIMEN) == 0U, SPL_ERR_STATE); /* TRIM read-only */
     CRS->CR = (cr & ~CRS_CR_TRIM) | (trim << CRS_CR_TRIM_Pos);
     return SPL_OK;
 }
 
 SPL_Status CRS_GetTrim(uint32_t *trim)
 {
-    SPL_REQUIRE_SAFE(trim != (uint32_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(trim != (uint32_t *)0, SPL_ERR_PARAM);
     *trim = (CRS->CR & CRS_CR_TRIM) >> CRS_CR_TRIM_Pos;
     return SPL_OK;
 }
@@ -190,7 +189,7 @@ SPL_Status CRS_InterruptConfig(uint32_t mask, uint8_t enable)
     uint32_t cr;
 
     SPL_REQUIRE((mask != 0U) && (enable <= 1U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((mask & ~CRS_IT_ALL) == 0U, SPL_ERR_PARAM); /* SAFE: CR'ye OR'lanir */
+    SPL_REQUIRE((mask & ~CRS_IT_ALL) == 0U, SPL_ERR_PARAM); /* ORed into CR */
     cr = CRS->CR & (CRS_CR_KEEP & ~mask);
     if (enable != 0U)
     {
@@ -202,9 +201,9 @@ SPL_Status CRS_InterruptConfig(uint32_t mask, uint8_t enable)
 
 SPL_Status CRS_ClearFlags(uint32_t flags)
 {
-    SPL_REQUIRE(flags != 0U, SPL_ERR_PARAM); /* normal: etkisiz */
-    /* SAFE (EDR-003): ayrilmis bite yazim. */
-    SPL_REQUIRE_SAFE((flags & ~CRS_CLEAR_ALL) == 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(flags != 0U, SPL_ERR_PARAM); /* no effect */
+    /* (EDR-003): write to a reserved bit. */
+    SPL_REQUIRE((flags & ~CRS_CLEAR_ALL) == 0U, SPL_ERR_PARAM);
     CRS->ICR = flags;
     /* Read back: the clear reaches the peripheral before return (METHOD 1.7, issue #23). */
     (void)CRS->ISR;
@@ -226,7 +225,7 @@ SPL_Status CRS_GetStatus(CRS_StatusTypeDef *status)
 {
     uint32_t isr;
 
-    SPL_REQUIRE_SAFE(status != (CRS_StatusTypeDef *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(status != (CRS_StatusTypeDef *)0, SPL_ERR_PARAM);
     isr = Crs_ReadStatus(status, CRS->CR);
     if ((isr & CRS_ERRORS_ALL) != 0U)
     {
@@ -240,11 +239,11 @@ SPL_Status CRS_TrySyncOk(CRS_StatusTypeDef *status)
     uint32_t cr;
     uint32_t isr;
 
-    SPL_REQUIRE_SAFE(status != (CRS_StatusTypeDef *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(status != (CRS_StatusTypeDef *)0, SPL_ERR_PARAM);
     cr = CRS->CR;
     isr = Crs_ReadStatus(status, cr);
-    /* Counter stopped: no SYNC is evaluated, polling cannot help (SAFE: K-A4-4 ilkesi). */
-    SPL_REQUIRE_SAFE((cr & CRS_CR_CEN) != 0U, SPL_ERR_STATE);
+    /* Counter stopped: no SYNC is evaluated, polling cannot help (K-A4-4 principle). */
+    SPL_REQUIRE((cr & CRS_CR_CEN) != 0U, SPL_ERR_STATE);
     if ((isr & CRS_ERRORS_ALL) != 0U)
     {
         return SPL_ERR_HW;

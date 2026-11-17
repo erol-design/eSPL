@@ -1,17 +1,16 @@
-/* Ported from STM32G4 SPL v0.13 (Src/stm32g4_rng.c) and reviewed against RM0444 Rev 6
- * section 19: same IP, registers and procedures; references changed (v0.9). */
-/* Kutuphane birimi: spl_check.h karisma korumasi referansini bu birim de uretir; uretmeyen tek
- * birim stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
+/* RNG driver implementation (RM0444 Rev 6 section 19); public contract in stm32g0_rng.h.
+ * Compiled only when SPL_G0_HAS_RNG. Ported from STM32G4 SPL v0.13 (Src/stm32g4_rng.c) and
+ * reviewed against RM0444 Rev 6 section 19: same IP, registers and procedures; references changed
+ * (v0.9). */
+/* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit
+ * that does not is stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
 #define SPL_LIBRARY_BUILD 1
 #include "stm32g0_rng.h"
 
 #if SPL_G0_HAS_RNG
 
-/* Denetim seviyesi (A4 dalga 5, Docs/CHECK_LEVEL.md 5.4 RNG tablosu): SPL_REQUIRE = normal
- * sinif (yalniz FULL), SPL_REQUIRE_SAFE = SAFE sinif (FULL ve MIX). Hata bayraklari, DRDY yok ve
- * DR = 0 result: her seviyede. */
-
-/* RM0444 Rev 6 section 19. */
+/* Check level (A4 wave 5, Docs/CHECK_LEVEL.md 5.4 RNG table): SPL_REQUIRE = checked at FULL only
+ * (not compiled at FAST). Error flags, no DRDY and DR = 0 result: at every level. */
 
 #define RNG_CR_KNOWN_BITS (RNG_CR_CED | RNG_CR_IE | RNG_CR_RNGEN)
 
@@ -33,8 +32,8 @@ SPL_Status RNG_ClockErrorDetectionConfig(uint8_t enable)
 
     SPL_REQUIRE(enable <= 1U, SPL_ERR_PARAM);
     cr = RNG->CR;
-    /* RM0444 19.7.1: CED cannot change while the RNG is enabled (SAFE). */
-    SPL_REQUIRE_SAFE((cr & RNG_CR_RNGEN) == 0U, SPL_ERR_STATE);
+    /* RM0444 19.7.1: CED cannot change while the RNG is enabled. */
+    SPL_REQUIRE((cr & RNG_CR_RNGEN) == 0U, SPL_ERR_STATE);
 
     cr &= RNG_CR_KNOWN_BITS & ~RNG_CR_CED;
     if (enable == 0U)
@@ -77,7 +76,7 @@ SPL_Status RNG_TryRead(uint32_t *value)
     uint32_t cr;
     uint32_t data;
 
-    SPL_REQUIRE_SAFE(value != (uint32_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(value != (uint32_t *)0, SPL_ERR_PARAM);
     cr = RNG->CR;
     sr = RNG->SR;
     /* RM0444 19.3.5: DR must not be read when SEIS or CEIS is set. */
@@ -108,7 +107,7 @@ SPL_Status RNG_TryRead(uint32_t *value)
 
 SPL_Status RNG_GetErrors(uint32_t *errors)
 {
-    SPL_REQUIRE_SAFE(errors != (uint32_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(errors != (uint32_t *)0, SPL_ERR_PARAM);
     *errors = RNG->SR & RNG_ERRORS_ALL;
     return SPL_OK;
 }

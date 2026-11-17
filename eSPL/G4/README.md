@@ -40,7 +40,6 @@ G474, G491, G4A1. A peripheral instance or feature that the selected device does
 
 ```c
 -DSPL_CHECK_LEVEL=0   /* SPL_CHECK_FULL */
--DSPL_CHECK_LEVEL=1   /* SPL_CHECK_MIX  */
 -DSPL_CHECK_LEVEL=2   /* SPL_CHECK_FAST */
 ```
 

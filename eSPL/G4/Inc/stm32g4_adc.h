@@ -84,32 +84,32 @@ extern "C"
     /* Clears DEEPPWD, then sets ADVREGEN (two writes, RM0440 21.4.6).
      * Pending ADDIS/ADSTP/JADSTP: BUSY; ADEN/ADCAL/ADSTART/JADSTART: ERR_STATE;
      * both without register writes. Caller waits the regulator startup time. */
-    /* Seviye: PARAM[S] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status ADC_PowerRegulator(ADC_TypeDef *adc);
     /* Single-ended calibration (same as ADC_StartCalibrationMode(adc, ADC_CAL_SINGLE)). */
     /* Caller duty (CCL-2 ADC-01b): CFGR.DMAEN is not checked here or in
      * ADC_StartCalibrationMode; call ADC_DisableDma before calibration if DMA was enabled. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status ADC_StartCalibration(ADC_TypeDef *adc);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status ADC_CalibrationDone(ADC_TypeDef *adc, uint8_t *done);
     /* Legacy one-rank setup: RES/ALIGN/CONT/EXTEN/DMAEN/DMACFG cleared; requires ADEN=0. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status ADC_RegularSingleInit(ADC_TypeDef *adc, uint8_t channel, uint8_t sample_code);
     /* v0.11.1: ADVREGEN=0 (or DEEPPWD/ADCAL set): ERR_STATE. After ADCAL clears, caller must
      * observe >=4 ADC clock cycles and the regulator start-up time before ADEN (not
      * detectable by software). Poll ADC_Ready with a caller timeout: ADRDY never sets if
      * those rules were broken or the ADC clock is missing. */
-    /* Seviye: PARAM[S] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status ADC_Enable(ADC_TypeDef *adc);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status ADC_Ready(ADC_TypeDef *adc, uint8_t *ready);
     /* Pending ADDIS/ADSTP/JADSTP: BUSY, no register writes. ADSTART=1: BUSY in single mode
      * with software trigger (clears at EOS); v0.11.1: ERR_STATE with CONT=1 or EXTEN!=0
      * (never clears by itself; ADC_StopRegular first). */
     /* ERRATA ES0431 2.5.9 / ES0430 2.7.9 / ES0523 2.6.7: a conversion > 1 ms after calibration or
      * the previous conversion may be wrong (all revisions); convert twice, drop the first. */
-    /* Seviye: PARAM[S] STATE[r] HW[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] HW[r] BUSY[r] */
     SPL_Status ADC_Start(ADC_TypeDef *adc);
     /* Caller duty (CCL-2 ADC-08b): on OVR (ERR_HW here, or the OVR flag) the library restarts
      * nothing; the caller clears OVR (ADC_ClearErrors) and restarts the conversion and, when
@@ -117,10 +117,10 @@ extern "C"
     /* OVR: ERR_HW. EOC=0: disabled -> ERR_STATE; enabled and ADSTART=1 -> WOULD_BLOCK;
      * v0.11.1: enabled and ADSTART=0 (nothing running, sample already read, stopped) ->
      * ERR_STATE. Retained EOC data can be read after disable. Error leaves output unchanged. */
-    /* Seviye: PARAM[S] STATE[r] HW[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] HW[r] WOULD_BLOCK[r] */
     SPL_Status ADC_TryRead(ADC_TypeDef *adc, uint16_t *value);
     /* Clears OVR with W1C semantics. Read/capture error diagnosis before clearing. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status ADC_ClearErrors(ADC_TypeDef *adc);
     /* ADSTART=1 or JADSTART=1: ERR_STATE (RM0440 21.7.4 DMAEN/DMACFG). */
     /* Caller duty (CCL-2 ADC-06a, ADC-06b, ADC-06c, ADC-06d): the library does not link the
@@ -131,9 +131,9 @@ extern "C"
     /* ERRATA ES0431 2.5.10 / ES0430 2.7.10 / ES0523 2.6.8 (Rev Y; G491/G4A1 Rev A): after a
      * one-shot DMA end the first conversion reads channel 0 (result 0); discard it or ADC_Disable +
      * ADC_Enable. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status ADC_EnableDma(ADC_TypeDef *adc, uint8_t circular);
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status ADC_DisableDma(ADC_TypeDef *adc);
 
     /* Common block of the pair containing adc. All ADCs of the pair must be disabled
@@ -141,69 +141,69 @@ extern "C"
     /* ERRATA ES0431 2.5.11 / ES0430 2.7.11 / ES0523 2.6.9: overlapping conversions of two ADCs may
      * lose accuracy except ASYNC with presc 0 (/1) or SYNC_DIVx (trigger prescaler a multiple of
      * the divider); G47x: keep ADC12 and ADC345 blocks consistent (see contract). */
-    /* Seviye: PARAM[S] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status ADC_CommonClockConfig(ADC_TypeDef *adc, uint32_t ckmode, uint32_t presc);
     /* Sets exactly VREFEN/VSENSESEL/VBATSEL of the pair's CCR from mask (ADC_INTERNAL_*). */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status ADC_InternalChannelsConfig(ADC_TypeDef *adc, uint32_t mask);
 
     /* length 1..16 ranks, channels 0..18; ADSTART=0 required. Writes SQR1..SQR4 fully. */
     /* ERRATA ES0431 2.5.8 / ES0430 2.7.8 (Rev Z only, not in ES0523): a channel switch disturbs
      * running ADCs (DNL); scan each input twice, keep the first (ES text); BULB not exposed. */
-    /* Seviye: PARAM[S] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status ADC_RegularSequenceConfig(ADC_TypeDef *adc, const uint8_t *channels, uint8_t length);
     /* code 0..7 = 2.5..640.5 ADC cycles; ADSTART=0 and JADSTART=0 required. */
-    /* Seviye: PARAM[S] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status ADC_SetSamplingTime(ADC_TypeDef *adc, uint8_t channel, uint8_t sample_code);
     /* ADSTART=0 and JADSTART=0 required; DMA, watchdog and injected bits kept.
      * v0.11.1: AWD1EN=1 with LT1/HT1 low bits that the new resolution requires to be 0:
      * ERR_STATE (reprogram AWD1 with ADC_Awd1Config, or disable it, first). */
     /* ERRATA ES0431 2.5.7 / ES0430 2.7.7 (Rev Z only, not in ES0523): EOC at RES 10/8/6 bit
      * disturbs other converting ADCs; use 12 bit, or same RES/sampling and simultaneous start. */
-    /* Seviye: PARAM[S] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status ADC_RegularConfig(ADC_TypeDef *adc, const ADC_RegularConfigTypeDef *config);
 
     /* Channels 1..18 as bit mask (bit 0 is read-only); ADC fully disabled required.
      * v0.11.1: internal-channel bits are PARAM (ADC1 16/17/18, ADC3 17/18, ADC4 18,
      * ADC5 4/17/18). OPAMP internal outputs are not checked (caller). */
-    /* Seviye: PARAM[S] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status ADC_SetDifferentialChannels(ADC_TypeDef *adc, uint32_t mask);
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status ADC_StartCalibrationMode(ADC_TypeDef *adc, uint32_t mode);
     /* BUSY while ADCAL=1. */
-    /* Seviye: PARAM[S] BUSY[r] */
+    /* Level: PARAM[F] BUSY[r] */
     SPL_Status ADC_GetCalibrationFactors(ADC_TypeDef *adc, uint8_t *single, uint8_t *diff);
     /* 0..127 each; ADEN=1, ADDIS=0, ADSTART=0, JADSTART=0 required. */
-    /* Seviye: PARAM[S] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status ADC_SetCalibrationFactors(ADC_TypeDef *adc, uint8_t single, uint8_t diff);
 
     /* Regular oversampling; ADSTART=0 and JADSTART=0 required. */
     /* v0.13.5: PARAM when (resolution bits + ratio + 1 - shift) > 16 with regular or injected
      * oversampling on (RM0440 21.4.29: wider results are truncated without saturation). */
-    /* Seviye: PARAM[S] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status ADC_OversamplingConfig(ADC_TypeDef *adc, const ADC_OversamplingTypeDef *config);
     /* Analog watchdog 1 on regular channels; ADSTART=0 and JADSTART=0 required. */
     /* ERRATA ES0431 2.5.4 / ES0430 2.7.4 / ES0523 2.6.4: ADC_AWD1_OUT is also reset by non-guarded
      * channels; with AWD_OUT used, convert only guarded channels or use its rising edge. */
-    /* Seviye: PARAM[S] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status ADC_Awd1Config(ADC_TypeDef *adc, const ADC_Awd1ConfigTypeDef *config);
 
     /* Raw ADC_ISR flags (no side effect). */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status ADC_GetFlags(ADC_TypeDef *adc, uint32_t *flags);
     /* W1C write of a non-empty subset of ADC_FLAGS_CLEARABLE. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status ADC_ClearFlags(ADC_TypeDef *adc, uint32_t flags);
 
     /* Non-blocking ADSTP command; OK without write if nothing runs or ADSTP is pending. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status ADC_StopRegular(ADC_TypeDef *adc);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status ADC_RegularStopped(ADC_TypeDef *adc, uint8_t *stopped);
     /* Non-blocking ADDIS command; conversions must be stopped first (STATE). */
-    /* Seviye: PARAM[S] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status ADC_Disable(ADC_TypeDef *adc);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status ADC_Disabled(ADC_TypeDef *adc, uint8_t *disabled);
 
 #ifdef __cplusplus

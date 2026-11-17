@@ -8,24 +8,38 @@
 extern "C"
 {
 #endif
-/* USART / LPUART driver (RM0444 Rev 6 sections 33 and 34, Docs/v0.3_USART_CONTRACT.md),
- * ported from the STM32G4 SPL v0.13.3.
- * G0B1 instance classes (RM0444 Table 183/184):
+/* USART / LPUART driver for STM32G0 (RM0444 Rev 6 sections 33 and 34), ported from the STM32G4
+ * SPL v0.13.3.
+ * Scope: G0B1 instance classes (RM0444 Table 183/184):
  *  - FULL: USART1, USART2, USART3 (FIFO, prescaler, smartcard, ...);
  *  - BASIC: USART4, USART5, USART6: no FIFO, no prescaler (PRESC register absent), no
  *    smartcard/IrDA/LIN/auto baud/receiver timeout/wake-up; kernel clock = PCLK;
  *  - LP: LPUART1, LPUART2 (BRR = 256 * f / baud, no OVER8, FIFO and prescaler present).
- * Kernel clock: RCC_GetUsartKernelClock gives the value to pass as kernel_hz.
- * USART_Init: legacy asynchronous 8N1 x16 for USART1..6 (no FIFO, parity, flow control or
- * interrupts). Caller configures GPIO alternate functions. Not concurrency-safe; only
- * initialize with the peripheral disabled. LPUART1/2 -> SPL_ERR_PARAM (BRR formula differs):
- * use USART_InitEx. */
+ * Usage: USART_InitEx (UE = 0), optional USART_FifoConfig / USART_DriverEnableConfig and mode
+ * settings, USART_Enable, poll USART_Ready, then the Try* transfers. USART_Init is the legacy
+ * shortcut (sets UE = 1 itself). Kernel clock: RCC_GetUsartKernelClock gives the value to pass as
+ * kernel_hz.
+ * Common rules: no dynamic memory, no static state; no function waits (BUSY / WOULD_BLOCK are
+ * returned instead); not reentrant per instance (see the serialization duty below); output
+ * parameters are unchanged unless SPL_OK (METHOD 1.8).
+ * Caller duties (all APIs; not done by the driver):
+ *  - Clock: RCC bus clock and kernel clock source of the instance; kernel_hz passed to the init
+ *    APIs must be the real kernel clock frequency (the driver only computes BRR from it).
+ *  - Pins: TX / RX (CK, CTS, RTS / DE when used) in their GPIO alternate function.
+ *  - Interrupts / DMA: NVIC line, priority and handler; DMA channel / DMAMUX setup and buffers.
+ *  - Serialize all calls per instance (ISR included); CR1 / CR3 are read-modify-written.
+ * Contract: Docs/v0.3_USART_CONTRACT.md; communication modes: Docs/v0.10_COMM_MODES.md. */
 typedef struct
 {
     uint32_t kernel_hz;
     uint32_t baudrate;
 } USART_InitTypeDef;
-/* Seviye: PARAM[S] STATE[S] */
+/* Legacy asynchronous 8N1 x16 for USART1..6 (no FIFO, parity, flow control or interrupts).
+ * LPUART1/2 -> SPL_ERR_PARAM (BRR formula differs): use USART_InitEx. Not concurrency-safe; only
+ * initialize with the peripheral disabled. */
+/* Caller: none beyond the file-header duties (kernel_hz from RCC_GetUsartKernelClock; this API
+ * sets UE = 1 itself). */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status USART_Init(USART_TypeDef *instance, const USART_InitTypeDef *cfg);
 /* Single-step nonblocking accesses. No register write on any non-OK result.
  * Accept USART1..6 and LPUART1/2.
@@ -38,21 +52,31 @@ SPL_Status USART_Init(USART_TypeDef *instance, const USART_InitTypeDef *cfg);
  * v0.13.3: a 9-bit data field (M0=1, M1=0, PCE=0) gives SPL_ERR_STATE
  * (checked after UE/TE/RE, before any data access): bit 8 would be lost.
  */
-/* Seviye: PARAM[S] STATE[S] WOULD_BLOCK[r] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] STATE[F] WOULD_BLOCK[r] */
 SPL_Status USART_TryWrite(USART_TypeDef *instance, uint8_t byte);
-/* Seviye: PARAM[S] STATE[S] HW[r] WOULD_BLOCK[r] */
+/* Caller: after ERR_HW capture USART_ErrorFlags, then clear (USART_ClearErrorFlags); the
+ * received frame is lost. */
+/* Level: PARAM[F] STATE[F] HW[r] WOULD_BLOCK[r] */
 SPL_Status USART_TryRead(USART_TypeDef *instance, uint8_t *byte);
-/* Seviye: PARAM[S] */
+/* Caller: capture USART_ErrorFlags first; this clears all four flags, so an error arriving after
+ * the capture is lost (use USART_ClearErrorFlags to keep it). */
+/* Level: PARAM[F] */
 SPL_Status USART_ClearErrors(USART_TypeDef *instance);
 /* Readiness: SPL_ERR_STATE when UE=0. With UE=1 returns SPL_OK; each output
  * is 1 only if its TE/RE is enabled and TEACK/REACK is acknowledged.
  * Never polls or waits. Both outputs must be non-NULL. */
-/* Seviye: PARAM[S] STATE[S] */
+/* Caller: poll until the needed output is 1 before relying on TE / RE (the driver never waits);
+ * bound the poll. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status USART_Ready(USART_TypeDef *instance, uint8_t *tx_ready, uint8_t *rx_ready);
 /* Snapshot raw error bits (ISR PE/FE/NE/ORE); caller decides how to recover. */
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status USART_ErrorFlags(USART_TypeDef *instance, uint32_t *errors);
-/* Seviye: PARAM[S] */
+/* Caller: TC stays set until USART_ClearTxComplete; clear it after use so the next check sees
+ * only the new transmission. */
+/* Level: PARAM[F] */
 SPL_Status USART_TxComplete(USART_TypeDef *instance, uint8_t *complete);
 
 /* ---- extended configuration, LPUART, FIFO, RS485, IRQ/DMA ---- */
@@ -112,6 +136,8 @@ SPL_Status USART_TxComplete(USART_TypeDef *instance, uint8_t *complete);
 #define USART_OPT_RXINV 0x08U       /* CR2.RXINV: RX pin level inverted */
 #define USART_OPT_DATAINV 0x10U     /* CR2.DATAINV: data (and parity) inverted */
 #define USART_OPT_HALF_DUPLEX 0x20U /* CR3.HDSEL: single wire on TX pin */
+/* USART_OPT_HALF_DUPLEX on a wire shared with other nodes: TX pin in alternate function open drain
+ * with a pull-up (RM0444 33.5.16), else two push-pull drivers can fight on the line. */
 
 /* Asynchronous frame configuration. 16 bytes, no padding. */
 typedef struct
@@ -136,21 +162,27 @@ typedef struct
  * ERRATA ES0548 2.13.1: LPUART1/2 with BRR in 0x301..0x3FF and
  * BRR & 0xFF != 0 (kernel/baud ratio non-integer in 3..4, e.g. 32768 Hz /
  * 9600 Bd) -> PARAM, no write; raise the kernel clock or lower the baud. */
-/* Seviye: PARAM[S,n] STATE[S] UNSUPPORTED[S] */
+/* Caller: none beyond the file-header duties (kernel_hz is the kernel clock before PRESC). */
+/* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
 SPL_Status USART_InitEx(USART_TypeDef *instance, const USART_InitExTypeDef *cfg);
 /* Set CR1.UE (idempotent: UE=1 -> OK, no write). STATE when BRR is below the
  * instance minimum (USART 0x10, LPUART 0x300; reset BRR=0): call USART_InitEx
  * first. Poll USART_Ready for TEACK/REACK. */
-/* Seviye: PARAM[S] STATE[S] */
+/* Caller: poll USART_Ready for TEACK / REACK before the first transfer. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status USART_Enable(USART_TypeDef *instance);
 /* Clear CR1.UE after the last frame left the line. v0.4 (G4 v0.13.4): UE=1, TE=1 and TC=0 ->
  * SPL_BUSY, no write (poll again; RM0444 33.5.5 step 8). UE=0 also resets the DMA requests:
  * disable the DMA channel BEFORE this call (RM0444 33.8.1 UE). */
-/* Seviye: PARAM[S] BUSY[r] */
+/* Caller: disable the DMA channel first; bound the BUSY poll (a transmitter held by CTS never
+ * completes: USART_Abort). */
+/* Level: PARAM[F] BUSY[r] */
 SPL_Status USART_Disable(USART_TypeDef *instance);
 /* Clear CR1.UE immediately; frames in progress are discarded (old USART_Disable behaviour; e.g.
  * a transmitter held by CTS). */
-/* Seviye: PARAM[S] */
+/* Caller: frames in progress are discarded by design; disable the DMA channel first (UE = 0
+ * resets the DMA requests). */
+/* Level: PARAM[F] */
 SPL_Status USART_Abort(USART_TypeDef *instance);
 
 /* FIFO thresholds (CR3 TXFTCFG/RXFTCFG). EMPTY_FULL = TXFIFO empty / RXFIFO full. */
@@ -161,14 +193,16 @@ SPL_Status USART_Abort(USART_TypeDef *instance);
 #define USART_FIFO_THRESHOLD_7_8 4U
 #define USART_FIFO_THRESHOLD_EMPTY_FULL 5U
 /* UE=0 only. CR1.FIFOEN = enable, CR3.TXFTCFG/RXFTCFG = thresholds. */
-/* Seviye: PARAM[S,n] STATE[S] UNSUPPORTED[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
 SPL_Status USART_FifoConfig(USART_TypeDef *instance, uint8_t enable, uint8_t tx_threshold,
                             uint8_t rx_threshold);
 /* UE=0 only. RS485 driver enable on the RTS/DE pin: CR3.DEM = enable,
  * CR3.DEP = active_low, CR1.DEAT/DEDT = 0..31 (sample-time units on
  * USART, kernel-clock based on LPUART: RM0444 33.5.20 / 34.4.13).
  * enable=1 while CR3.RTSE=1 => SPL_ERR_STATE (same pin). */
-/* Seviye: PARAM[S,n] STATE[S] */
+/* Caller: none beyond the file-header duties (RTS / DE pin in its alternate function). */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status USART_DriverEnableConfig(USART_TypeDef *instance, uint8_t enable, uint8_t active_low,
                                     uint8_t assert_time, uint8_t deassert_time);
 
@@ -176,9 +210,12 @@ SPL_Status USART_DriverEnableConfig(USART_TypeDef *instance, uint8_t enable, uin
  * configured data field (9/8/7 bits minus the parity bit when PCE=1),
  * else SPL_ERR_PARAM. TryRead9 returns RDR[8:0] raw (includes the parity
  * bit when PCE=1). Same state/WOULD_BLOCK/ERR_HW rules as TryWrite/TryRead. */
-/* Seviye: PARAM[S] STATE[S] WOULD_BLOCK[r] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] STATE[F] WOULD_BLOCK[r] */
 SPL_Status USART_TryWrite9(USART_TypeDef *instance, uint16_t data);
-/* Seviye: PARAM[S] STATE[S] HW[r] WOULD_BLOCK[r] */
+/* Caller: after ERR_HW capture USART_ErrorFlags, then clear (USART_ClearErrorFlags); the
+ * received frame is lost. */
+/* Level: PARAM[F] STATE[F] HW[r] WOULD_BLOCK[r] */
 SPL_Status USART_TryRead9(USART_TypeDef *instance, uint16_t *data);
 
 /* Interrupt sources for USART_ITConfig. */
@@ -192,7 +229,9 @@ SPL_Status USART_TryRead9(USART_TypeDef *instance, uint16_t *data);
 /* Set (enable=1) or clear (enable=0) the selected enables; other bits
  * untouched. Allowed with UE=1. Read-modify-write of CR1/CR3: do not call
  * concurrently with other CR1/CR3 writers of the same instance. */
-/* Seviye: PARAM[S,n] */
+/* Caller: clear stale flags (errors, IDLE, TC) before enabling their interrupt; the handler
+ * clears ORE too (USART_IT_RXNE also enables the ORE interrupt), else the interrupt repeats. */
+/* Level: PARAM[F] */
 SPL_Status USART_ITConfig(USART_TypeDef *instance, uint32_t it_mask, uint8_t enable);
 
 /* DMA request flags for USART_DmaConfig. */
@@ -201,23 +240,29 @@ SPL_Status USART_ITConfig(USART_TypeDef *instance, uint32_t it_mask, uint8_t ena
 #define USART_DMA_DDRE 0x04U /* CR3.DDRE: DMA disabled on reception error */
 /* CR3.DMAT/DMAR/DDRE = flags. DMAT/DMAR may change with UE=1; a DDRE
  * change while UE=1 => SPL_ERR_STATE (UE=0 only field). */
-/* Seviye: PARAM[S,n] STATE[S] */
+/* Caller: DMA buffers stay valid until the DMA channel is disabled; disable the channel before
+ * USART_Disable / USART_Abort. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status USART_DmaConfig(USART_TypeDef *instance, uint32_t dma_flags);
 
 /* ISR.IDLE snapshot / ICR.IDLECF write (W1C, no read-modify-write). */
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status USART_IdleDetected(USART_TypeDef *instance, uint8_t *idle);
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status USART_ClearIdle(USART_TypeDef *instance);
 /* ICR.TCCF write. */
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status USART_ClearTxComplete(USART_TypeDef *instance);
 /* Error flags (ISR bit positions) reported by USART_ErrorFlags. */
 #define USART_ERRORS_ALL 0x0FU /* PE | FE | NE | ORE */
 /* Clear only the given error flags (non-zero subset of USART_ERRORS_ALL,
  * typically the value captured with USART_ErrorFlags) so that an error
  * arriving after the capture is not lost. */
-/* Seviye: PARAM[S,n] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status USART_ClearErrorFlags(USART_TypeDef *instance, uint32_t errors);
 
 /* ---- v0.10 (G0): communication modes, Docs/v0.10_COMM_MODES.md ----
@@ -242,7 +287,9 @@ typedef struct
  * ERRATA ES0548 2.12.1 (family): in synchronous slave mode at a low baud rate TC can rise before
  * the last bit is shifted out; after TC wait until the clock line is idle for more than half a
  * clock period before disabling the USART (caller's duty). */
-/* Seviye: PARAM[S,n] STATE[S] UNSUPPORTED[S] */
+/* Caller: CK pin in its alternate function; synchronous slave: after TC wait for an idle clock
+ * line longer than half a clock period before disabling (ES0548 2.12.1 above). */
+/* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
 SPL_Status USART_SyncConfig(USART_TypeDef *instance, const USART_SyncTypeDef *cfg);
 
 typedef struct
@@ -257,48 +304,62 @@ typedef struct
 /* FULL only. enable = 1 requires (else STATE) LINEN / HDSEL / IREN cleared, 8 data bits + parity
  * (M0 = 1, M1 = 0, PCE = 1), 1.5 or 0.5 stop bits, OVER8 = 0 (RM0444 33.5.17). Writes GTPR, CR3
  * SCEN / NACK / SCARCNT and CR2 CLKEN. enable = 0 clears SCEN / NACK / SCARCNT only. */
-/* Seviye: PARAM[S,n] STATE[S] UNSUPPORTED[S] */
+/* Caller: TX (card I/O) pin in alternate function open drain and CK pin when clock_out = 1
+ * (RM0444 33.5.17); card protocol (ATR, retries policy) is the caller's. */
+/* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
 SPL_Status USART_SmartcardConfig(USART_TypeDef *instance, const USART_SmartcardTypeDef *cfg);
 /* FULL only. IREN / IRLP; prescaler 1..255 (GTPR.PSC, 0 reserved). enable = 1 requires LINEN,
  * STOP, CLKEN, SCEN, HDSEL cleared and OVER8 = 0 (RM0444 33.5.18). GT is kept. */
-/* Seviye: PARAM[S,n] STATE[S] UNSUPPORTED[S] */
+/* Caller: low_power: prescaler chosen for the IrDA low-power frequency from the kernel clock
+ * (RM0444 33.5.18); IR transceiver on the board. */
+/* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
 SPL_Status USART_IrdaConfig(USART_TypeDef *instance, uint8_t enable, uint8_t low_power,
                             uint8_t prescaler);
 /* FULL only. LINEN / LBDL (11-bit break detection) / LBDIE. enable = 1 requires STOP = 1 bit,
  * CLKEN, SCEN, HDSEL, IREN cleared, 8-bit words, OVER8 = 0 (RM0444 33.5.13). */
-/* Seviye: PARAM[S,n] STATE[S] UNSUPPORTED[S] */
+/* Caller: break_irq = 1: the handler clears LBDF with USART_ClearModeFlags. */
+/* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
 SPL_Status USART_LinConfig(USART_TypeDef *instance, uint8_t enable, uint8_t break_11bit,
                            uint8_t break_irq);
 /* RQR.SBKRQ (break; 13 bits in LIN mode). UE and TE required (else STATE); SBKF = 1 -> BUSY. */
-/* Seviye: PARAM[S] STATE[S] BUSY[r] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] STATE[F] BUSY[r] */
 SPL_Status USART_SendBreak(USART_TypeDef *instance);
 /* FULL only. ABREN / ABRMODE (0 start bit, 1 falling edge, 2 0x7F frame, 3 0x55 frame).
  * ERRATA ES0548 2.12.4 (family): clearing ABREN during a reception corrupts data; ABREN changes
  * only with UE = 0 here (STATE otherwise), so it is never cleared while receiving. */
-/* Seviye: PARAM[S,n] STATE[S] UNSUPPORTED[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
 SPL_Status USART_AutoBaudConfig(USART_TypeDef *instance, uint8_t enable, uint8_t mode);
 /* RQR.ABRRQ: restart the detection (ABREN = 0 -> STATE). */
-/* Seviye: PARAM[S] STATE[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status USART_AutoBaudRequest(USART_TypeDef *instance);
 /* *done = ABRF, *error = ABRE. */
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status USART_AutoBaudStatus(USART_TypeDef *instance, uint8_t *done, uint8_t *error);
 /* FULL and LPUART (BASIC -> UNSUPPORTED). UESM = enable, WUS = source (0 address match, 2 start
  * bit, 3 RXNE; 1 reserved -> PARAM), WUFIE = irq. Stop 0 / Stop 1 wake-up (RM0444 Table 184). */
-/* Seviye: PARAM[S,n] STATE[S] UNSUPPORTED[S] */
+/* Caller: kernel clock running in Stop (HSI16 or LSE source); EXTI / NVIC setup for the wake-up
+ * and clearing WUF with USART_ClearModeFlags. */
+/* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
 SPL_Status USART_WakeupConfig(USART_TypeDef *instance, uint8_t enable, uint8_t source, uint8_t irq);
 /* FULL only. RTOR = timeout (bit times, <= 0xFFFFFF) | block_length (smartcard BLEN), CR2.RTOEN.
  * RTOF / EOBF: USART_ModeFlags. */
-/* Seviye: PARAM[S,n] STATE[S] UNSUPPORTED[S] */
+/* Caller: clear RTOF / EOBF with USART_ClearModeFlags after each event. */
+/* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
 SPL_Status USART_RxTimeoutConfig(USART_TypeDef *instance, uint8_t enable, uint32_t timeout,
                                  uint8_t block_length);
 /* Multiprocessor communication (RM0444 33.5.10): MME = enable, WAKE = address_mark (0 idle line,
  * 1 address mark), ADD = address, ADDM7 = addr7 (4-bit mode: address <= 15, else PARAM). */
-/* Seviye: PARAM[S,n] STATE[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status USART_MuteConfig(USART_TypeDef *instance, uint8_t enable, uint8_t address_mark,
                             uint8_t address, uint8_t addr7);
 /* RQR.MMRQ: enter mute mode (MME = 0 -> STATE). RWU: USART_ModeFlags. */
-/* Seviye: PARAM[S] STATE[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status USART_EnterMute(USART_TypeDef *instance);
 
 /* ISR flags of the modes above, and the subset with a same-position ICR clear bit. */
@@ -309,12 +370,14 @@ SPL_Status USART_EnterMute(USART_TypeDef *instance);
     (USART_MODE_FLAGS_CLEARABLE | USART_ISR_ABRE | USART_ISR_ABRF | USART_ISR_SBKF |               \
      USART_ISR_RWU | USART_ISR_TCBGT)
 /* *flags = ISR & USART_MODE_FLAGS. */
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status USART_ModeFlags(USART_TypeDef *instance, uint32_t *flags);
 /* ICR = flags (non-empty subset of USART_MODE_FLAGS_CLEARABLE), then ISR read back. Flags of a
  * feature the instance class lacks -> UNSUPPORTED: LBDF / RTOF / EOBF / UDR only on FULL USARTs,
  * WUF on FULL and LPUART, BASIC USARTs CMF only (RM0444 Table 184). */
-/* Seviye: PARAM[S,n] UNSUPPORTED[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] UNSUPPORTED[F] */
 SPL_Status USART_ClearModeFlags(USART_TypeDef *instance, uint32_t flags);
 
 #ifdef __cplusplus

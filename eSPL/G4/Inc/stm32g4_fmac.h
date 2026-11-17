@@ -67,24 +67,24 @@ extern "C"
      * watermark > 3, base + size >= 256 (RM0440 18.3.2), X2 overlaps X1 or
      * Y, or X1 and Y overlap without coinciding exactly (same base and
      * size: the RM0440 18.3.8 memory-saving FIR layout). OK otherwise. */
-    /* Seviye: PARAM[r] */
+    /* Level: PARAM[r] */
     SPL_Status FMAC_LayoutCheck(const FMAC_LayoutTypeDef *layout);
     /* Writes X1BUFCFG, X2BUFCFG, YBUFCFG (reserved bits 0) after
      * FMAC_LayoutCheck. Requires START = 0 (RM0440 18.4.1-18.4.3):
      * filter running => STATE; load in progress or reset pending => BUSY. */
-    /* Seviye: PARAM[S] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status FMAC_ConfigBuffers(const FMAC_LayoutTypeDef *layout);
     /* CR = flags (subset of FMAC_CR_CONFIG_ALL), RESET written 0. PARAM for
      * other bits, or WIEN with DMAWEN, or RIEN with DMAREN (RM0440 Table 120:
      * one method per direction). DMAREN/DMAWEN can change only with
      * START = 0 (RM0440 18.4.5): a change while START = 1 => STATE.
      * Reset pending => BUSY. Never touches PARAM. */
-    /* Seviye: PARAM[S] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status FMAC_ControlConfig(uint32_t flags);
     /* CR.RESET = 1, CR configuration bits kept. Resets pointers, SR (clears
      * OVFL/UNFL/SAT) and PARAM incl. START (RM0440 18.4.5). Self-clearing:
      * poll FMAC_GetState until it is not FMAC_STATE_RESET. Always OK. */
-    /* Seviye: - */
+    /* Level: - */
     SPL_Status FMAC_Reset(void);
 
     /* Preload sequences (RM0440 18.3.5): one PARAM write (FUNC, P[, Q],
@@ -95,12 +95,12 @@ extern "C"
      * STATE: filter running; RIEN, WIEN, DMAREN or DMAWEN set (RM0440 18.3.5
      * recommends them off during initialization); n (+ m) larger than the
      * configured buffer size. BUSY: reset pending or a load in progress. */
-    /* Seviye: PARAM[S] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status FMAC_LoadX1(const int16_t *data, uint8_t n);
     /* X2 = b[0..n-1] followed by a[0..m-1] (IIR feedback; FIR: m = 0). */
-    /* Seviye: PARAM[S] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status FMAC_LoadX2(const int16_t *b, uint8_t n, const int16_t *a, uint8_t m);
-    /* Seviye: PARAM[S] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status FMAC_LoadY(const int16_t *data, uint8_t n);
 
     /* PARAM = START | FUNC | R | Q | P in one write (RM0440 18.3.8/18.3.9).
@@ -111,30 +111,30 @@ extern "C"
      * layout invalid, IIR with X1/Y overlapping, DMAWEN with FULL_WM != 0 or
      * DMAREN with EMPTY_WM != 0 (RM0440 18.4.1/18.4.3).
      * BUSY: reset pending or a load in progress. */
-    /* Seviye: PARAM[S] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status FMAC_FilterStart(uint32_t func, uint8_t p, uint8_t q, uint8_t r);
     /* START = 0 by software; FUNC/P/Q/R kept (RM0440 18.4.4). Stops any
      * function. No write when START is already 0. Always OK. */
-    /* Seviye: - */
+    /* Level: - */
     SPL_Status FMAC_FilterStop(void);
 
     /* Polling data path, never stalls. Reads PARAM before SR.
      * TryWrite: BUSY (reset/load), STATE (no filter running), ERR_HW (OVFL
      * set), WOULD_BLOCK (X1FULL = 1), else one WDATA write. */
-    /* Seviye: STATE[r] HW[r] BUSY[r] WOULD_BLOCK[r] */
+    /* Level: STATE[r] HW[r] BUSY[r] WOULD_BLOCK[r] */
     SPL_Status FMAC_TryWrite(int16_t sample);
     /* TryRead: PARAM (NULL), BUSY (reset/load), ERR_HW (UNFL set), OK with
      * one RDATA read when YEMPTY = 0 (also after FilterStop), WOULD_BLOCK
      * when YEMPTY = 1 and a filter runs, STATE when YEMPTY = 1 and no filter
      * runs. *sample written on OK only. */
-    /* Seviye: PARAM[S] STATE[r] HW[r] BUSY[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] HW[r] BUSY[r] WOULD_BLOCK[r] */
     SPL_Status FMAC_TryRead(int16_t *sample);
 
     /* *flags = SR & FMAC_FLAGS_ALL. No side effects. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status FMAC_GetFlags(uint32_t *flags);
     /* *state = one of FMAC_STATE_*. No side effects. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status FMAC_GetState(uint32_t *state);
 
 #ifdef __cplusplus

@@ -17,8 +17,15 @@ extern "C"
  * SYSCLK and ignore the AHB / APB prescalers; they work only while SYSCLK / PCLK <= 4. Caller:
  * compute TIM16 / TIM17 timing from SYSCLK and keep HPRE x PPRE <= 4 when they run
  * (RCC_SetAhbPrescaler / RCC_SetApbPrescaler). Peripheral clocks, GPIO AF mapping and IRQ priority
- * are board responsibilities. This module is non-blocking and does not install interrupt handlers.
- * Configure with CEN=0 and, for channels, CCxE=0. */
+ * are board responsibilities. This module is non-blocking, keeps no static state and does not
+ * install interrupt handlers. On SPL_ERR_PARAM no register is written.
+ * Usage: configure with CEN = 0 (channels with CCxE = 0): TIM_BaseInit, optional TIM_CounterInit
+ * and channel init, TIM_GenerateUpdate, then TIM_Enable.
+ * Caller duties (all APIs): TIMx bus clock on (RCC); TIM1 / TIM15 kernel clock source if selected
+ * (TIM1SEL / TIM15SEL); PSC / ARR / CCR / DTG computed from the actual timer clock; GPIO AF for
+ * the CHx, CHxN, ETR and BKIN pins; IRQ handler, NVIC priority and enable (the handler clears the
+ * flags it serves with TIM_ClearFlags / TIM_ClearUpdate); serialise calls per instance with ISRs
+ * using the same timer (CR1, CR2, DIER, CCER, CCMRx, SMCR are read-modify-write). */
 typedef struct
 {
     uint32_t prescaler;           /* PSC register: 0..65535, division by PSC+1 */
@@ -48,39 +55,60 @@ typedef struct
     uint8_t prescaler;    /* ICxPSC: 0..3 (1,2,4,8 captures) */
 } TIM_ICInitTypeDef;
 /* ARR/period zero is rejected; no registers are written on parameter error.
- * Issue #27 politikasi: yazilmis CCRx sinanmaz; ARR ile CCR bagimsiz, CCR > ARR gecerli. */
-/* Seviye: PARAM[S,n] STATE[S] */
+ * Issue #27 policy: the written CCRx are not checked; ARR and CCR are independent, CCR > ARR is
+ * valid. */
+/* Caller: PSC (always preloaded) and ARR with ARPE = 1 take effect only at the next update
+ * event and no UG is generated here: call TIM_GenerateUpdate before TIM_Enable. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status TIM_BaseInit(TIM_TypeDef *tim, const TIM_BaseInitTypeDef *cfg);
 /* CR1.CEN set/cleared. v0.13.3: one-pulse mode with a pulse running
  * (OPM=1, CEN=1) and enable=1 -> SPL_BUSY, no write (retry after the
  * pulse; hardware clears CEN at its end). */
-/* Seviye: PARAM[S,n] BUSY[r] */
+/* Caller: configure the timer and load PSC / ARR (TIM_GenerateUpdate) before enable = 1; enable
+ * = 0 is not refused while a pulse or period runs and cuts it. */
+/* Level: PARAM[F] BUSY[r] */
 SPL_Status TIM_Enable(TIM_TypeDef *tim, uint8_t enable);
-/* Seviye: PARAM[S] */
+/* Caller: UG reloads PSC / ARR / RCR / preloaded CCRx, restarts the counter and, with UIE = 1,
+ * raises the update interrupt; clear UIF afterwards if that IRQ is unwanted. */
+/* Level: PARAM[F] */
 SPL_Status TIM_GenerateUpdate(TIM_TypeDef *tim);
-/* Seviye: PARAM[S,n] */
+/* Caller: clear a stale UIF (TIM_ClearUpdate) before enable = 1, else the IRQ fires at once;
+ * the handler clears UIF. */
+/* Level: PARAM[F] */
 SPL_Status TIM_UpdateInterrupt(TIM_TypeDef *tim, uint8_t enable);
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status TIM_UpdatePending(TIM_TypeDef *tim, uint8_t *pending);
 /* SR = valid flags & ~UIF (rc_w0, reserved bits 0; G4 v0.13.5). */
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status TIM_ClearUpdate(TIM_TypeDef *tim);
-/* cfg->compare: register width only, else PARAM, nothing written. Issue #27 politikasi: ARR'ye
- * gore sinanmaz; CCR > ARR gecerli (PWM: OCxREF sabit, OC: periyot icinde eslesme yok). */
-/* Seviye: PARAM[S] STATE[S] */
+/* cfg->compare: register width only, else PARAM, nothing written. Issue #27 policy: not checked
+ * against ARR; CCR > ARR is valid (PWM: OCxREF constant, OC: no match within the period). */
+/* Caller: then TIM_ChannelEnable (TIM1 / 15 / 16 / 17: also TIM_MainOutputEnable); the CCR /
+ * ARR pair (duty, event timing) is the caller's design. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status TIM_OutputCompareInit(TIM_TypeDef *tim, uint8_t channel, const TIM_OCInitTypeDef *cfg);
-/* Seviye: PARAM[S] STATE[S] */
+/* Caller: then TIM_ChannelEnable and read with TIM_GetCapture. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status TIM_InputCaptureInit(TIM_TypeDef *tim, uint8_t channel, const TIM_ICInitTypeDef *cfg);
-/* Seviye: PARAM[S,n] */
+/* Caller: configure the channel first (TIM_OutputCompareInit / TIM_InputCaptureInit); not
+ * checked here. TIM1 / 15 / 16 / 17 outputs also need TIM_MainOutputEnable. */
+/* Level: PARAM[F] */
 SPL_Status TIM_ChannelEnable(TIM_TypeDef *tim, uint8_t channel, uint8_t enable);
 /* ERRATA ES0548 2.8.2: a CCR change giving matches on two
  * consecutive counter clocks (ARR->0, crest ARR-1->ARR, valley 1->0) loses the 2nd compare
  * event (toggle output, CCxIF); no workaround.
- * Issue #27 politikasi: yalniz genislik; CCR > ARR gecerli. ARR ve CCR ayri yazimlardir, atomik
- * degil: ikisini birlikte degistirmek icin OCxPE = ARPE = 1 ile ayni update araliginda yazin. */
-/* Seviye: PARAM[S] */
+ * Issue #27 policy: width only; CCR > ARR is valid. ARR and CCR are separate writes, not atomic:
+ * to change both together write them in the same update interval with OCxPE = ARPE = 1. */
+/* Caller: when CCR and ARR both change, write them in one update interval with OCxPE = ARPE =
+ * 1; avoid CCR changes that give matches on two consecutive counter clocks (ES0548 2.8.2). */
+/* Level: PARAM[F] */
 SPL_Status TIM_SetCompare(TIM_TypeDef *tim, uint8_t channel, uint32_t compare);
-/* Seviye: PARAM[S] HW[r] WOULD_BLOCK[r] */
+/* Caller: after SPL_ERR_HW clear the overcapture flag (TIM_ClearFlags
+ * TIM_FLAG_CCx_OVERCAPTURE), it is never cleared here; one reader per channel (reading CCRx
+ * clears CCxIF). */
+/* Level: PARAM[F] HW[r] WOULD_BLOCK[r] */
 SPL_Status TIM_GetCapture(TIM_TypeDef *tim, uint8_t channel, uint32_t *capture);
 /* BDTR.MOE set/clear. TIM1/15/16/17 only, else PARAM. enable=1 returns BUSY (no write) while BKDSRM
  * or BK2DSRM is still set (break re-arm in progress, RM0444 21.3.16); retry. The write never copies
@@ -101,7 +129,9 @@ SPL_Status TIM_GetCapture(TIM_TypeDef *tim, uint8_t channel, uint32_t *capture);
  * cleared here. enable=0 always clears MOE (flags not checked). AOE (TIM_BreakDeadTimeInit
  * auto_output_enable = 1): hardware sets MOE again at the next update event after the break input
  * is released, without this function; choose it only when an automatic restart is intended. */
-/* Seviye: PARAM[S,n] HW[r] BUSY[r] */
+/* Caller: call TIM_BreakDeadTimeInit first (LOCK write-once, only a reset clears it); after
+ * SPL_ERR_HW remove the break cause, clear the flag with TIM_ClearFlags, retry. */
+/* Level: PARAM[F] HW[r] BUSY[r] */
 SPL_Status TIM_MainOutputEnable(TIM_TypeDef *tim, uint8_t enable);
 
 /* Extension (from G4 v0.10: counter mode, encoder, complementary outputs, break/dead time,
@@ -197,28 +227,39 @@ typedef enum
 /* G0: no encoder index / direction / error flags (G4 TIM_FLAG_INDEX, _DIRECTION, _INDEX_ERROR,
  * _TRANSITION_ERROR are not provided). */
 
-/* Seviye: PARAM[S,n] STATE[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status TIM_CounterInit(TIM_TypeDef *tim, const TIM_CounterInitTypeDef *cfg);
-/* Seviye: PARAM[S] STATE[S] */
+/* Caller: RCR is preloaded: it takes effect at the next update event (TIM_GenerateUpdate). */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status TIM_SetRepetition(TIM_TypeDef *tim, uint32_t repetition);
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status TIM_GetCounter(TIM_TypeDef *tim, uint32_t *count, uint8_t *uif_copy);
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status TIM_SetCounter(TIM_TypeDef *tim, uint32_t count);
-/* Seviye: PARAM[S,n] STATE[S] */
+/* Caller: set the count range with TIM_BaseInit (ARR) and start counting with TIM_Enable. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status TIM_EncoderInit(TIM_TypeDef *tim, const TIM_EncoderInitTypeDef *cfg);
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status TIM_GetDirection(TIM_TypeDef *tim, uint8_t *down);
 /* Complementary (CHxN) outputs: TIM1 channel 1..3 (no CH4N on G0: RM0444 21.4.11, CC4NE is
  * reserved), TIM15 / TIM16 / TIM17 channel 1; other timers have none. Other channels: SPL_ERR_PARAM
- * (SAFE class: not checked at SPL_CHECK_FAST, the caller must keep the channel valid). */
-/* Seviye: PARAM[S] STATE[S] */
+ * (not checked at SPL_CHECK_FAST, the caller must keep the channel valid). */
+/* Caller: then TIM_BreakDeadTimeInit (DTG != 0) and TIM_ComplementaryEnable. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status TIM_ComplementaryOutputInit(TIM_TypeDef *tim, uint8_t channel, uint8_t inverted);
 /* G4 v0.13.5: enable=1 with BDTR.DTG = 0 -> SPL_ERR_STATE (no dead time: shoot-through in a
  * bridge); call TIM_BreakDeadTimeInit first. enable=0 always allowed. */
-/* Seviye: PARAM[S,n] STATE[S] */
+/* Caller: choose a dead time long enough for the power stage (only DTG != 0 is checked);
+ * outputs also need TIM_MainOutputEnable. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status TIM_ComplementaryEnable(TIM_TypeDef *tim, uint8_t channel, uint8_t enable);
-/* Seviye: PARAM[S,r] */
+/* Caller: dts_hz is the tDTS clock (timer clock divided by CKD); it is not compared with the
+ * RCC setting. */
+/* Level: PARAM[F,r] */
 SPL_Status TIM_DeadTimeToDtg(uint32_t dts_hz, uint32_t dead_time_ns, uint8_t *dtg);
 /* ERRATA ES0548 2.8.4: BKBID/BK2BID always written 0
  * (bidirectional break fails with short pulses); keep it so if the API is extended.
@@ -226,15 +267,22 @@ SPL_Status TIM_DeadTimeToDtg(uint32_t dts_hz, uint32_t dead_time_ns, uint8_t *dt
  * SPL_ERR_STATE before the write; after the write LOCK is read back and a value other than
  * cfg->lock_level (LOCK already frozen by an earlier BDTR write) -> SPL_ERR_STATE (the other
  * fields are written; check with TIM_GetLockLevel). OISx/OISxN: not written, see above. */
-/* Seviye: PARAM[S,n] STATE[S,r] */
+/* Caller: make it the first BDTR write after reset; check the result: SPL_ERR_STATE after the
+ * write means LOCK is frozen at another level until reset (TIM_GetLockLevel). */
+/* Level: PARAM[F] STATE[F,r] */
 SPL_Status TIM_BreakDeadTimeInit(TIM_TypeDef *tim, const TIM_BreakDeadTimeInitTypeDef *cfg);
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status TIM_GetLockLevel(TIM_TypeDef *tim, uint8_t *level);
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status TIM_GetFlags(TIM_TypeDef *tim, uint32_t *flags);
-/* Seviye: PARAM[S,n] */
+/* Caller: a break flag stays set while the break input is active: remove the cause first. */
+/* Level: PARAM[F] */
 SPL_Status TIM_ClearFlags(TIM_TypeDef *tim, uint32_t flags);
-/* Seviye: PARAM[S,r] STATE[S] */
+/* Caller: configure the slave timer (TIM_SlaveConfig) with the ITRx that maps to this timer
+ * (RM0444 Tables 119 / 125 / 130). */
+/* Level: PARAM[F,r] STATE[F] */
 SPL_Status TIM_SetMasterTrigger(TIM_TypeDef *tim, uint32_t source);
 
 /* ---- v0.11: slave modes, output compare clear, DMA requests and burst
@@ -284,7 +332,9 @@ typedef struct
  * G081: TIM1 and TIM15): a slave may miss the master's trigger when the master clock is faster
  * than the slave clock (no workaround). Caller: on these SKUs clock master and slave equally
  * (TIM1 at TIMPCLK, not the PLLQ x 2 TIM1SEL source) when the slave uses TIM1 / TIM15 TRGO. */
-/* Seviye: PARAM[S,n] STATE[S] */
+/* Caller: do not set OPM after this call when MSM = 1 (ES0548 2.8.1, not checked); on G031 /
+ * G041 / G071 / G081 clock master and slave equally (see above). */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status TIM_SlaveConfig(TIM_TypeDef *t, const TIM_SlaveTypeDef *cfg);
 
 /* OCREF_CLR source for TIM1, TIM2..4: ETRF (OCCS = 1) or a comparator through OR1.OCREF_CLR
@@ -298,24 +348,32 @@ SPL_Status TIM_SlaveConfig(TIM_TypeDef *t, const TIM_SlaveTypeDef *cfg);
 #define TIM_OCCLR_COMP2 1U
 #define TIM_OCCLR_COMP3 2U
 #define TIM_OCCLR_ETRF 0x10U
-/* Seviye: PARAM[S] UNSUPPORTED[S] */
+/* Caller: configure the ETR input (prescaler, filter, polarity) or the selected COMP. */
+/* Level: PARAM[F] UNSUPPORTED[F] */
 SPL_Status TIM_OcClearSource(TIM_TypeDef *t, uint32_t source);
 /* OCxCE of an output channel (CCxS = 00, else STATE) of TIM1, TIM2..4.
  * ERRATA ES0548 2.8.3: enable while SMS is reset or combined reset + trigger -> STATE. */
-/* Seviye: PARAM[S,n] STATE[S] UNSUPPORTED[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
 SPL_Status TIM_OcClearEnable(TIM_TypeDef *t, uint8_t ch, uint8_t enable);
 
 /* DIER DMA request enables (image of the DE bits valid for the timer: UDE, CCxDE, COMDE, TDE;
  * TIM14 has none -> PARAM). Bits outside the timer's set -> PARAM; other DIER bits kept. */
-/* Seviye: PARAM[S] */
+/* Caller: configure the DMA channel and its DMAMUX request; keep the buffer valid while a
+ * request is enabled. */
+/* Level: PARAM[F] */
 SPL_Status TIM_DmaRequestConfig(TIM_TypeDef *t, uint32_t requests);
 /* DMA burst (DCR): base_index = register index from CR1 (DBA, offset / 4), transfers 1..18 (DBL).
  * Timers with DCR: TIM1..4, TIM15..17 (else PARAM). A burst range covering DCR (18) or DMAR (19),
  * or beyond TISEL (26) -> PARAM. A DMA request enabled in DIER -> STATE. The DMA channel uses
  * TIM_GetDmaBurstAddress as peripheral address. */
-/* Seviye: PARAM[S] STATE[S] */
+/* Caller: program the DMA channel with TIM_GetDmaBurstAddress as peripheral address and a
+ * buffer laid out for this timer's register map, then enable the request
+ * (TIM_DmaRequestConfig). */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status TIM_DmaBurstConfig(TIM_TypeDef *t, uint32_t base_index, uint32_t transfers);
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status TIM_GetDmaBurstAddress(TIM_TypeDef *t, uint32_t *address);
 
 #ifdef __cplusplus

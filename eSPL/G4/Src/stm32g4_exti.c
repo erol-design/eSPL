@@ -92,8 +92,8 @@ typedef enum
 
 /* Compile-time check (CCL-2 YAP-03): every line 0..EXTI_LINE_COUNT-1 maps to bank 1 (IMR1..,
  * lines 0..31) or bank 2 (IMR2.., lines 32..63) of 32 bits each, as Exti_Classify assumes. */
-typedef char Exti_LineCountCheck[((EXTI_LINE_COUNT > 32U) && (EXTI_LINE_COUNT <= (2U * 32U))) ? 1
-                                                                                             : -1];
+typedef char
+    Exti_LineCountCheck[((EXTI_LINE_COUNT > 32U) && (EXTI_LINE_COUNT <= (2U * 32U))) ? 1 : -1];
 
 static uint32_t Exti_Bit(uint8_t line)
 {
@@ -215,10 +215,10 @@ SPL_Status EXTI_SetGpioSource(GPIO_TypeDef *port, uint8_t line)
     uint32_t index;
     uint32_t value;
 
-    /* SAFE: gecersiz port veya EXTI hattinda yanlis EXTICR yazimi. */
-    SPL_REQUIRE_SAFE(valid != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(line <= 15U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((code != EXTI_PORT_CODE_G) || (line <= EXTI_PORT_G_MAX_LINE), SPL_ERR_PARAM);
+    /* Gecersiz port veya EXTI hattinda yanlis EXTICR yazimi. */
+    SPL_REQUIRE(valid != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(line <= 15U, SPL_ERR_PARAM);
+    SPL_REQUIRE((code != EXTI_PORT_CODE_G) || (line <= EXTI_PORT_G_MAX_LINE), SPL_ERR_PARAM);
 
     index = (uint32_t)line >> 2U;
     shift = ((uint32_t)line & 3U) * 4U;
@@ -256,12 +256,12 @@ SPL_Status EXTI_LineConfig(uint8_t line, EXTI_TriggerTypeDef trigger, uint32_t m
     {
         return status;
     }
-    /* SAFE: tetik/mode bitleri komsu register alanlarini bozabilir. */
-    SPL_REQUIRE_SAFE(trig <= (uint32_t)EXTI_TRIGGER_BOTH, SPL_ERR_PARAM);
+    /* Tetik/mode bitleri komsu register alanlarini bozabilir. */
+    SPL_REQUIRE(trig <= (uint32_t)EXTI_TRIGGER_BOTH, SPL_ERR_PARAM);
     SPL_REQUIRE(mode != 0U, SPL_ERR_PARAM); /* Normal: maske kapali kalir. */
-    SPL_REQUIRE_SAFE((mode & ~(EXTI_MODE_INTERRUPT | EXTI_MODE_EVENT)) == 0U, SPL_ERR_PARAM);
-    /* SAFE: direct hatta trigger yazma istegi sessizce yok sayilir. */
-    SPL_REQUIRE_SAFE((cls != EXTI_CLASS_DIRECT) || (trig == (uint32_t)EXTI_TRIGGER_NONE), SPL_ERR_PARAM);
+    SPL_REQUIRE((mode & ~(EXTI_MODE_INTERRUPT | EXTI_MODE_EVENT)) == 0U, SPL_ERR_PARAM);
+    /* Direct hatta trigger yazma istegi sessizce yok sayilir. */
+    SPL_REQUIRE((cls != EXTI_CLASS_DIRECT) || (trig == (uint32_t)EXTI_TRIGGER_NONE), SPL_ERR_PARAM);
 
     /* Triggers first, masks last: never unmask with a stale edge selection. */
     if (line < 32U)
@@ -351,8 +351,8 @@ SPL_Status EXTI_GetPending(uint8_t line, uint8_t *pending)
     {
         return status;
     }
-    /* SAFE: gecersiz cikti pointer'i belirsiz sonuc uretir. */
-    SPL_REQUIRE_SAFE(pending != NULL, SPL_ERR_PARAM);
+    /* Gecersiz cikti pointer'i belirsiz sonuc uretir. */
+    SPL_REQUIRE(pending != NULL, SPL_ERR_PARAM);
     if (line < 32U)
     {
         pr = EXTI->PR1;

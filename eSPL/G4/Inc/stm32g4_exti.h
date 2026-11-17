@@ -32,25 +32,25 @@ extern "C"
      * (SYSCFG clock off) -> SPL_ERR_STATE.
      * Caller duty (CCL-2 GPIO-05): one port per line; a later call for the same line from
      * another port silently replaces the earlier selection, so keep line numbers distinct. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status EXTI_SetGpioSource(GPIO_TypeDef *port, uint8_t line);
     /* Triggers (configurable lines only; direct lines need EXTI_TRIGGER_NONE), then
      * IMR/EMR from 'mode' (non-zero EXTI_MODE_* mask). Pending bit is not cleared.
      * Caller duty (CCL-2 GPIO-06): with EXTI_TRIGGER_BOTH the handler (caller code) must read
      * the pin level to tell rising from falling edge, unless its work is edge-independent. */
-    /* Seviye: PARAM[S,n,r] UNSUPPORTED[r] */
+    /* Level: PARAM[F,r] UNSUPPORTED[r] */
     SPL_Status EXTI_LineConfig(uint8_t line, EXTI_TriggerTypeDef trigger, uint32_t mode);
     /* Clears IMR/EMR (and RTSR/FTSR on configurable lines). Pending bit untouched. */
-    /* Seviye: PARAM[r] UNSUPPORTED[r] */
+    /* Level: PARAM[r] UNSUPPORTED[r] */
     SPL_Status EXTI_LineDisable(uint8_t line);
     /* Configurable lines only: writes only this line's SWIER bit. */
-    /* Seviye: PARAM[r] UNSUPPORTED[r] */
+    /* Level: PARAM[r] UNSUPPORTED[r] */
     SPL_Status EXTI_SoftwareTrigger(uint8_t line);
     /* Configurable lines only. *pending = 1 when the PR bit is set. */
-    /* Seviye: PARAM[S,r] UNSUPPORTED[r] */
+    /* Level: PARAM[F,r] UNSUPPORTED[r] */
     SPL_Status EXTI_GetPending(uint8_t line, uint8_t *pending);
     /* Configurable lines only. PR is W1C: writes only this line's bit. ISR-safe. */
-    /* Seviye: PARAM[r] UNSUPPORTED[r] */
+    /* Level: PARAM[r] UNSUPPORTED[r] */
     SPL_Status EXTI_ClearPending(uint8_t line);
 
 #ifdef __cplusplus

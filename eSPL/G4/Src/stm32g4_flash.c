@@ -109,7 +109,7 @@ static const uint8_t flash_max_mhz[][5] = {
 };
 
 /* Compile-time check (CCL-2 YAP-03): one row per FLASH_RangeTypeDef value 0..FLASH_RANGE2 (the
- * bound 2 of the SAFE check in FLASH_CalcLatency), and the 5 wait states 0..4 fit ACR.LATENCY. */
+ * bound 2 of the check in FLASH_CalcLatency), and the 5 wait states 0..4 fit ACR.LATENCY. */
 typedef char Flash_LatencyTableCheck
     [(((sizeof(flash_max_mhz) / sizeof(flash_max_mhz[0])) == ((uint32_t)FLASH_RANGE2 + 1U)) &&
       ((uint32_t)FLASH_RANGE2 == 2U) && ((uint32_t)FLASH_RANGE1_BOOST == 0U) &&
@@ -123,8 +123,9 @@ SPL_Status FLASH_CalcLatency(uint32_t hclk_hz, FLASH_RangeTypeDef range, uint32_
     uint32_t ws;
     uint32_t row;
 
-    /* SAFE: Prevent invalid table index and output pointer; incorrect latency can destabilize core. */
-    SPL_REQUIRE_SAFE(!((latency == NULL) || (hclk_hz == 0U) || ((uint32_t)range > 2U)), SPL_ERR_PARAM);
+    /* Prevent invalid table index and output pointer; incorrect latency can destabilize core.
+     */
+    SPL_REQUIRE(!((latency == NULL) || (hclk_hz == 0U) || ((uint32_t)range > 2U)), SPL_ERR_PARAM);
 
     row = (uint32_t)range;
     for (ws = 0U; ws < 5U; ++ws)
@@ -141,8 +142,8 @@ SPL_Status FLASH_CalcLatency(uint32_t hclk_hz, FLASH_RangeTypeDef range, uint32_
 
 SPL_Status FLASH_SetLatency(uint32_t latency)
 {
-    /* SAFE: Prevent illegal LATENCY encoding. */
-    SPL_REQUIRE_SAFE(!(latency > (FLASH_ACR_LATENCY_Msk >> FLASH_ACR_LATENCY_Pos)), SPL_ERR_PARAM);
+    /* Prevent illegal LATENCY encoding. */
+    SPL_REQUIRE(!(latency > (FLASH_ACR_LATENCY_Msk >> FLASH_ACR_LATENCY_Pos)), SPL_ERR_PARAM);
 
     FLASH->ACR = (FLASH->ACR & ~FLASH_ACR_LATENCY) | (latency << FLASH_ACR_LATENCY_Pos);
 
@@ -158,8 +159,8 @@ SPL_Status FLASH_ConfigAccelerator(uint8_t prefetch, uint8_t icache, uint8_t dca
 {
     uint32_t acr;
 
-    /* SAFE: Prevent invalid accelerator control values. */
-    SPL_REQUIRE_SAFE(!((prefetch > 1U) || (icache > 1U) || (dcache > 1U)), SPL_ERR_PARAM);
+    /* Prevent invalid accelerator control values. */
+    SPL_REQUIRE(!((prefetch > 1U) || (icache > 1U) || (dcache > 1U)), SPL_ERR_PARAM);
 
     acr = FLASH->ACR & ~(FLASH_ACR_PRFTEN | FLASH_ACR_ICEN | FLASH_ACR_DCEN);
     if (prefetch != 0U)
@@ -197,8 +198,8 @@ SPL_Status FLASH_GetGeometry(FLASH_GeometryTypeDef *geometry)
     FLASH_GeometryTypeDef g;
     SPL_Status status;
 
-    /* SAFE: Reject invalid output pointer before writing geometry. */
-    SPL_REQUIRE_SAFE(!(geometry == NULL), SPL_ERR_PARAM);
+    /* Reject invalid output pointer before writing geometry. */
+    SPL_REQUIRE(!(geometry == NULL), SPL_ERR_PARAM);
     status = Flash_ReadGeometry(&g);
     if (status == SPL_OK)
     {
@@ -209,8 +210,8 @@ SPL_Status FLASH_GetGeometry(FLASH_GeometryTypeDef *geometry)
 
 SPL_Status FLASH_GetOptionRegister(uint32_t *optr)
 {
-    /* SAFE: Reject invalid output pointer before reading option bytes. */
-    SPL_REQUIRE_SAFE(!(optr == NULL), SPL_ERR_PARAM);
+    /* Reject invalid output pointer before reading option bytes. */
+    SPL_REQUIRE(!(optr == NULL), SPL_ERR_PARAM);
     *optr = FLASH->OPTR;
     return SPL_OK;
 }
@@ -254,8 +255,8 @@ SPL_Status FLASH_ErasePageStart(uint32_t bank, uint32_t page)
     SPL_Status status;
     uint32_t cr;
 
-    /* SAFE: Prevent erasure of unintended page or bank. */
-    SPL_REQUIRE_SAFE(!((bank != FLASH_BANK_1) && (bank != FLASH_BANK_2)), SPL_ERR_PARAM);
+    /* Prevent erasure of unintended page or bank. */
+    SPL_REQUIRE(!((bank != FLASH_BANK_1) && (bank != FLASH_BANK_2)), SPL_ERR_PARAM);
     status = Flash_ReadGeometry(&g);
     if (status != SPL_OK)
     {
@@ -272,8 +273,8 @@ SPL_Status FLASH_ErasePageStart(uint32_t bank, uint32_t page)
         return SPL_ERR_UNSUPPORTED;
     }
 #endif
-    /* SAFE: Prevent erasure of unintended page or bank. */
-    SPL_REQUIRE_SAFE(!(page >= g.pages_per_bank), SPL_ERR_PARAM);
+    /* Prevent erasure of unintended page or bank. */
+    SPL_REQUIRE(!(page >= g.pages_per_bank), SPL_ERR_PARAM);
     status = Flash_ReadyForOperation();
     if (status != SPL_OK)
     {
@@ -292,7 +293,9 @@ SPL_Status FLASH_ErasePageStart(uint32_t bank, uint32_t page)
     }
 #endif
     FLASH->CR = cr;
-    FLASH->CR = FLASH->CR | FLASH_CR_STRT;
+    /* Command bits masked (rmw_check, METHOD 1.4); CR was just written without them, so the
+     * written value is unchanged. */
+    FLASH->CR = (FLASH->CR & ~FLASH_CR_CMDBITS) | FLASH_CR_STRT;
     return SPL_OK;
 }
 
@@ -301,15 +304,15 @@ SPL_Status FLASH_ProgramDoubleWordStart(uint32_t address, uint64_t data)
     FLASH_GeometryTypeDef g;
     SPL_Status status;
 
-    /* SAFE: Prevent writes to an unintended flash address. */
-    SPL_REQUIRE_SAFE(!((address & 7U) != 0U), SPL_ERR_PARAM);
+    /* Prevent writes to an unintended flash address. */
+    SPL_REQUIRE(!((address & 7U) != 0U), SPL_ERR_PARAM);
     status = Flash_ReadGeometry(&g);
     if (status != SPL_OK)
     {
         return status;
     }
-    /* SAFE: Prevent writes to an unintended flash address. */
-    SPL_REQUIRE_SAFE(!(Flash_AddressValid(&g, address) == 0U), SPL_ERR_PARAM);
+    /* Prevent writes to an unintended flash address. */
+    SPL_REQUIRE(!(Flash_AddressValid(&g, address) == 0U), SPL_ERR_PARAM);
     status = Flash_ReadyForOperation();
     if (status != SPL_OK)
     {
@@ -368,16 +371,16 @@ SPL_Status FLASH_EndOperation(void)
 
 SPL_Status FLASH_GetFlags(uint32_t *flags)
 {
-    /* SAFE: Reject invalid output pointer. */
-    SPL_REQUIRE_SAFE(!(flags == NULL), SPL_ERR_PARAM);
+    /* Reject invalid output pointer. */
+    SPL_REQUIRE(!(flags == NULL), SPL_ERR_PARAM);
     *flags = FLASH->SR;
     return SPL_OK;
 }
 
 SPL_Status FLASH_ClearFlags(uint32_t mask)
 {
-    /* SAFE: Prevent clearing undocumented status flags. */
-    SPL_REQUIRE_SAFE(!((mask == 0U) || ((mask & ~FLASH_SR_CLEARABLE) != 0U)), SPL_ERR_PARAM);
+    /* Prevent clearing undocumented status flags. */
+    SPL_REQUIRE(!((mask == 0U) || ((mask & ~FLASH_SR_CLEARABLE) != 0U)), SPL_ERR_PARAM);
 
     /* SR flags are rc_w1: write the mask only, never read-modify-write. */
     FLASH->SR = mask;
@@ -398,8 +401,8 @@ SPL_Status FLASH_GetEcc(FLASH_EccTypeDef *ecc)
 {
     uint32_t eccr;
 
-    /* SAFE: Reject invalid ECC output pointer. */
-    SPL_REQUIRE_SAFE(!(ecc == (FLASH_EccTypeDef *)0), SPL_ERR_PARAM);
+    /* Reject invalid ECC output pointer. */
+    SPL_REQUIRE(!(ecc == (FLASH_EccTypeDef *)0), SPL_ERR_PARAM);
     eccr = FLASH->ECCR; /* single read: the fields belong to the same event */
     ecc->address = eccr & FLASH_ECCR_ADDR_ECC;
     ecc->detected = (uint8_t)(((eccr & FLASH_ECC_DETECTED) != 0U) ? 1U : 0U);

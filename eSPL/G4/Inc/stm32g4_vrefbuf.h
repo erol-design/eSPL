@@ -42,21 +42,21 @@ extern "C"
 
     /* VRS write. PARAM: scale > 2. STATE: ENVR=1 (RM0440 23.4.1 note).
      * Hardware reloads the factory TRIM for the new scale (RM0440 23.3). */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status VREFBUF_SetScale(uint32_t scale);
     /* Writes ENVR and HIZ in one CSR write, VRS kept. Enable = INTERNAL,
      * disable = EXTERNAL. After INTERNAL poll VREFBUF_ReadyStatus. */
     /* ERRATA ES0430 2.8.1 (G47x/G48x only; removed for G491/G4A1 in ES0523 Rev 2): GPIO toggling on
      * PB10/PB11/PB13/PB14/PD14 (Rev Z/Y) or PB10/PB13 (Rev X) disturbs VREF+ in INTERNAL mode; keep
      * them low. */
-    /* Seviye: PARAM[r] UNSUPPORTED[r] */
+    /* Level: PARAM[r] UNSUPPORTED[r] */
     SPL_Status VREFBUF_SetMode(uint32_t mode);
     /* OK: VRR=1 in INTERNAL mode. BUSY: INTERNAL mode, VRR=0 (poll again).
      * STATE: ENVR=0 (never ready) or HOLD mode (VRR detection disabled). */
-    /* Seviye: STATE[r] UNSUPPORTED[r] BUSY[r] */
+    /* Level: STATE[r] UNSUPPORTED[r] BUSY[r] */
     SPL_Status VREFBUF_ReadyStatus(void);
     /* *trim = VREFBUF_CCR.TRIM (read only; the driver never writes TRIM). */
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status VREFBUF_GetTrim(uint32_t *trim);
 
 #ifdef __cplusplus

@@ -18,7 +18,7 @@ extern "C"
      * SAI1 is absent on STM32G411xx/G414xx: only SAI_CheckSupport exists there. */
 
     /* SPL_OK when this SKU has SAI1, SPL_ERR_UNSUPPORTED otherwise. */
-    /* Seviye: UNSUPPORTED[r] */
+    /* Level: UNSUPPORTED[r] */
     SPL_Status SAI_CheckSupport(void);
 
 #if defined(SAI1)
@@ -143,19 +143,19 @@ extern "C"
      * flags are untouched. PARAM: invalid/inconsistent field (contract table).
      * STATE: SAIEN=1 (also while a disable is still completing), or MCKEN=1
      * and mck_div differs from the running divider (clear MCKEN first). */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status SAI_BlockInit(SAI_Block_TypeDef *block, const SAI_BlockInitTypeDef *cfg);
 
     /* Pure: clock rates for a free-protocol master configuration and a
      * sai_x_ker_ck of ker_hz (RM0440 43.4.8, truncated integer division). */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status SAI_CalcClocks(uint32_t ker_hz, const SAI_BlockInitTypeDef *cfg,
                               SAI_ClocksTypeDef *clocks);
 
     /* Sets SAIEN. STATE: SAIEN already 1 (enabled or disable pending), or a
      * slave transmitter with an empty FIFO (preload it first, RM0440 43.4.4).
      * Master: the kernel clock must be running (caller duty). */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status SAI_Enable(SAI_Block_TypeDef *block);
 
     /* Non-blocking disable request: clears SAIEN. Hardware keeps SAIEN=1 until
@@ -164,14 +164,14 @@ extern "C"
      * frame: recover with the RCC SAI1 reset. OK without a write when already
      * disabled. If one block is synchronous with the other, disable the
      * asynchronous (clock-providing) block first (caller duty). */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status SAI_Disable(SAI_Block_TypeDef *block);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status SAI_IsDisabled(SAI_Block_TypeDef *block, uint8_t *disabled);
 
     /* FFLUSH. STATE when SAIEN=1 (RM0440 43.6.2). Disable the DMA channel and
      * the FREQ interrupt beforehand (caller duty). */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status SAI_FlushFifo(SAI_Block_TypeDef *block);
 
     /* One FIFO word. STATE: wrong direction (TryWrite on a receiver, TryRead
@@ -179,31 +179,31 @@ extern "C"
      * WOULD_BLOCK: FIFO full/empty while SAIEN=1. Error flags are not checked
      * (an underrun is normal right after a master TX enable); read them with
      * SAI_GetFlags. A slave without SCK/FS stays WOULD_BLOCK: bound retries. */
-    /* Seviye: PARAM[S] STATE[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] WOULD_BLOCK[r] */
     SPL_Status SAI_TryWrite(SAI_Block_TypeDef *block, uint32_t data);
-    /* Seviye: PARAM[S] STATE[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] WOULD_BLOCK[r] */
     SPL_Status SAI_TryRead(SAI_Block_TypeDef *block, uint32_t *data);
 
     /* FLVL code 0..5 (SAI_FLVL_*). */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status SAI_GetFifoLevel(SAI_Block_TypeDef *block, uint32_t *level);
     /* SR & SAI_FLAGS_ALL, no side effects. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status SAI_GetFlags(SAI_Block_TypeDef *block, uint32_t *flags);
     /* Writes exactly the CLRFR bits of the given flags (non-zero subset of
      * SAI_FLAGS_CLEARABLE). CLRFR is write-only; nothing is read back. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status SAI_ClearFlags(SAI_Block_TypeDef *block, uint32_t flags);
 
     /* Sets (enable=1) or clears (enable=0) the given IMR bits (non-zero subset
      * of SAI_IT_ALL). Allowed in any state. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status SAI_InterruptConfig(SAI_Block_TypeDef *block, uint32_t interrupts, uint8_t enable);
 
     /* DMAEN. STATE when SAIEN=1: a CR1 read-modify-write would copy SAIEN=1
      * back over a pending disable request. Order: BlockInit, DMA channel,
      * SAI_DmaCmd(1), SAI_Enable. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status SAI_DmaCmd(SAI_Block_TypeDef *block, uint8_t enable);
 
 #if defined(SAI_PDMCR_PDMEN)
@@ -225,7 +225,7 @@ extern "C"
      * (RM0440 43.4.10 sequence). STATE: block A SAIEN=1 (the PDM interface
      * must be configured before SAI_A is enabled), or enable=1 while block A
      * is not a free-protocol master receiver (RM0440 Table 400). */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status SAI_PdmInit(SAI_TypeDef *sai, const SAI_PdmInitTypeDef *cfg);
 #endif
 

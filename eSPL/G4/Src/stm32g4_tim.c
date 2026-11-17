@@ -107,10 +107,11 @@ static volatile uint32_t *Tim_Ccr(TIM_TypeDef *t, uint8_t ch)
 SPL_Status TIM_BaseInit(TIM_TypeDef *t, const TIM_BaseInitTypeDef *cfg)
 {
     uint32_t cr1;
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Tim_IsBase(t) == 0U) || (cfg == (const TIM_BaseInitTypeDef *)0) ||
-        (cfg->auto_reload_preload > 1U) || (cfg->prescaler > 0xFFFFU) || (cfg->period == 0U) ||
-        (Tim_WidthValid(t, cfg->period) == 0U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Tim_IsBase(t) == 0U) || (cfg == (const TIM_BaseInitTypeDef *)0) ||
+                  (cfg->auto_reload_preload > 1U) || (cfg->prescaler > 0xFFFFU) ||
+                  (cfg->period == 0U) || (Tim_WidthValid(t, cfg->period) == 0U)),
+                SPL_ERR_PARAM);
     /* Issue #27 politikasi: yazilmis CCRx sinanmaz; periyot karsilastirmanin altina inebilir. */
     if ((t->CR1 & TIM_CR1_CEN) != 0U)
     {
@@ -130,8 +131,8 @@ SPL_Status TIM_BaseInit(TIM_TypeDef *t, const TIM_BaseInitTypeDef *cfg)
 }
 SPL_Status TIM_Enable(TIM_TypeDef *t, uint8_t enable)
 {
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Tim_IsBase(t) == 0U) || (enable > 1U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Tim_IsBase(t) == 0U) || (enable > 1U)), SPL_ERR_PARAM);
 #if defined(TIM_CR1_OPM)
     /* One-pulse mode: CEN=1 means a pulse is running; a new request would be
      * lost (hardware clears CEN at the end of the pulse). */
@@ -152,15 +153,15 @@ SPL_Status TIM_Enable(TIM_TypeDef *t, uint8_t enable)
 }
 SPL_Status TIM_GenerateUpdate(TIM_TypeDef *t)
 {
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!(Tim_IsBase(t) == 0U), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!(Tim_IsBase(t) == 0U), SPL_ERR_PARAM);
     t->EGR = TIM_EGR_UG;
     return SPL_OK;
 }
 SPL_Status TIM_UpdateInterrupt(TIM_TypeDef *t, uint8_t enable)
 {
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Tim_IsBase(t) == 0U) || (enable > 1U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Tim_IsBase(t) == 0U) || (enable > 1U)), SPL_ERR_PARAM);
     if (enable != 0U)
     {
         /* Stale UIF: the interrupt would fire at once for an old event (CCL-2 KSM-12; same
@@ -179,15 +180,15 @@ SPL_Status TIM_UpdateInterrupt(TIM_TypeDef *t, uint8_t enable)
 }
 SPL_Status TIM_UpdatePending(TIM_TypeDef *t, uint8_t *pending)
 {
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Tim_IsBase(t) == 0U) || (pending == (uint8_t *)0)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Tim_IsBase(t) == 0U) || (pending == (uint8_t *)0)), SPL_ERR_PARAM);
     *pending = (uint8_t)(((t->SR & TIM_SR_UIF) != 0U) ? 1U : 0U);
     return SPL_OK;
 }
 SPL_Status TIM_ClearUpdate(TIM_TypeDef *t)
 {
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!(Tim_IsBase(t) == 0U), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!(Tim_IsBase(t) == 0U), SPL_ERR_PARAM);
 #if defined(TIM_SPL_EXTENDED)
     /* TIM SR is rc_w0: zero on UIF, ones on the other flags of this timer type,
      * reserved bits at their reset value 0 (same value as TIM_ClearFlags). */
@@ -208,15 +209,18 @@ SPL_Status TIM_OutputCompareInit(TIM_TypeDef *t, uint8_t ch, const TIM_OCInitTyp
     uint32_t field;
     uint32_t ccer_mask;
     uint32_t ccmr_value;
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Tim_ChannelValid(t, ch) == 0U) || (cfg == (const TIM_OCInitTypeDef *)0) ||
-        (cfg->inverted > 1U) || (cfg->preload > 1U) || (Tim_WidthValid(t, cfg->compare) == 0U)), SPL_ERR_PARAM);
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!(!((cfg->mode == (uint32_t)TIM_OC_FROZEN) ||
-          (cfg->mode == (uint32_t)TIM_OC_ACTIVE_ON_MATCH) ||
-          (cfg->mode == (uint32_t)TIM_OC_INACTIVE_ON_MATCH) ||
-          (cfg->mode == (uint32_t)TIM_OC_TOGGLE) || (cfg->mode == (uint32_t)TIM_OC_PWM1) ||
-          (cfg->mode == (uint32_t)TIM_OC_PWM2))), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Tim_ChannelValid(t, ch) == 0U) || (cfg == (const TIM_OCInitTypeDef *)0) ||
+                  (cfg->inverted > 1U) || (cfg->preload > 1U) ||
+                  (Tim_WidthValid(t, cfg->compare) == 0U)),
+                SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!(!((cfg->mode == (uint32_t)TIM_OC_FROZEN) ||
+                    (cfg->mode == (uint32_t)TIM_OC_ACTIVE_ON_MATCH) ||
+                    (cfg->mode == (uint32_t)TIM_OC_INACTIVE_ON_MATCH) ||
+                    (cfg->mode == (uint32_t)TIM_OC_TOGGLE) ||
+                    (cfg->mode == (uint32_t)TIM_OC_PWM1) || (cfg->mode == (uint32_t)TIM_OC_PWM2))),
+                SPL_ERR_PARAM);
     /* Issue #27 politikasi: compare ARR'ye gore sinanmaz (CCR > ARR gecerli), yalniz genislik. */
     ccer_mask = (uint32_t)1U << (4U * ((uint32_t)ch - 1U));
     if (((t->CR1 & TIM_CR1_CEN) != 0U) || ((t->CCER & ccer_mask) != 0U))
@@ -249,9 +253,10 @@ SPL_Status TIM_InputCaptureInit(TIM_TypeDef *t, uint8_t ch, const TIM_ICInitType
     uint32_t ccer_shift;
     uint32_t ccmr_value;
     uint32_t mask;
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Tim_ChannelValid(t, ch) == 0U) || (cfg == (const TIM_ICInitTypeDef *)0) ||
-        (cfg->falling_edge > 1U) || (cfg->filter > 15U) || (cfg->prescaler > 3U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Tim_ChannelValid(t, ch) == 0U) || (cfg == (const TIM_ICInitTypeDef *)0) ||
+                  (cfg->falling_edge > 1U) || (cfg->filter > 15U) || (cfg->prescaler > 3U)),
+                SPL_ERR_PARAM);
     ccer_shift = 4U * ((uint32_t)ch - 1U);
     if (((t->CR1 & TIM_CR1_CEN) != 0U) || ((t->CCER & ((uint32_t)1U << ccer_shift)) != 0U))
     {
@@ -271,8 +276,8 @@ SPL_Status TIM_InputCaptureInit(TIM_TypeDef *t, uint8_t ch, const TIM_ICInitType
 SPL_Status TIM_ChannelEnable(TIM_TypeDef *t, uint8_t ch, uint8_t enable)
 {
     uint32_t mask;
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Tim_ChannelValid(t, ch) == 0U) || (enable > 1U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Tim_ChannelValid(t, ch) == 0U) || (enable > 1U)), SPL_ERR_PARAM);
     mask = (uint32_t)1U << (4U * ((uint32_t)ch - 1U));
     if (enable != 0U)
     {
@@ -286,8 +291,9 @@ SPL_Status TIM_ChannelEnable(TIM_TypeDef *t, uint8_t ch, uint8_t enable)
 }
 SPL_Status TIM_SetCompare(TIM_TypeDef *t, uint8_t ch, uint32_t compare)
 {
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Tim_ChannelValid(t, ch) == 0U) || (Tim_WidthValid(t, compare) == 0U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Tim_ChannelValid(t, ch) == 0U) || (Tim_WidthValid(t, compare) == 0U)),
+                SPL_ERR_PARAM);
     /* Issue #27 politikasi (HRTIM ile ayni): ARR ile iliski sinanmaz, yalniz register
      * genisligi. CCR > ARR gecerli bir degerdir: PWM kipinde OCxREF sabit kalir, karsilastirma
      * kipinde periyot icinde eslesme olmaz. Iki ayri register yazimi atomik degildir; OCxPE /
@@ -299,8 +305,8 @@ SPL_Status TIM_GetCapture(TIM_TypeDef *t, uint8_t ch, uint32_t *capture)
 {
     uint32_t ccmr;
 
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Tim_ChannelValid(t, ch) == 0U) || (capture == (uint32_t *)0)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Tim_ChannelValid(t, ch) == 0U) || (capture == (uint32_t *)0)), SPL_ERR_PARAM);
     /* Input channel (CCxS != 00): report a lost capture (CCxOF, SR bit ch + 8)
      * and a missing new one (CCxIF, SR bit ch) instead of returning a stale
      * value. Reading CCRx clears CCxIF; the flags are otherwise kept. */
@@ -343,8 +349,8 @@ SPL_Status TIM_MainOutputEnable(TIM_TypeDef *t, uint8_t enable)
 {
     uint32_t bdtr;
 
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((enable > 1U) || (Tim_HasBdtr(t) == 0U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((enable > 1U) || (Tim_HasBdtr(t) == 0U)), SPL_ERR_PARAM);
     bdtr = t->BDTR;
     if (enable != 0U)
     {
@@ -561,15 +567,18 @@ SPL_Status TIM_CounterInit(TIM_TypeDef *t, const TIM_CounterInitTypeDef *cfg)
     uint32_t cr1;
     uint32_t bits = 0U;
 
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Tim_IsBase(t) == 0U) || (cfg == (const TIM_CounterInitTypeDef *)0)), SPL_ERR_PARAM);
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((cfg->mode > (uint32_t)TIM_COUNTER_CENTER3) || (cfg->clock_division > 2U) ||
-        (cfg->one_pulse > 1U) || (cfg->uif_remap > 1U)), SPL_ERR_PARAM);
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Tim_HasCounterMode(t) == 0U) && (cfg->mode != (uint32_t)TIM_COUNTER_UP)), SPL_ERR_PARAM);
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Tim_IsBasic(t) != 0U) && (cfg->clock_division != 0U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Tim_IsBase(t) == 0U) || (cfg == (const TIM_CounterInitTypeDef *)0)),
+                SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((cfg->mode > (uint32_t)TIM_COUNTER_CENTER3) || (cfg->clock_division > 2U) ||
+                  (cfg->one_pulse > 1U) || (cfg->uif_remap > 1U)),
+                SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Tim_HasCounterMode(t) == 0U) && (cfg->mode != (uint32_t)TIM_COUNTER_UP)),
+                SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Tim_IsBasic(t) != 0U) && (cfg->clock_division != 0U)), SPL_ERR_PARAM);
     if ((t->CR1 & TIM_CR1_CEN) != 0U)
     {
         return SPL_ERR_STATE;
@@ -597,8 +606,7 @@ SPL_Status TIM_CounterInit(TIM_TypeDef *t, const TIM_CounterInitTypeDef *cfg)
         bits |= TIM_CR1_UIFREMAP;
     }
     /* Preserve ARPE, URS, UDIS, DITHEN; CEN is known to be 0. */
-    cr1 = t->CR1 &
-          ~(TIM_CR1_DIR | TIM_CR1_CMS | TIM_CR1_CKD | TIM_CR1_OPM | TIM_CR1_UIFREMAP);
+    cr1 = t->CR1 & ~(TIM_CR1_DIR | TIM_CR1_CMS | TIM_CR1_CKD | TIM_CR1_OPM | TIM_CR1_UIFREMAP);
     t->CR1 = cr1 | bits;
     return SPL_OK;
 }
@@ -607,14 +615,14 @@ SPL_Status TIM_SetRepetition(TIM_TypeDef *t, uint32_t repetition)
 {
     uint32_t max = 0xFFU;
 
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!(Tim_HasBreak(t) == 0U), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!(Tim_HasBreak(t) == 0U), SPL_ERR_PARAM);
     if (Tim_IsAdvanced(t) != 0U)
     {
         max = 0xFFFFU;
     }
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!(repetition > max), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!(repetition > max), SPL_ERR_PARAM);
     if ((t->CR1 & TIM_CR1_CEN) != 0U)
     {
         return SPL_ERR_STATE;
@@ -628,8 +636,8 @@ SPL_Status TIM_GetCounter(TIM_TypeDef *t, uint32_t *count, uint8_t *uif_copy)
     uint32_t cnt;
     uint8_t remap;
 
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Tim_IsBase(t) == 0U) || (count == (uint32_t *)0)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Tim_IsBase(t) == 0U) || (count == (uint32_t *)0)), SPL_ERR_PARAM);
     /* Read CR1 first, then CNT once, so value and UIF copy come from one sample. */
     remap = (uint8_t)(((t->CR1 & TIM_CR1_UIFREMAP) != 0U) ? 1U : 0U);
     cnt = t->CNT;
@@ -654,13 +662,14 @@ SPL_Status TIM_GetCounter(TIM_TypeDef *t, uint32_t *count, uint8_t *uif_copy)
 
 SPL_Status TIM_SetCounter(TIM_TypeDef *t, uint32_t count)
 {
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!(Tim_IsBase(t) == 0U), SPL_ERR_PARAM);
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!(Tim_WidthValid(t, count) == 0U), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!(Tim_IsBase(t) == 0U), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!(Tim_WidthValid(t, count) == 0U), SPL_ERR_PARAM);
     /* With UIFREMAP=1, bit 31 of a 32-bit CNT is the read-only UIF copy. */
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!(((t->CR1 & TIM_CR1_UIFREMAP) != 0U) && ((count & TIM_CNT_UIFCPY) != 0U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!(((t->CR1 & TIM_CR1_UIFREMAP) != 0U) && ((count & TIM_CNT_UIFCPY) != 0U)),
+                SPL_ERR_PARAM);
     t->CNT = count;
     return SPL_OK;
 }
@@ -671,12 +680,14 @@ SPL_Status TIM_EncoderInit(TIM_TypeDef *t, const TIM_EncoderInitTypeDef *cfg)
     uint32_t ccer;
     uint32_t smcr;
 
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Tim_HasCounterMode(t) == 0U) || (cfg == (const TIM_EncoderInitTypeDef *)0)), SPL_ERR_PARAM);
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((cfg->mode < (uint32_t)TIM_ENCODER_X2_TI1) || (cfg->mode > (uint32_t)TIM_ENCODER_X4) ||
-        (cfg->ti1_inverted > 1U) || (cfg->ti2_inverted > 1U) || (cfg->ti1_filter > 15U) ||
-        (cfg->ti2_filter > 15U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Tim_HasCounterMode(t) == 0U) || (cfg == (const TIM_EncoderInitTypeDef *)0)),
+                SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((cfg->mode < (uint32_t)TIM_ENCODER_X2_TI1) ||
+                  (cfg->mode > (uint32_t)TIM_ENCODER_X4) || (cfg->ti1_inverted > 1U) ||
+                  (cfg->ti2_inverted > 1U) || (cfg->ti1_filter > 15U) || (cfg->ti2_filter > 15U)),
+                SPL_ERR_PARAM);
     /* CCxS is writable only with CCxE=0; encoder and external clock mode 2 are exclusive. */
     if (((t->CR1 & TIM_CR1_CEN) != 0U) || ((t->CCER & (TIM_CCER_CC1E | TIM_CCER_CC2E)) != 0U) ||
         ((t->SMCR & TIM_SMCR_ECE) != 0U))
@@ -707,8 +718,8 @@ SPL_Status TIM_EncoderInit(TIM_TypeDef *t, const TIM_EncoderInitTypeDef *cfg)
 
 SPL_Status TIM_GetDirection(TIM_TypeDef *t, uint8_t *down)
 {
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Tim_HasCounterMode(t) == 0U) || (down == (uint8_t *)0)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Tim_HasCounterMode(t) == 0U) || (down == (uint8_t *)0)), SPL_ERR_PARAM);
     *down = (uint8_t)(((t->CR1 & TIM_CR1_DIR) != 0U) ? 1U : 0U);
     return SPL_OK;
 }
@@ -718,8 +729,8 @@ SPL_Status TIM_ComplementaryOutputInit(TIM_TypeDef *t, uint8_t ch, uint8_t inver
     uint32_t shift;
     uint32_t ccer;
 
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Tim_ComplementaryValid(t, ch) == 0U) || (inverted > 1U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Tim_ComplementaryValid(t, ch) == 0U) || (inverted > 1U)), SPL_ERR_PARAM);
     shift = 4U * ((uint32_t)ch - 1U);
     if ((t->CCER & (TIM_CCER_CC1NE << shift)) != 0U)
     {
@@ -739,15 +750,16 @@ SPL_Status TIM_ComplementaryEnable(TIM_TypeDef *t, uint8_t ch, uint8_t enable)
 {
     uint32_t mask;
 
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Tim_ComplementaryValid(t, ch) == 0U) || (enable > 1U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Tim_ComplementaryValid(t, ch) == 0U) || (enable > 1U)), SPL_ERR_PARAM);
     /* DTG = 0: CCx and CCxN switch at the same edge, a bridge would conduct
      * through both switches. Program the dead time (TIM_BreakDeadTimeInit) first. */
     if ((enable != 0U) && ((t->BDTR & TIM_BDTR_DTG_Msk) == 0U))
     {
         return SPL_ERR_STATE;
     }
-    /* Load into the 32-bit variable first: unsigned long is 64-bit on the host (shift in uint32_t). */
+    /* Load into the 32-bit variable first: unsigned long is 64-bit on the host (shift in uint32_t).
+     */
     mask = TIM_CCER_CC1NE;
     mask <<= 4U * ((uint32_t)ch - 1U);
     if (enable != 0U)
@@ -768,11 +780,11 @@ SPL_Status TIM_DeadTimeToDtg(uint32_t dts_hz, uint32_t dead_time_ns, uint8_t *dt
     uint32_t n;
     uint32_t value;
 
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((dts_hz == 0U) || (dtg == (uint8_t *)0)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((dts_hz == 0U) || (dtg == (uint8_t *)0)), SPL_ERR_PARAM);
     ticks = (((uint64_t)dead_time_ns * dts_hz) + 999999999ULL) / 1000000000ULL;
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!(ticks > 1008U), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!(ticks > 1008U), SPL_ERR_PARAM);
     n = (uint32_t)ticks;
     if (n <= 127U)
     {
@@ -798,20 +810,26 @@ SPL_Status TIM_BreakDeadTimeInit(TIM_TypeDef *t, const TIM_BreakDeadTimeInitType
 {
     uint32_t bdtr;
 
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Tim_HasBreak(t) == 0U) || (cfg == (const TIM_BreakDeadTimeInitTypeDef *)0)), SPL_ERR_PARAM);
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((cfg->dead_time > 0xFFU) || (cfg->lock_level > 3U) || (cfg->off_state_run > 1U) ||
-        (cfg->off_state_idle > 1U) || (cfg->auto_output_enable > 1U) || (cfg->break_enable > 1U) ||
-        (cfg->break_active_high > 1U) || (cfg->break_filter > 15U) || (cfg->break2_enable > 1U) ||
-        (cfg->break2_active_high > 1U) || (cfg->break2_filter > 15U)), SPL_ERR_PARAM);
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Tim_IsAdvanced(t) == 0U) &&
-        ((cfg->break2_enable != 0U) || (cfg->break2_active_high != 0U) ||
-         (cfg->break2_filter != 0U))), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Tim_HasBreak(t) == 0U) || (cfg == (const TIM_BreakDeadTimeInitTypeDef *)0)),
+                SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((cfg->dead_time > 0xFFU) || (cfg->lock_level > 3U) || (cfg->off_state_run > 1U) ||
+                  (cfg->off_state_idle > 1U) || (cfg->auto_output_enable > 1U) ||
+                  (cfg->break_enable > 1U) || (cfg->break_active_high > 1U) ||
+                  (cfg->break_filter > 15U) || (cfg->break2_enable > 1U) ||
+                  (cfg->break2_active_high > 1U) || (cfg->break2_filter > 15U)),
+                SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Tim_IsAdvanced(t) == 0U) &&
+                  ((cfg->break2_enable != 0U) || (cfg->break2_active_high != 0U) ||
+                   (cfg->break2_filter != 0U))),
+                SPL_ERR_PARAM);
     /* RM0440 29.6.20: BRKIN2 must only be used with OSSR = OSSI = 1. */
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((cfg->break2_enable != 0U) && ((cfg->off_state_run == 0U) || (cfg->off_state_idle == 0U))), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((cfg->break2_enable != 0U) &&
+                  ((cfg->off_state_run == 0U) || (cfg->off_state_idle == 0U))),
+                SPL_ERR_PARAM);
     /* Outputs must be off; LOCK >= 1 freezes DTG/BKE/BKP/AOE/BKF/BK2x and LOCK itself. */
     if (((t->BDTR & TIM_BDTR_MOE) != 0U) || (Tim_LockLevel(t) != 0U))
     {
@@ -871,16 +889,16 @@ SPL_Status TIM_BreakDeadTimeInit(TIM_TypeDef *t, const TIM_BreakDeadTimeInitType
 
 SPL_Status TIM_GetLockLevel(TIM_TypeDef *t, uint8_t *level)
 {
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Tim_HasBreak(t) == 0U) || (level == (uint8_t *)0)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Tim_HasBreak(t) == 0U) || (level == (uint8_t *)0)), SPL_ERR_PARAM);
     *level = (uint8_t)Tim_LockLevel(t);
     return SPL_OK;
 }
 
 SPL_Status TIM_GetFlags(TIM_TypeDef *t, uint32_t *flags)
 {
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Tim_IsBase(t) == 0U) || (flags == (uint32_t *)0)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Tim_IsBase(t) == 0U) || (flags == (uint32_t *)0)), SPL_ERR_PARAM);
     *flags = t->SR & Tim_FlagMask(t);
     return SPL_OK;
 }
@@ -889,11 +907,11 @@ SPL_Status TIM_ClearFlags(TIM_TypeDef *t, uint32_t flags)
 {
     uint32_t valid;
 
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!(Tim_IsBase(t) == 0U), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!(Tim_IsBase(t) == 0U), SPL_ERR_PARAM);
     valid = Tim_FlagMask(t);
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((flags == 0U) || ((flags & ~valid) != 0U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((flags == 0U) || ((flags & ~valid) != 0U)), SPL_ERR_PARAM);
     /* rc_w0: zeros clear the requested flags, ones leave the other flags untouched,
      * reserved bits are written at their reset value 0. No read-modify-write. */
     t->SR = valid & ~flags;
@@ -923,8 +941,8 @@ SPL_Status TIM_SetMasterTrigger(TIM_TypeDef *t, uint32_t source)
     {
         return SPL_ERR_PARAM;
     }
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!(source > max), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!(source > max), SPL_ERR_PARAM);
     if ((t->CR1 & TIM_CR1_CEN) != 0U)
     {
         return SPL_ERR_STATE;

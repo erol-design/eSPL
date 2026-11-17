@@ -1,7 +1,8 @@
-/* FDCAN driver for STM32G0B1 (RM0444 Rev 6 section 36, ES0548 Rev 4 section 2.15), ported from
- * the G4 SPL v0.13.5 FDCAN driver (Autometry_Mcu_Spl 13c21ce): same IP and message RAM. */
-/* Kutuphane birimi: spl_check.h karisma korumasi referansini bu birim de uretir; uretmeyen tek
- * birim stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
+/* FDCAN driver implementation for STM32G0B1 (RM0444 Rev 6 section 36, ES0548 Rev 4 section 2.15),
+ * ported from the G4 SPL v0.13.5 FDCAN driver (Autometry_Mcu_Spl 13c21ce): same IP and message
+ * RAM. Compiled only when SPL_G0_HAS_FDCAN; public contract in stm32g0_fdcan.h. */
+/* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit
+ * that does not is stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
 #define SPL_LIBRARY_BUILD 1
 #include "stm32g0_fdcan.h"
 #include "stm32g0_fdcan_layout.h"
@@ -64,10 +65,10 @@ typedef char Fdcan_PayloadCheck[((sizeof(((FDCAN_FrameTypeDef *)0)->data) >= FDC
                                     ? 1
                                     : -1];
 
-/* Denetim seviyesi (A4 dalga 4a, Docs/CHECK_LEVEL.md 5.4 FDCAN tablosu): SPL_REQUIRE = normal sinif
- * (yalniz FULL), SPL_REQUIRE_SAFE = SAFE sinif (FULL ve MIX). INIT = 1 (bus-off dahil), FIFO
- * dolu / bos, FIFO indeksi, gelen FD cercevesi result: her seviyede duz if. Yardimcilar static
- * inline (saf, Tools/pure_checks.txt). */
+/* Check level (A4 wave 4a, Docs/CHECK_LEVEL.md 5.4 FDCAN table): SPL_REQUIRE = checked at FULL only
+ * (not compiled at FAST). INIT = 1 (bus-off included), FIFO full / empty, FIFO index, incoming FD
+ * frame result: plain if at every level. Helpers are static inline (pure, Tools/pure_checks.txt).
+ */
 
 /* Zero-based instance number, or FDCAN_INSTANCE_NONE. Message RAM of
  * instance n starts at SRAMCAN_BASE + n * 0x350 (RM0444 36.3.6). */
@@ -117,16 +118,24 @@ static inline uint8_t Fdcan_IsBool(uint32_t value)
 
 SPL_Status FDCAN_RequestInit(FDCAN_GlobalTypeDef *can)
 {
-    SPL_REQUIRE_SAFE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* SAFE: Message RAM rastgele adres */
+    SPL_REQUIRE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* arbitrary SRAM address */
 
+    /* CCL-2 CAN-09b: leaving normal operation with a pending transmission would abort it, and
+     * the following Configure (CCE) resets TXBRP. Pending requests -> BUSY: the caller waits for
+     * them (FDCAN_TxStatus) or cancels them (FDCAN_TxCancel) first. Already in INIT (bus-off,
+     * repeated call): no check. */
+    if (((can->CCCR & FDCAN_CCCR_INIT) == 0U) && ((can->TXBRP & FDCAN_TX_BUFFER_MASK) != 0U))
+    {
+        return SPL_BUSY;
+    }
     can->CCCR |= FDCAN_CCCR_INIT;
     return SPL_OK;
 }
 
 SPL_Status FDCAN_InitReady(FDCAN_GlobalTypeDef *can, uint8_t *ready)
 {
-    SPL_REQUIRE_SAFE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* SAFE: Message RAM rastgele adres */
-    SPL_REQUIRE_SAFE(ready != (uint8_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* arbitrary SRAM address */
+    SPL_REQUIRE(ready != (uint8_t *)0, SPL_ERR_PARAM);
 
     *ready = (uint8_t)(((can->CCCR & FDCAN_CCCR_INIT) != 0U) ? 1U : 0U);
     return SPL_OK;
@@ -134,15 +143,14 @@ SPL_Status FDCAN_InitReady(FDCAN_GlobalTypeDef *can, uint8_t *ready)
 
 SPL_Status FDCAN_SetNominalTiming(FDCAN_GlobalTypeDef *can, const FDCAN_NominalTimingTypeDef *cfg)
 {
-    SPL_REQUIRE_SAFE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* SAFE: Message RAM rastgele adres */
-    SPL_REQUIRE_SAFE(cfg != (const FDCAN_NominalTimingTypeDef *)0, SPL_ERR_PARAM);
-    /* SAFE: 0 - 1 butun alanlari doldurur / NBTP tasmasi / spesifikasyon disi zamanlama. */
-    SPL_REQUIRE_SAFE((cfg->prescaler != 0U) && (cfg->prescaler <= 512U) && (cfg->seg1 != 0U) &&
-                         (cfg->seg1 <= 256U) && (cfg->seg2 != 0U) && (cfg->seg2 <= 128U) &&
-                         (cfg->sjw != 0U) && (cfg->sjw <= 128U) && (cfg->sjw <= cfg->seg2),
-                     SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(Fdcan_InitSet(can) != 0U,
-                     SPL_ERR_STATE); /* SAFE: korumali yazim yok sayilir */
+    SPL_REQUIRE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* arbitrary SRAM address */
+    SPL_REQUIRE(cfg != (const FDCAN_NominalTimingTypeDef *)0, SPL_ERR_PARAM);
+    /* 0 - 1 fills all fields / NBTP overflow / out-of-specification timing. */
+    SPL_REQUIRE((cfg->prescaler != 0U) && (cfg->prescaler <= 512U) && (cfg->seg1 != 0U) &&
+                    (cfg->seg1 <= 256U) && (cfg->seg2 != 0U) && (cfg->seg2 <= 128U) &&
+                    (cfg->sjw != 0U) && (cfg->sjw <= 128U) && (cfg->sjw <= cfg->seg2),
+                SPL_ERR_PARAM);
+    SPL_REQUIRE(Fdcan_InitSet(can) != 0U, SPL_ERR_STATE); /* protected write is ignored */
 
     /* Timing registers may be updated only after INIT has acknowledged.
      * Enable protected configuration writes through CCE. */
@@ -156,8 +164,8 @@ SPL_Status FDCAN_SetNominalTiming(FDCAN_GlobalTypeDef *can, const FDCAN_NominalT
 
 SPL_Status FDCAN_LeaveInit(FDCAN_GlobalTypeDef *can)
 {
-    SPL_REQUIRE_SAFE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* SAFE: Message RAM rastgele adres */
-    SPL_REQUIRE((can->CCCR & FDCAN_CCCR_INIT) != 0U, SPL_ERR_STATE); /* normal: etkisiz */
+    SPL_REQUIRE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM);              /* arbitrary SRAM address */
+    SPL_REQUIRE((can->CCCR & FDCAN_CCCR_INIT) != 0U, SPL_ERR_STATE); /* no effect */
 
     can->CCCR &= (uint32_t)~FDCAN_CCCR_INIT;
     return SPL_OK;
@@ -165,8 +173,8 @@ SPL_Status FDCAN_LeaveInit(FDCAN_GlobalTypeDef *can)
 
 SPL_Status FDCAN_Status(FDCAN_GlobalTypeDef *can, uint32_t *psr, uint32_t *ecr)
 {
-    SPL_REQUIRE_SAFE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* SAFE: Message RAM rastgele adres */
-    SPL_REQUIRE_SAFE((psr != (uint32_t *)0) && (ecr != (uint32_t *)0), SPL_ERR_PARAM);
+    SPL_REQUIRE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* arbitrary SRAM address */
+    SPL_REQUIRE((psr != (uint32_t *)0) && (ecr != (uint32_t *)0), SPL_ERR_PARAM);
 
     *psr = can->PSR;
     *ecr = can->ECR;
@@ -175,10 +183,10 @@ SPL_Status FDCAN_Status(FDCAN_GlobalTypeDef *can, uint32_t *psr, uint32_t *ecr)
 
 SPL_Status FDCAN_ClearIrq(FDCAN_GlobalTypeDef *can, uint32_t mask)
 {
-    SPL_REQUIRE_SAFE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* SAFE: Message RAM rastgele adres */
-    /* normal: IR 31:24 ayrilmis (IE ile ayni bit konumlari, RM0444 36.4.x); 2026-11-14 tarama. */
-    /* SAFE (EDR-003): ayrilmis bite yazim. */
-    SPL_REQUIRE_SAFE((mask & ~FDCAN_IE_ALL) == 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* arbitrary SRAM address */
+    /* IR 31:24 reserved (same bit positions as IE, RM0444 36.4.x); 2026-11-14 audit. */
+    /* (EDR-003): write to a reserved bit. */
+    SPL_REQUIRE((mask & ~FDCAN_IE_ALL) == 0U, SPL_ERR_PARAM);
 
     /* IR is a write-one-to-clear register. */
     can->IR = mask;
@@ -203,24 +211,24 @@ SPL_Status FDCAN_Configure(FDCAN_GlobalTypeDef *can, const FDCAN_ConfigTypeDef *
     uint32_t word;
     uint32_t cccr;
 
-    SPL_REQUIRE_SAFE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* SAFE: Message RAM rastgele adres */
-    SPL_REQUIRE_SAFE(cfg != (const FDCAN_ConfigTypeDef *)0, SPL_ERR_PARAM);
-    /* SAFE: RXGFC / TXBC tasmasi (reject_remote_* / tx_queue kaydirilir), filtreler baska bolume.
-     */
-    SPL_REQUIRE_SAFE((cfg->std_filter_count <= FDCAN_STANDARD_FILTER_MAX) &&
-                         (cfg->ext_filter_count <= FDCAN_EXTENDED_FILTER_MAX) &&
-                         (Fdcan_NonMatchValid(cfg->nonmatch_std) != 0U) &&
-                         (Fdcan_NonMatchValid(cfg->nonmatch_ext) != 0U) &&
-                         (Fdcan_IsBool(cfg->reject_remote_std) != 0U) &&
-                         (Fdcan_IsBool(cfg->reject_remote_ext) != 0U) &&
-                         (Fdcan_IsBool(cfg->tx_queue) != 0U),
-                     SPL_ERR_PARAM);
-    /* normal: fd_enable / brs_enable 1 gibi. */
+    SPL_REQUIRE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* arbitrary SRAM address */
+    SPL_REQUIRE(cfg != (const FDCAN_ConfigTypeDef *)0, SPL_ERR_PARAM);
+    /* RXGFC / TXBC field overflow (reject_remote_* / tx_queue shifted), filters spill into
+     * another section. */
+    SPL_REQUIRE((cfg->std_filter_count <= FDCAN_STANDARD_FILTER_MAX) &&
+                    (cfg->ext_filter_count <= FDCAN_EXTENDED_FILTER_MAX) &&
+                    (Fdcan_NonMatchValid(cfg->nonmatch_std) != 0U) &&
+                    (Fdcan_NonMatchValid(cfg->nonmatch_ext) != 0U) &&
+                    (Fdcan_IsBool(cfg->reject_remote_std) != 0U) &&
+                    (Fdcan_IsBool(cfg->reject_remote_ext) != 0U) &&
+                    (Fdcan_IsBool(cfg->tx_queue) != 0U),
+                SPL_ERR_PARAM);
+    /* fd_enable / brs_enable act as 1. */
     SPL_REQUIRE((Fdcan_IsBool(cfg->fd_enable) != 0U) && (Fdcan_IsBool(cfg->brs_enable) != 0U),
                 SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((cfg->brs_enable == 0U) || (cfg->fd_enable != 0U), SPL_ERR_PARAM); /* SAFE */
-    /* SAFE: calisan cekirdegin Message RAM'i sifirlanirdi. */
-    SPL_REQUIRE_SAFE(Fdcan_InitSet(can) != 0U, SPL_ERR_STATE);
+    SPL_REQUIRE((cfg->brs_enable == 0U) || (cfg->fd_enable != 0U), SPL_ERR_PARAM);
+    /* the Message RAM of a running core would be zeroed. */
+    SPL_REQUIRE(Fdcan_InitSet(can) != 0U, SPL_ERR_STATE);
 
     /* CCE resets RXFxS/TXFQS/TXBRP and holds the Rx/Tx handlers idle
      * (RM0444 36.3.4 Software initialization). Then clear the instance RAM:
@@ -259,17 +267,16 @@ SPL_Status FDCAN_SetDataTiming(FDCAN_GlobalTypeDef *can, const FDCAN_DataTimingT
 {
     uint32_t dbtp;
 
-    SPL_REQUIRE_SAFE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* SAFE: Message RAM rastgele adres */
-    SPL_REQUIRE_SAFE(cfg != (const FDCAN_DataTimingTypeDef *)0, SPL_ERR_PARAM);
-    /* SAFE: DBTP / TDCR tasmasi, spesifikasyon disi zamanlama. */
-    SPL_REQUIRE_SAFE((cfg->prescaler != 0U) && (cfg->prescaler <= 32U) && (cfg->seg1 != 0U) &&
-                         (cfg->seg1 <= 32U) && (cfg->seg2 != 0U) && (cfg->seg2 <= 16U) &&
-                         (cfg->sjw != 0U) && (cfg->sjw <= cfg->seg2) && (cfg->tdc_offset <= 127U) &&
-                         (cfg->tdc_filter <= 127U),
-                     SPL_ERR_PARAM);
-    SPL_REQUIRE(Fdcan_IsBool(cfg->tdc) != 0U, SPL_ERR_PARAM); /* normal */
-    SPL_REQUIRE_SAFE(Fdcan_InitSet(can) != 0U,
-                     SPL_ERR_STATE); /* SAFE: korumali yazim yok sayilir */
+    SPL_REQUIRE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* arbitrary SRAM address */
+    SPL_REQUIRE(cfg != (const FDCAN_DataTimingTypeDef *)0, SPL_ERR_PARAM);
+    /* DBTP / TDCR field overflow, out-of-specification timing. */
+    SPL_REQUIRE((cfg->prescaler != 0U) && (cfg->prescaler <= 32U) && (cfg->seg1 != 0U) &&
+                    (cfg->seg1 <= 32U) && (cfg->seg2 != 0U) && (cfg->seg2 <= 16U) &&
+                    (cfg->sjw != 0U) && (cfg->sjw <= cfg->seg2) && (cfg->tdc_offset <= 127U) &&
+                    (cfg->tdc_filter <= 127U),
+                SPL_ERR_PARAM);
+    SPL_REQUIRE(Fdcan_IsBool(cfg->tdc) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(Fdcan_InitSet(can) != 0U, SPL_ERR_STATE); /* protected write is ignored */
 
     dbtp = ((cfg->prescaler - 1U) << FDCAN_DBTP_DBRP_Pos) |
            ((cfg->seg1 - 1U) << FDCAN_DBTP_DTSEG1_Pos) |
@@ -288,13 +295,12 @@ SPL_Status FDCAN_SetTestMode(FDCAN_GlobalTypeDef *can, FDCAN_TestModeTypeDef mod
 {
     uint32_t cccr;
 
-    SPL_REQUIRE_SAFE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* SAFE: Message RAM rastgele adres */
-    /* SAFE: gecersiz kip sessizce normal kip. */
-    SPL_REQUIRE_SAFE((mode == FDCAN_MODE_NORMAL) || (mode == FDCAN_MODE_EXT_LOOPBACK) ||
-                         (mode == FDCAN_MODE_INT_LOOPBACK) || (mode == FDCAN_MODE_BUS_MONITOR),
-                     SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(Fdcan_InitSet(can) != 0U,
-                     SPL_ERR_STATE); /* SAFE: korumali yazim yok sayilir */
+    SPL_REQUIRE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* arbitrary SRAM address */
+    /* an invalid mode silently becomes normal mode. */
+    SPL_REQUIRE((mode == FDCAN_MODE_NORMAL) || (mode == FDCAN_MODE_EXT_LOOPBACK) ||
+                    (mode == FDCAN_MODE_INT_LOOPBACK) || (mode == FDCAN_MODE_BUS_MONITOR),
+                SPL_ERR_PARAM);
+    SPL_REQUIRE(Fdcan_InitSet(can) != 0U, SPL_ERR_STATE); /* protected write is ignored */
 
     /* MON may be set only with INIT and CCE (RM0444 36.4.6). Clearing
      * CCCR.TEST resets FDCAN_TEST in hardware (36.4.4). */
@@ -348,18 +354,17 @@ SPL_Status FDCAN_SetStdFilter(FDCAN_GlobalTypeDef *can, uint32_t index,
 {
     uint32_t count;
 
-    SPL_REQUIRE_SAFE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* SAFE: Message RAM rastgele adres */
-    SPL_REQUIRE_SAFE(filter != (const FDCAN_FilterTypeDef *)0, SPL_ERR_PARAM);
-    /* SAFE: gecersiz tip / eylem / kimlik Message RAM'e yanlis filtre yazar. */
-    SPL_REQUIRE_SAFE(Fdcan_FilterValid(filter, FDCAN_STD_ID_MAX) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* arbitrary SRAM address */
+    SPL_REQUIRE(filter != (const FDCAN_FilterTypeDef *)0, SPL_ERR_PARAM);
+    /* an invalid type / action / identifier writes a wrong filter to Message RAM. */
+    SPL_REQUIRE(Fdcan_FilterValid(filter, FDCAN_STD_ID_MAX) != 0U, SPL_ERR_PARAM);
     count = (can->RXGFC & FDCAN_RXGFC_LSS) >> FDCAN_RXGFC_LSS_Pos;
     if (count > FDCAN_STANDARD_FILTER_MAX)
     {
         count = FDCAN_STANDARD_FILTER_MAX;
     }
-    SPL_REQUIRE_SAFE(index < count, SPL_ERR_PARAM); /* SAFE: baska filtre / bolum ezilir */
-    SPL_REQUIRE_SAFE(Fdcan_InitSet(can) != 0U,
-                     SPL_ERR_STATE); /* SAFE: korumali yazim yok sayilir */
+    SPL_REQUIRE(index < count, SPL_ERR_PARAM);            /* other filter / section overwritten */
+    SPL_REQUIRE(Fdcan_InitSet(can) != 0U, SPL_ERR_STATE); /* protected write is ignored */
 
     *Fdcan_Ram(can, FDCAN_RAM_STD_FILTER_WORD + index) =
         ((uint32_t)filter->type << FDCAN_SFT_POS) | ((uint32_t)filter->action << FDCAN_SFEC_POS) |
@@ -373,18 +378,17 @@ SPL_Status FDCAN_SetExtFilter(FDCAN_GlobalTypeDef *can, uint32_t index,
     volatile uint32_t *element;
     uint32_t count;
 
-    SPL_REQUIRE_SAFE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* SAFE: Message RAM rastgele adres */
-    SPL_REQUIRE_SAFE(filter != (const FDCAN_FilterTypeDef *)0, SPL_ERR_PARAM);
-    /* SAFE: gecersiz tip / eylem / kimlik Message RAM'e yanlis filtre yazar. */
-    SPL_REQUIRE_SAFE(Fdcan_FilterValid(filter, FDCAN_EXT_ID_MAX) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* arbitrary SRAM address */
+    SPL_REQUIRE(filter != (const FDCAN_FilterTypeDef *)0, SPL_ERR_PARAM);
+    /* an invalid type / action / identifier writes a wrong filter to Message RAM. */
+    SPL_REQUIRE(Fdcan_FilterValid(filter, FDCAN_EXT_ID_MAX) != 0U, SPL_ERR_PARAM);
     count = (can->RXGFC & FDCAN_RXGFC_LSE) >> FDCAN_RXGFC_LSE_Pos;
     if (count > FDCAN_EXTENDED_FILTER_MAX)
     {
         count = FDCAN_EXTENDED_FILTER_MAX;
     }
-    SPL_REQUIRE_SAFE(index < count, SPL_ERR_PARAM); /* SAFE: baska filtre / bolum ezilir */
-    SPL_REQUIRE_SAFE(Fdcan_InitSet(can) != 0U,
-                     SPL_ERR_STATE); /* SAFE: korumali yazim yok sayilir */
+    SPL_REQUIRE(index < count, SPL_ERR_PARAM);            /* other filter / section overwritten */
+    SPL_REQUIRE(Fdcan_InitSet(can) != 0U, SPL_ERR_STATE); /* protected write is ignored */
 
     /* EFT 00 for range: XIDAM is applied, and Configure sets it to all ones.
      * F1 first, F0 (holding EFEC enable) last. */
@@ -396,9 +400,9 @@ SPL_Status FDCAN_SetExtFilter(FDCAN_GlobalTypeDef *can, uint32_t index,
 
 SPL_Status FDCAN_DlcToLength(uint32_t dlc, uint8_t fd, uint8_t *length)
 {
-    SPL_REQUIRE_SAFE(dlc <= 15U, SPL_ERR_PARAM); /* SAFE: tablo disi okuma */
-    SPL_REQUIRE_SAFE(length != (uint8_t *)0, SPL_ERR_PARAM);
-    SPL_REQUIRE(fd <= 1U, SPL_ERR_PARAM); /* normal */
+    SPL_REQUIRE(dlc <= 15U, SPL_ERR_PARAM); /* read outside the table */
+    SPL_REQUIRE(length != (uint8_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(fd <= 1U, SPL_ERR_PARAM);
 
     if ((fd == 0U) && (dlc > 8U))
     {
@@ -416,8 +420,8 @@ SPL_Status FDCAN_LengthToDlc(uint32_t length, uint8_t fd, uint8_t *dlc)
     uint32_t code;
     uint32_t limit = (fd != 0U) ? 15U : 8U;
 
-    SPL_REQUIRE_SAFE(dlc != (uint8_t *)0, SPL_ERR_PARAM);
-    SPL_REQUIRE(fd <= 1U, SPL_ERR_PARAM); /* normal */
+    SPL_REQUIRE(dlc != (uint8_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(fd <= 1U, SPL_ERR_PARAM);
     for (code = 0U; code <= limit; ++code)
     {
         if (Fdcan_DlcBytes[code] == length)
@@ -426,11 +430,11 @@ SPL_Status FDCAN_LengthToDlc(uint32_t length, uint8_t fd, uint8_t *dlc)
             return SPL_OK;
         }
     }
-    return SPL_ERR_PARAM; /* result: uzunluk DLC tablosunda yok, her seviyede */
+    return SPL_ERR_PARAM; /* result: length not in the DLC table, at every level */
 }
 
-/* A4: saf alan dogrulayicisi (SAFE, 5.3: hatta baska tipte cerceve). Uzunluk / DLC
- * FDCAN_TryWrite'ta ayrica (deger uretir). */
+/* A4: pure field validator (5.3: a frame of another type on the line). Length / DLC is
+ * checked separately in FDCAN_TryWrite (it produces a value). */
 static inline uint8_t Fdcan_FrameFieldsValid(const FDCAN_FrameTypeDef *frame)
 {
     uint32_t id_max;
@@ -462,13 +466,13 @@ SPL_Status FDCAN_TryWrite(FDCAN_GlobalTypeDef *can, const FDCAN_FrameTypeDef *fr
     uint32_t b;
     uint8_t dlc = 0U;
 
-    SPL_REQUIRE_SAFE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* SAFE: Message RAM rastgele adres */
-    SPL_REQUIRE_SAFE(frame != (const FDCAN_FrameTypeDef *)0, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(Fdcan_FrameFieldsValid(frame) != 0U, SPL_ERR_PARAM);
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
+    SPL_REQUIRE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* arbitrary SRAM address */
+    SPL_REQUIRE(frame != (const FDCAN_FrameTypeDef *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(Fdcan_FrameFieldsValid(frame) != 0U, SPL_ERR_PARAM);
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
     if (FDCAN_LengthToDlc(frame->length, frame->fdf, &dlc) != SPL_OK)
     {
-        return SPL_ERR_PARAM; /* SAFE: uzunluk Message RAM ogesini tasirir (5.3) */
+        return SPL_ERR_PARAM; /* the length overflows the Message RAM element (5.3) */
     }
 #else
     (void)FDCAN_LengthToDlc(frame->length, frame->fdf, &dlc);
@@ -480,12 +484,12 @@ SPL_Status FDCAN_TryWrite(FDCAN_GlobalTypeDef *can, const FDCAN_FrameTypeDef *fr
      * FDF/BRS (Table 410): reject instead. */
     if (Fdcan_InitSet(can) != 0U)
     {
-        return SPL_ERR_STATE; /* result: INIT = 1 (bus-off dahil), her seviyede */
+        return SPL_ERR_STATE; /* result: INIT = 1 (bus-off included), at every level */
     }
-    /* SAFE: FDOE / BRSE kapaliyken cekirdek FDF / BRS'yi sessizce yok sayar (Table 410). */
-    SPL_REQUIRE_SAFE(((frame->fdf == 0U) || ((can->CCCR & FDCAN_CCCR_FDOE) != 0U)) &&
-                         ((frame->brs == 0U) || ((can->CCCR & FDCAN_CCCR_BRSE) != 0U)),
-                     SPL_ERR_STATE);
+    /* with FDOE / BRSE clear the core silently ignores FDF / BRS (Table 410). */
+    SPL_REQUIRE(((frame->fdf == 0U) || ((can->CCCR & FDCAN_CCCR_FDOE) != 0U)) &&
+                    ((frame->brs == 0U) || ((can->CCCR & FDCAN_CCCR_BRSE) != 0U)),
+                SPL_ERR_STATE);
     txfqs = can->TXFQS;
     if ((txfqs & FDCAN_TXFQS_TFQF) != 0U)
     {
@@ -535,12 +539,12 @@ SPL_Status FDCAN_TryWrite(FDCAN_GlobalTypeDef *can, const FDCAN_FrameTypeDef *fr
 
 SPL_Status FDCAN_TxCancel(FDCAN_GlobalTypeDef *can, uint32_t mask)
 {
-    SPL_REQUIRE_SAFE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* SAFE: Message RAM rastgele adres */
-    SPL_REQUIRE(mask != 0U, SPL_ERR_PARAM);                  /* normal: etkisiz */
-    /* SAFE (EDR-003): ayrilmis bite yazim. */
-    SPL_REQUIRE_SAFE((mask & ~FDCAN_TX_BUFFER_MASK) == 0U, SPL_ERR_PARAM);
-    /* SAFE: CCE = 1 iken TXBCR yazilamaz, iptal sessizce olmaz. */
-    SPL_REQUIRE_SAFE(Fdcan_CceSet(can) == 0U, SPL_ERR_STATE);
+    SPL_REQUIRE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* arbitrary SRAM address */
+    SPL_REQUIRE(mask != 0U, SPL_ERR_PARAM);             /* no effect */
+    /* (EDR-003): write to a reserved bit. */
+    SPL_REQUIRE((mask & ~FDCAN_TX_BUFFER_MASK) == 0U, SPL_ERR_PARAM);
+    /* TXBCR is not writable while CCE = 1, the cancel silently does not happen. */
+    SPL_REQUIRE(Fdcan_CceSet(can) == 0U, SPL_ERR_STATE);
 
     /* TXBCR: write 1 sets, write 0 has no effect. */
     can->TXBCR = mask;
@@ -550,10 +554,10 @@ SPL_Status FDCAN_TxCancel(FDCAN_GlobalTypeDef *can, uint32_t mask)
 SPL_Status FDCAN_TxStatus(FDCAN_GlobalTypeDef *can, uint32_t *pending, uint32_t *occurred,
                           uint32_t *cancelled)
 {
-    SPL_REQUIRE_SAFE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* SAFE: Message RAM rastgele adres */
-    SPL_REQUIRE_SAFE((pending != (uint32_t *)0) && (occurred != (uint32_t *)0) &&
-                         (cancelled != (uint32_t *)0),
-                     SPL_ERR_PARAM);
+    SPL_REQUIRE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* arbitrary SRAM address */
+    SPL_REQUIRE((pending != (uint32_t *)0) && (occurred != (uint32_t *)0) &&
+                    (cancelled != (uint32_t *)0),
+                SPL_ERR_PARAM);
 
     *pending = can->TXBRP & FDCAN_TX_BUFFER_MASK;
     *occurred = can->TXBTO & FDCAN_TX_BUFFER_MASK;
@@ -573,11 +577,11 @@ SPL_Status FDCAN_TryRead(FDCAN_GlobalTypeDef *can, uint32_t fifo, FDCAN_FrameTyp
     uint32_t w;
     uint32_t b;
 
-    SPL_REQUIRE_SAFE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* SAFE: Message RAM rastgele adres */
-    SPL_REQUIRE_SAFE(frame != (FDCAN_FrameTypeDef *)0, SPL_ERR_PARAM);
-    SPL_REQUIRE(fifo <= 1U, SPL_ERR_PARAM); /* normal */
-    /* CCE resets RXFxS and holds the Rx handler idle: data cannot arrive. normal: CCE INIT ister,
-     * bos FIFO'da yine INIT STATE doner. */
+    SPL_REQUIRE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* arbitrary SRAM address */
+    SPL_REQUIRE(frame != (FDCAN_FrameTypeDef *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(fifo <= 1U, SPL_ERR_PARAM);
+    /* CCE resets RXFxS and holds the Rx handler idle: data cannot arrive. CCE requires
+     * INIT, so an empty FIFO still returns STATE through INIT. */
     SPL_REQUIRE(Fdcan_CceSet(can) == 0U, SPL_ERR_STATE);
     status = (fifo == 0U) ? can->RXF0S : can->RXF1S;
     /* RXF0S and RXF1S share the same field layout. */
@@ -588,7 +592,7 @@ SPL_Status FDCAN_TryRead(FDCAN_GlobalTypeDef *can, uint32_t fifo, FDCAN_FrameTyp
          * FIFO stay readable (checked above). */
         if (Fdcan_InitSet(can) != 0U)
         {
-            return SPL_ERR_STATE; /* result: bus-off dahil, her seviyede */
+            return SPL_ERR_STATE; /* result: bus-off included, at every level */
         }
         return SPL_WOULD_BLOCK;
     }
@@ -648,8 +652,8 @@ SPL_Status FDCAN_RxFifoStatus(FDCAN_GlobalTypeDef *can, uint32_t fifo, uint32_t 
 {
     uint32_t status;
 
-    SPL_REQUIRE_SAFE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* SAFE: Message RAM rastgele adres */
-    SPL_REQUIRE_SAFE((fill != (uint32_t *)0) && (lost != (uint8_t *)0), SPL_ERR_PARAM);
+    SPL_REQUIRE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* arbitrary SRAM address */
+    SPL_REQUIRE((fill != (uint32_t *)0) && (lost != (uint8_t *)0), SPL_ERR_PARAM);
     SPL_REQUIRE(fifo <= 1U, SPL_ERR_PARAM);
 
     status = (fifo == 0U) ? can->RXF0S : can->RXF1S;
@@ -660,8 +664,8 @@ SPL_Status FDCAN_RxFifoStatus(FDCAN_GlobalTypeDef *can, uint32_t fifo, uint32_t 
 
 SPL_Status FDCAN_ClearRxLost(FDCAN_GlobalTypeDef *can, uint32_t fifo)
 {
-    SPL_REQUIRE_SAFE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* SAFE: Message RAM rastgele adres */
-    SPL_REQUIRE(fifo <= 1U, SPL_ERR_PARAM);                  /* normal: FIFO 1 gibi */
+    SPL_REQUIRE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* arbitrary SRAM address */
+    SPL_REQUIRE(fifo <= 1U, SPL_ERR_PARAM);             /* acts as FIFO 1 */
 
     /* IR is W1C: write only the one flag, never read-modify-write. */
     can->IR = (fifo == 0U) ? FDCAN_IR_RF0L : FDCAN_IR_RF1L;
@@ -672,9 +676,9 @@ SPL_Status FDCAN_ClearRxLost(FDCAN_GlobalTypeDef *can, uint32_t fifo)
 
 SPL_Status FDCAN_IrqEnable(FDCAN_GlobalTypeDef *can, uint32_t ie_mask)
 {
-    SPL_REQUIRE_SAFE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* SAFE: Message RAM rastgele adres */
-    /* SAFE (EDR-003): ayrilmis bite yazim. */
-    SPL_REQUIRE_SAFE((ie_mask & ~FDCAN_IE_ALL) == 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* arbitrary SRAM address */
+    /* (EDR-003): write to a reserved bit. */
+    SPL_REQUIRE((ie_mask & ~FDCAN_IE_ALL) == 0U, SPL_ERR_PARAM);
 
     can->IE = ie_mask;
     return SPL_OK;
@@ -682,9 +686,9 @@ SPL_Status FDCAN_IrqEnable(FDCAN_GlobalTypeDef *can, uint32_t ie_mask)
 
 SPL_Status FDCAN_IrqLineSelect(FDCAN_GlobalTypeDef *can, uint32_t ils_mask)
 {
-    SPL_REQUIRE_SAFE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* SAFE: Message RAM rastgele adres */
-    /* SAFE (EDR-003): ayrilmis bite yazim. */
-    SPL_REQUIRE_SAFE((ils_mask & ~FDCAN_ILS_ALL) == 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* arbitrary SRAM address */
+    /* (EDR-003): write to a reserved bit. */
+    SPL_REQUIRE((ils_mask & ~FDCAN_ILS_ALL) == 0U, SPL_ERR_PARAM);
 
     can->ILS = ils_mask;
     return SPL_OK;
@@ -692,23 +696,23 @@ SPL_Status FDCAN_IrqLineSelect(FDCAN_GlobalTypeDef *can, uint32_t ils_mask)
 
 SPL_Status FDCAN_IrqLineEnable(FDCAN_GlobalTypeDef *can, uint32_t ile_mask)
 {
-    SPL_REQUIRE_SAFE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* SAFE: Message RAM rastgele adres */
-    /* SAFE (EDR-003): ayrilmis bite yazim. */
-    SPL_REQUIRE_SAFE((ile_mask & ~FDCAN_ILE_ALL) == 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* arbitrary SRAM address */
+    /* (EDR-003): write to a reserved bit. */
+    SPL_REQUIRE((ile_mask & ~FDCAN_ILE_ALL) == 0U, SPL_ERR_PARAM);
 
     can->ILE = ile_mask;
     return SPL_OK;
 }
 
-/* ---- Klasik CAN yolu (Docs/FAST_PATH.md bolum 8) ---- */
+/* ---- Classic CAN path (Docs/FAST_PATH.md section 8) ---- */
 
-/* n bayt (0..4) icin kelime maskesi: n'in otesindeki baytlar 0 olur. */
+/* Word mask for n bytes (0..4): the bytes beyond n become 0. */
 static uint32_t Fdcan_ByteMask(uint32_t n)
 {
     return (n >= 4U) ? 0xFFFFFFFFUL : (((uint32_t)1U << (8U * n)) - 1U);
 }
 
-/* 4 bayt -> kucuk endian kelime (Message RAM duzeni, RM0444 36.3.12). */
+/* 4 bytes -> little-endian word (Message RAM layout, RM0444 36.3.12). */
 static uint32_t Fdcan_Pack4(const uint8_t *p)
 {
     return (uint32_t)p[0] | ((uint32_t)p[1] << 8U) | ((uint32_t)p[2] << 16U) |
@@ -731,14 +735,15 @@ SPL_Status FDCAN_TryWriteClassic(FDCAN_GlobalTypeDef *can, const FDCAN_ClassicFr
     uint32_t put;
     uint32_t t0;
 
-    SPL_REQUIRE_SAFE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* SAFE: Message RAM rastgele adres */
-    SPL_REQUIRE_SAFE(frame != (const FDCAN_ClassicFrameTypeDef *)0, SPL_ERR_PARAM);
-    /* SAFE (5.3): hatta baska tipte cerceve; uzunluk > 8 Message RAM ogesini tasirir. */
-    SPL_REQUIRE_SAFE((frame->ide <= 1U) && (frame->rtr <= 1U) && (frame->length <= 8U) &&
-                         (frame->id <= ((frame->ide != 0U) ? FDCAN_EXT_ID_MAX : FDCAN_STD_ID_MAX)),
-                     SPL_ERR_PARAM);
-    /* INIT = 1 (yazilim ya da bus-off, RM0444 36.3.4): aktarim durur, kuyruk yalniz dolar.
-     * CCE = 1 de INIT = 1 gerektirir (TXBAR yazilamaz). result: her seviyede. */
+    SPL_REQUIRE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* arbitrary SRAM address */
+    SPL_REQUIRE(frame != (const FDCAN_ClassicFrameTypeDef *)0, SPL_ERR_PARAM);
+    /* (5.3): a frame of another type on the line; length > 8 overflows the Message RAM
+     * element. */
+    SPL_REQUIRE((frame->ide <= 1U) && (frame->rtr <= 1U) && (frame->length <= 8U) &&
+                    (frame->id <= ((frame->ide != 0U) ? FDCAN_EXT_ID_MAX : FDCAN_STD_ID_MAX)),
+                SPL_ERR_PARAM);
+    /* INIT = 1 (software or bus-off, RM0444 36.3.4): transfers stop, the queue only fills up.
+     * CCE = 1 also requires INIT = 1 (TXBAR not writable). result: at every level. */
     if (Fdcan_InitSet(can) != 0U)
     {
         return SPL_ERR_STATE;
@@ -761,9 +766,9 @@ SPL_Status FDCAN_TryWriteClassic(FDCAN_GlobalTypeDef *can, const FDCAN_ClassicFr
     }
     element = Fdcan_Ram(can, FDCAN_RAM_TX_BUFFER_WORD + (put * FDCAN_RAM_ELEMENT_WORDS));
     element[0] = t0;
-    /* FDF = BRS = 0, MM = 0, EFC = 0; klasik CAN'de DLC = uzunluk (0..8). */
+    /* FDF = BRS = 0, MM = 0, EFC = 0; in classic CAN DLC = length (0..8). */
     element[1] = (uint32_t)frame->length << FDCAN_ELEM_DLC_POS;
-    /* FDCAN_TryWrite ile ayni: ceil(length / 4) kelime yazilir, length'in otesi 0. */
+    /* Same as FDCAN_TryWrite: ceil(length / 4) words are written, bytes beyond length are 0. */
     if ((frame->rtr == 0U) && (frame->length != 0U))
     {
         element[FDCAN_RAM_HEADER_WORDS] =
@@ -793,18 +798,19 @@ SPL_Status FDCAN_TryReadClassic(FDCAN_GlobalTypeDef *can, uint32_t fifo,
     uint32_t d0 = 0U;
     uint32_t d1 = 0U;
 
-    SPL_REQUIRE_SAFE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* SAFE: Message RAM rastgele adres */
-    SPL_REQUIRE_SAFE(frame != (FDCAN_ClassicFrameTypeDef *)0, SPL_ERR_PARAM);
-    SPL_REQUIRE(fifo <= 1U, SPL_ERR_PARAM); /* normal */
-    /* CCE RXFxS'i sifirlar ve Rx islemcisini bekletir: veri gelemez. normal (bos FIFO'da INIT). */
+    SPL_REQUIRE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM); /* arbitrary SRAM address */
+    SPL_REQUIRE(frame != (FDCAN_ClassicFrameTypeDef *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(fifo <= 1U, SPL_ERR_PARAM);
+    /* CCE resets RXFxS and holds the Rx handler idle: data cannot arrive (INIT on an
+     * empty FIFO). */
     SPL_REQUIRE(Fdcan_CceSet(can) == 0U, SPL_ERR_STATE);
     status = (fifo == 0U) ? can->RXF0S : can->RXF1S;
     if ((status & FDCAN_RXF0S_F0FL) == 0U)
     {
-        /* INIT = 1 (bus-off dahil): yeni cerceve gelmez, beklemek ise yaramaz. */
+        /* INIT = 1 (bus-off included): no new frame arrives, waiting does not help. */
         if (Fdcan_InitSet(can) != 0U)
         {
-            return SPL_ERR_STATE; /* result: bus-off dahil, her seviyede */
+            return SPL_ERR_STATE; /* result: bus-off included, at every level */
         }
         return SPL_WOULD_BLOCK;
     }
@@ -820,8 +826,8 @@ SPL_Status FDCAN_TryReadClassic(FDCAN_GlobalTypeDef *can, uint32_t fifo,
     r1 = element[1];
     if ((r1 & FDCAN_ELEM_FDF) != 0U)
     {
-        return SPL_ERR_UNSUPPORTED; /* result (gelen veri): onaylanmaz, FDCAN_TryRead ile okunmali
-                                     */
+        return SPL_ERR_UNSUPPORTED; /* result (incoming data): not acknowledged, read it with
+                                     * FDCAN_TryRead */
     }
     frame->ide = (uint8_t)(((r0 & FDCAN_ELEM_XTD) != 0U) ? 1U : 0U);
     frame->rtr = (uint8_t)(((r0 & FDCAN_ELEM_RTR) != 0U) ? 1U : 0U);
@@ -843,7 +849,7 @@ SPL_Status FDCAN_TryReadClassic(FDCAN_GlobalTypeDef *can, uint32_t fifo,
                                      Fdcan_ByteMask((uint32_t)frame->length - 4U))
                                   : 0U;
     }
-    /* length'in otesindeki baytlar 0 (Message RAM'deki eski icerik tasinmaz). */
+    /* Bytes beyond length are 0 (stale Message RAM content is not copied). */
     Fdcan_Unpack4(&frame->data[0], d0);
     Fdcan_Unpack4(&frame->data[4], d1);
 

@@ -31,7 +31,7 @@ extern "C"
      *   every ADDR (I2C_TargetPollAddress, I2C_TargetAckAddress), STOPF (I2C_ClearStop)
      *   and NACKF (I2C_ClearErrorFlags) event and reset the buffer index and direction on
      *   every STOP or NACK. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status I2C_MasterInit(I2C_TypeDef *i2c, uint32_t timingr);
     /* Start/StartNoStop/StartLong: TC=1 or TCR=1 (bus still held by the
      * previous transfer) => STATE, finish it with Stop/Restart/ReloadService.
@@ -46,26 +46,26 @@ extern "C"
      * *Long APIs only). SDA held low with SCL high needs the retry bound. */
     /* address7 0..127; reserved addresses (0x00-0x07, 0x78-0x7F) are not refused: 0x00 is
      * the general call (v0.13.5 decision, contract LEG-I2C-02). */
-    /* Seviye: PARAM[S] STATE[r] HW[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] HW[r] BUSY[r] */
     SPL_Status I2C_Start(I2C_TypeDef *i2c, uint8_t address7, uint8_t length, uint8_t read);
     /* Software-end first phase: complete NBYTES then wait for TC.
      * AUTOEND=0, no automatic STOP. 1..255 bytes. */
-    /* Seviye: PARAM[S] STATE[r] HW[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] HW[r] BUSY[r] */
     SPL_Status I2C_StartNoStop(I2C_TypeDef *i2c, uint8_t address7, uint8_t length, uint8_t read);
     /* Repeated START allowed only after TC. Does not block. TC=0: WOULD_BLOCK
      * while a software-end transfer runs (BUSY=1) or START is pending; STATE
      * when TC cannot set (BUSY=0, STOPF=1 or TCR=1; RM0440 39.9.7).
      * CR2.START is read before ISR (v0.11.1 I2C-M1). A START pending on a
      * stuck bus gives WOULD_BLOCK indefinitely: bound the poll as for Start. */
-    /* Seviye: PARAM[S] STATE[r] HW[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] HW[r] WOULD_BLOCK[r] */
     SPL_Status I2C_Restart(I2C_TypeDef *i2c, uint8_t address7, uint8_t length, uint8_t read,
                            uint8_t autoend);
-    /* Seviye: PARAM[S] HW[r] */
+    /* Level: PARAM[F] HW[r] */
     SPL_Status I2C_TransferComplete(I2C_TypeDef *i2c, uint8_t *complete);
     /* *detected = ISR.STOPF (not acknowledged). v0.13.3: NACKF or ARLO set ->
      * SPL_ERR_HW, *detected untouched (a target NACK in an AUTOEND transfer
      * also ends with STOPF). */
-    /* Seviye: PARAM[S] HW[r] */
+    /* Level: PARAM[F] HW[r] */
     SPL_Status I2C_StopDetected(I2C_TypeDef *i2c, uint8_t *detected);
     /* Byte services require PE=1; otherwise ERR_STATE without register writes
      * or output mutation. Serialize access to a given instance.
@@ -76,20 +76,20 @@ extern "C"
      * (I2C_GetErrors / I2C_Status); clear it with I2C_ClearErrorFlags(BERR)
      * before the next fresh START (Start/StartNoStop/StartLong still return
      * ERR_HW while BERR=1). */
-    /* Seviye: PARAM[S] STATE[r] HW[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] HW[r] WOULD_BLOCK[r] */
     SPL_Status I2C_TryWrite(I2C_TypeDef *i2c, uint8_t byte);
-    /* Seviye: PARAM[S] STATE[r] HW[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] HW[r] WOULD_BLOCK[r] */
     SPL_Status I2C_TryRead(I2C_TypeDef *i2c, uint8_t *byte);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status I2C_Stop(I2C_TypeDef *i2c);
     /* Clears NACK/BERR/ARLO/OVR only; does NOT acknowledge STOPF.
      * Capture ISR and diagnose the error before clearing. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status I2C_ClearErrors(I2C_TypeDef *i2c);
     /* Acknowledge STOPF explicitly; does not clear error flags. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status I2C_ClearStop(I2C_TypeDef *i2c);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status I2C_Status(I2C_TypeDef *i2c, uint32_t *status);
 
 /* ---- v0.10: long transfers, 10-bit addressing, errors, reset, timeout ---- */
@@ -117,27 +117,29 @@ extern "C"
     /* Fresh START for 1..0xFFFFFFFF bytes. Chunks of up to 255 bytes; RELOAD
      * on every chunk but the last; AUTOEND only on the last chunk. Requires
      * PE=1, no error flags, BUSY=0 and START=0. Clears a stale STOPF. */
-    /* Seviye: PARAM[S] STATE[r] HW[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] HW[r] BUSY[r] */
     SPL_Status I2C_StartLong(I2C_TypeDef *i2c, I2C_LongTransferTypeDef *xfer, uint16_t address,
                              uint32_t options, uint32_t length);
     /* Repeated START after TC (software end). Same chunking as I2C_StartLong.
      * TC=0 handling as I2C_Restart (WOULD_BLOCK or STATE).
      * HEAD10R is accepted here only, with ADDR10 and READ. */
-    /* Seviye: PARAM[S] STATE[r] HW[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] HW[r] WOULD_BLOCK[r] */
     SPL_Status I2C_RestartLong(I2C_TypeDef *i2c, I2C_LongTransferTypeDef *xfer, uint16_t address,
                                uint32_t options, uint32_t length);
     /* Nonblocking: call when TCR may be set. Programs the next chunk, clears
      * RELOAD and applies AUTOEND on the last chunk, decrements remaining.
      * WOULD_BLOCK while TCR=0; STATE when nothing remains. */
-    /* Seviye: PARAM[S] STATE[r] HW[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] HW[r] WOULD_BLOCK[r] */
     SPL_Status I2C_ReloadService(I2C_TypeDef *i2c, I2C_LongTransferTypeDef *xfer);
 
     /* Reads ISR & I2C_ERRORS_ALL (no side effects). */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status I2C_GetErrors(I2C_TypeDef *i2c, uint32_t *errors);
     /* Clears the given ISR error flags (subset of I2C_ERRORS_ALL, non-zero)
-     * by writing their ICR bits. Never touches STOPF or ADDR. */
-    /* Seviye: PARAM[S] */
+     * by writing their ICR bits. Never touches STOPF or ADDR. When NACKF, BERR,
+     * ARLO, PECERR or TIMEOUT is cleared, TXDR is also flushed (ISR.TXE = 1); OVR alone keeps
+     * TXDR (CCL-2 I2C-02c). */
+    /* Level: PARAM[F] */
     SPL_Status I2C_ClearErrorFlags(I2C_TypeDef *i2c, uint32_t errors);
 
     /* RM0440 39.4.6 software reset: PE=0, read back PE=0 (the RM sequence that
@@ -148,14 +150,14 @@ extern "C"
      * Bus recovery (SDA held low by a target) is NOT done here: the board layer
      * must switch SCL to GPIO open-drain, clock up to 9 pulses until SDA is
      * high, generate a STOP, restore the AF mapping, then call this reset. */
-    /* Seviye: PARAM[S] HW[r] */
+    /* Level: PARAM[F] HW[r] */
     SPL_Status I2C_SoftwareReset(I2C_TypeDef *i2c, uint8_t reenable);
 
     /* Writes I2C_TIMEOUTR (TIMEOUTA, TIDLE, TIMOUTEN, TIMEOUTB, TEXTEN).
      * RM0440 Table 352 exposes timeout/SMBus only on I2C1. Reserved bits must
      * be zero. Rejected with BUSY while ISR.BUSY=1. The enables are cleared
      * before the fields are written, as the RM requires. */
-    /* Seviye: PARAM[S] UNSUPPORTED[S] BUSY[r] */
+    /* Level: PARAM[F] UNSUPPORTED[F] BUSY[r] */
     SPL_Status I2C_TimeoutConfig(I2C_TypeDef *i2c, uint32_t timeoutr);
 
     /* ---- v0.17: target mode and SMBus/PEC ----
@@ -183,32 +185,32 @@ extern "C"
      * ERRATA ES0431 2.11.4 / ES0430 2.15.4 / ES0523 2.11.3 (no software workaround, caller): with
      * no_stretch=1 a transmit underrun may not set OVR; keep clock stretching enabled unless the
      * target byte service latency is bounded tightly enough. */
-    /* Seviye: PARAM[S,n] STATE[S] UNSUPPORTED[S] */
+    /* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
     SPL_Status I2C_TargetInit(I2C_TypeDef *i2c, const I2C_TargetConfigTypeDef *cfg);
     /* ADDR=0 -> WOULD_BLOCK. Returns ADDCODE and DIR without clearing ADDR. */
-    /* Seviye: PARAM[S] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] WOULD_BLOCK[r] */
     SPL_Status I2C_TargetPollAddress(I2C_TypeDef *i2c, uint8_t *addcode, uint8_t *controller_reads);
     /* SBC=1 and PE=1 required. Programs NBYTES/RELOAD with START low. */
-    /* Seviye: PARAM[S,n] STATE[S] */
+    /* Level: PARAM[F] STATE[F] */
     SPL_Status I2C_TargetSetBytes(I2C_TypeDef *i2c, uint8_t nbytes, uint8_t reload);
     /* Clears ADDR, then rewrites CR2 with START low (G4 own-address errata). */
-    /* Seviye: PARAM[S] STATE[n] */
+    /* Level: PARAM[F] STATE[F] */
     SPL_Status I2C_TargetAckAddress(I2C_TypeDef *i2c);
     /* Requests NACK for the next target-receiver byte. PE=1 required. */
-    /* Seviye: PARAM[S] STATE[S] */
+    /* Level: PARAM[F] STATE[F] */
     SPL_Status I2C_TargetNack(I2C_TypeDef *i2c);
     /* Flushes a stale target-transmitter TXDR by writing ISR.TXE. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status I2C_TargetFlushTx(I2C_TypeDef *i2c);
     /* Nonblocking target byte services. BERR/OVR -> ERR_HW; a controller
      * NACK ending a target transmission -> STATE. */
-    /* Seviye: PARAM[S] STATE[r] HW[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] HW[r] WOULD_BLOCK[r] */
     SPL_Status I2C_TargetTryWrite(I2C_TypeDef *i2c, uint8_t byte);
-    /* Seviye: PARAM[S] HW[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] HW[r] WOULD_BLOCK[r] */
     SPL_Status I2C_TargetTryRead(I2C_TypeDef *i2c, uint8_t *byte);
     /* G4 errata recovery after target-mode SMBus TIMEOUT: if STOPF is absent,
      * cycle PE low for at least three APB clocks. I2C1 only. */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[S] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[F] */
     SPL_Status I2C_TargetTimeoutRecover(I2C_TypeDef *i2c);
 
 #define I2C_SMBUS_HOST I2C_CR1_SMBHEN
@@ -217,13 +219,13 @@ extern "C"
 #define I2C_SMBUS_PEC I2C_CR1_PECEN
 #define I2C_SMBUS_ALL (I2C_SMBUS_HOST | I2C_SMBUS_DEVICE | I2C_SMBUS_ALERT | I2C_SMBUS_PEC)
     /* I2C1 only; PE must be zero. Replaces the four SMBus CR1 option bits. */
-    /* Seviye: PARAM[S] STATE[S] UNSUPPORTED[S] */
+    /* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
     SPL_Status I2C_SmbusConfig(I2C_TypeDef *i2c, uint32_t options);
     /* I2C1 only. PE and PECEN required. Programs PECBYTE with START low. */
-    /* Seviye: PARAM[S] STATE[S] UNSUPPORTED[S] */
+    /* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
     SPL_Status I2C_SetPecByte(I2C_TypeDef *i2c);
     /* I2C1 only. Returns PECR.PEC; PECEN required. */
-    /* Seviye: PARAM[S] STATE[S] UNSUPPORTED[S] */
+    /* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
     SPL_Status I2C_GetPec(I2C_TypeDef *i2c, uint8_t *pec);
 
 #ifdef __cplusplus

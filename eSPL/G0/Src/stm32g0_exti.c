@@ -1,8 +1,9 @@
 /* EXTI driver for STM32G0 (RM0444 Rev 6 section 13). Bank 1 = lines 0..31, bank 2 = lines 32..36;
  * only IMR2/EMR2 of bank 2 are used (HW-001: the CMSIS RTSR2..FPR2 offsets are not trusted).
- * v0.8: the lines that exist and the configurable ones come from the generated per-SKU masks. */
-/* Kutuphane birimi: spl_check.h karisma korumasi referansini bu birim de uretir; uretmeyen tek
- * birim stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
+ * v0.8: the lines that exist and the configurable ones come from the generated per-SKU masks.
+ * Public contract: stm32g0_exti.h. */
+/* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit
+ * that does not is stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
 #define SPL_LIBRARY_BUILD 1
 #include <stddef.h>
 #include "stm32g0_exti.h"
@@ -15,9 +16,8 @@
 #define EXTI_PRESENT1 SPL_G0_MASK_EXTI_IMR1
 #define EXTI_PRESENT2 SPL_G0_MASK_EXTI_IMR2
 
-/* Denetim seviyesi (A4 dalga 2, Docs/CHECK_LEVEL.md 5.4 EXTI tablosu): SPL_REQUIRE = normal sinif
- * (yalniz FULL), SPL_REQUIRE_SAFE = SAFE sinif (FULL ve MIX). Butun makrolar ilk MMIO yazimindan
- * once (METHOD 1.3). */
+/* Check level (A4 wave 2, Docs/CHECK_LEVEL.md 5.4 EXTI table): SPL_REQUIRE = checked at FULL only
+ * (not compiled at FAST). All macros come before the first MMIO write (METHOD 1.3). */
 
 static uint8_t Exti_IsConfigurable(uint32_t line)
 {
@@ -30,8 +30,9 @@ static SPL_Status Exti_LineCheck(uint32_t line)
 {
     uint32_t present;
 
-    /* SAFE: line >= 37 tanimsiz kaydirma / baska hattin biti. "Bu SKU'da yok" ve hat 34 yapisal. */
-    SPL_REQUIRE_SAFE(line < EXTI_LINE_COUNT, SPL_ERR_PARAM);
+    /* line >= 37 is an undefined shift / another line's bit. "Not on this SKU" and line 34
+     * are structural. */
+    SPL_REQUIRE(line < EXTI_LINE_COUNT, SPL_ERR_PARAM);
     if (line == EXTI_LINE_VDDIO2)
     {
         return SPL_ERR_UNSUPPORTED;
@@ -58,7 +59,7 @@ SPL_Status EXTI_SetGpioSource(GPIO_TypeDef *port, uint8_t line)
     uint32_t code = 0U;
     uint32_t shift;
 
-    SPL_REQUIRE_SAFE(line <= 15U, SPL_ERR_PARAM); /* SAFE: EXTICR dizisinin disina yazim */
+    SPL_REQUIRE(line <= 15U, SPL_ERR_PARAM); /* write outside the EXTICR array */
     for (k = 0U; k < n; ++k)
     {
         if (port == ports[k].port)
@@ -69,8 +70,8 @@ SPL_Status EXTI_SetGpioSource(GPIO_TypeDef *port, uint8_t line)
     }
     if (k == n)
     {
-        return SPL_ERR_PARAM; /* yapisal: arama sonu (kod 0 = PA sessizce secilirdi), her seviyede
-                               */
+        /* structural: end of search (code 0 = PA would be selected silently); at every level. */
+        return SPL_ERR_PARAM;
     }
     /* RM0444 13.5.11: EXTICRx holds four 8-bit EXTIm fields (0 = PA .. 5 = PF). */
     shift = ((uint32_t)line & 3U) * 8U;
@@ -88,13 +89,13 @@ SPL_Status EXTI_LineConfig(uint8_t line, EXTI_TriggerTypeDef trigger, uint32_t m
     {
         return st;
     }
-    SPL_REQUIRE_SAFE(t <= (uint32_t)EXTI_TRIGGER_BOTH, SPL_ERR_PARAM); /* SAFE: kenar secilmez */
-    /* normal: mode = 0 hat maskeli (gorunur), fazla bit atilir. */
+    SPL_REQUIRE(t <= (uint32_t)EXTI_TRIGGER_BOTH, SPL_ERR_PARAM); /* no edge selected */
+    /* mode = 0 leaves the line masked (visible), extra bits are dropped. */
     SPL_REQUIRE((mode != 0U) && ((mode & ~(EXTI_MODE_INTERRUPT | EXTI_MODE_EVENT)) == 0U),
                 SPL_ERR_PARAM);
-    /* direct line: no edge selection. SAFE: kenar sessizce yok sayilir. */
-    SPL_REQUIRE_SAFE((Exti_IsConfigurable(line) != 0U) || (t == (uint32_t)EXTI_TRIGGER_NONE),
-                     SPL_ERR_PARAM);
+    /* direct line: no edge selection. the edge would be silently ignored. */
+    SPL_REQUIRE((Exti_IsConfigurable(line) != 0U) || (t == (uint32_t)EXTI_TRIGGER_NONE),
+                SPL_ERR_PARAM);
     if (line < 32U)
     {
         bit = (uint32_t)1U << line;
@@ -159,8 +160,8 @@ static SPL_Status Exti_ConfigurableCheck(uint8_t line)
     {
         return st;
     }
-    /* SAFE: dogrudan hatta yazim etkisiz / okuma sessizce 0. */
-    SPL_REQUIRE_SAFE(Exti_IsConfigurable(line) != 0U, SPL_ERR_PARAM);
+    /* on a direct line a write has no effect / a read is silently 0. */
+    SPL_REQUIRE(Exti_IsConfigurable(line) != 0U, SPL_ERR_PARAM);
     return SPL_OK;
 }
 
@@ -180,7 +181,7 @@ SPL_Status EXTI_GetPendingEdges(uint8_t line, uint8_t *rising, uint8_t *falling)
 {
     const SPL_Status st = Exti_ConfigurableCheck(line);
 
-    SPL_REQUIRE_SAFE((rising != NULL) && (falling != NULL), SPL_ERR_PARAM);
+    SPL_REQUIRE((rising != NULL) && (falling != NULL), SPL_ERR_PARAM);
     if (st != SPL_OK)
     {
         return st;
@@ -196,7 +197,7 @@ SPL_Status EXTI_GetPending(uint8_t line, uint8_t *pending)
     uint8_t f = 0U;
     SPL_Status st;
 
-    SPL_REQUIRE_SAFE(pending != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(pending != NULL, SPL_ERR_PARAM);
     st = EXTI_GetPendingEdges(line, &r, &f);
     if (st == SPL_OK)
     {

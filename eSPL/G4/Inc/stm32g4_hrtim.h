@@ -109,14 +109,14 @@ extern "C"
     /* --- DLL (RM0440 28.3.24, 28.5.75) --- */
     /* CALEN=1 -> STATE (CAL and CALEN must not be set together). Clears DLLRDY (ICR), then
      * DLLCR = CAL (CALRTE kept). */
-    /* Seviye: STATE[r] UNSUPPORTED[r] */
+    /* Level: STATE[r] UNSUPPORTED[r] */
     SPL_Status HRTIM_DllCalibrationStart(void);
     /* *ready = ISR.DLLRDY. */
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status HRTIM_DllReady(uint8_t *ready);
     /* enable=1: rate 0..3 (CALRTE), DLLRDY=0 -> STATE; DLLCR = CALEN | rate. enable=0: DLLCR = 0
      * (rate ignored). */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status HRTIM_DllPeriodic(uint8_t enable, uint32_t rate);
 
     /* --- timer A..F --- */
@@ -125,7 +125,7 @@ extern "C"
      * bits 0), TIMxCR2 = 0, PERxR, REPxR. v0.14: a non-zero CMP1..4 already written that is
      * outside the Table 232 limits of the new prescaler -> STATE, no write (reprogram it with
      * HRTIM_SetCompare first, or write it 0). Issue #27: CMP > PER is valid, not checked. */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status HRTIM_TimerInit(uint32_t timer, const HRTIM_TimerInitTypeDef *cfg);
     /* period within the Table 232 limits of the current CKPSC. Allowed while running (PREEN
      * decides when it takes effect). Issue #27 politikasi: yazilmis CMP1..4 sinanmaz, CMP > PER
@@ -133,66 +133,66 @@ extern "C"
      * Running with PREEN = 0 and period < current PERxR -> STATE, no write (a period below the
      * moving counter would let it run to 0xFFFF; no counter read, no race). Shrink with PREEN = 1
      * or while stopped; growing is allowed. */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status HRTIM_SetPeriod(uint32_t timer, uint32_t period);
     /* unit 1..4. value within the Table 232 limits of the current CKPSC, or 0 for units 1 and 3
      * (skipped pulse, RM 28.3.4). Issue #27 politikasi: PER ile iliski sinanmaz; CMP > PER
      * gecerli (periyot icinde eslesme ve olay yok). Allowed while running. */
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status HRTIM_SetCompare(uint32_t timer, uint32_t unit, uint32_t value);
 
     /* --- outputs --- */
     /* output 1..2. Timer stopped and this output not enabled (OENR), else STATE (POL, FAULT,
      * IDLES are fixed once the timer runs, RM 28.5.52). Writes SETxyR, RSTxyR and the POLy,
      * IDLESy, FAULTy fields of OUTxR (other OUTxR bits kept). */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status HRTIM_OutputConfig(uint32_t timer, uint32_t output, const HRTIM_OutputTypeDef *cfg);
     /* Timer stopped, both outputs of the timer disabled and no DTxR lock bit set, else STATE.
      * enable=1: DTxR = rising | prescaler | falling (positive signs, locks 0), OUTxR.DTEN = 1.
      * enable=0: OUTxR.DTEN = 0. Negative (overlapping) dead time is not offered.
      * enable=1 with rising = 0 or falling = 0 -> PARAM (both bridge switches would conduct at the
      * same edge). */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status HRTIM_DeadTimeConfig(uint32_t timer, const HRTIM_DeadTimeTypeDef *cfg);
     /* Software set (active=1, SETxyR.SST) or reset (active=0, RSTxyR.SRT) of one output; the
      * trigger bit self-clears. Works with the counter stopped (RM 28.3.24). */
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status HRTIM_ForceOutput(uint32_t timer, uint32_t output, uint8_t active);
     /* mask = HRTIM_OUTPUT_BIT(...) set, 1..0xFFF. OENR / ODISR = mask (writing 0 has no effect). */
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status HRTIM_OutputEnable(uint32_t mask);
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status HRTIM_OutputDisable(uint32_t mask);
     /* *enabled = OENR (1 = output in RUN; cleared by hardware on IDLE / FAULT), *disable_status =
      * ODSR. An ODSR bit is significant only while its OENR bit is 0: 0 = IDLE, 1 = FAULT
      * (RM0440 28.5.63, Table 249); with the output enabled it may read 1 (seen on G474RE). */
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status HRTIM_OutputStatus(uint32_t *enabled, uint32_t *disable_status);
 
     /* --- counters, software events --- */
     /* timer_mask = HRTIM_TIMER_BIT(...) set, 1..0x3F. enable=1: DLLRDY=0 -> STATE (RM 28.3.24:
      * start only once the DLL is ready); MCR TxCEN set / cleared (other MCR bits kept). */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status HRTIM_CounterEnable(uint32_t timer_mask, uint8_t enable);
     /* CR2 TxSWU / TxRST (self-clearing triggers): one write, the swap bits SWPx kept, no other
      * trigger copied back. timer_mask 1..0x3F (master timer not handled). */
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status HRTIM_SoftwareUpdate(uint32_t timer_mask);
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status HRTIM_SoftwareReset(uint32_t timer_mask);
 
     /* --- flags --- */
     /* *flags = TIMxISR (status bits 16..21 included). */
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status HRTIM_GetFlags(uint32_t timer, uint32_t *flags);
     /* flags non-zero subset of HRTIM_TIMFLAG_ALL -> TIMxICR = flags (W1C). */
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status HRTIM_ClearFlags(uint32_t timer, uint32_t flags);
     /* *flags = ISR. */
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status HRTIM_GetCommonFlags(uint32_t *flags);
     /* flags non-zero subset of FLT1..6, SYSFLT, BMPER -> ICR = flags (W1C). DLLRDY refused. */
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status HRTIM_ClearCommonFlags(uint32_t flags);
 
 #ifdef __cplusplus

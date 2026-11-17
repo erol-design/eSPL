@@ -9,6 +9,16 @@ extern "C"
 {
 #endif
 
+/* FDCAN message RAM layout calculator and validator (FD-01) for STM32G0B1 (RM0444 Rev 6 section
+ * 36.3.6), ported from the G4 SPL v0.13.5.
+ * Scope: computes and checks the fixed per-instance message RAM reservation of the
+ * FDCAN_SKU_G0B1 profile (FDCAN1 + FDCAN2); stm32g0_fdcan.c uses it for its offsets.
+ * Usage: FDCAN_LayoutCalculate per instance, then FDCAN_LayoutValidatePair for two instances.
+ * Common rules: no MMIO access, no static state, no waits; the validation results are the
+ * function's answer at every check level (Docs/CHECK_LEVEL.md 5.4 FDCAN table).
+ * Caller duties: none.
+ * Contract: Docs/v0.6_FDCAN_CONTRACT.md. */
+
 #define FDCAN_MESSAGE_RAM_WORDS_PER_INSTANCE 212U
 #define FDCAN_STANDARD_FILTER_MAX 28U
 #define FDCAN_EXTENDED_FILTER_MAX 8U
@@ -65,14 +75,16 @@ typedef struct
     uint32_t free_words;
 } FDCAN_MessageRamLayoutTypeDef;
 
-/* Seviye: PARAM[S,r] UNSUPPORTED[r] */
+/* Caller: none. */
+/* Level: PARAM[F,r] UNSUPPORTED[r] */
 SPL_Status FDCAN_LayoutCalculate(FDCAN_SkuTypeDef sku, uint32_t instance,
                                  const FDCAN_MessageRamConfigTypeDef *config,
                                  FDCAN_MessageRamLayoutTypeDef *layout);
 
 /* Validates canonical fixed sections, bases and distinct instance
  * reservations. Both layouts must describe the same SKU profile. */
-/* Seviye: PARAM[r] */
+/* Caller: none. */
+/* Level: PARAM[r] */
 SPL_Status FDCAN_LayoutValidatePair(const FDCAN_MessageRamLayoutTypeDef *first,
                                     const FDCAN_MessageRamLayoutTypeDef *second);
 

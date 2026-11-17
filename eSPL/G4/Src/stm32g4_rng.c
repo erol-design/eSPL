@@ -21,8 +21,8 @@ SPL_Status RNG_ClockErrorDetectionConfig(uint8_t enable)
 {
     uint32_t cr;
 
-    /* SAFE: Invalid boolean enable. */
-    SPL_REQUIRE_SAFE(enable <= 1U, SPL_ERR_PARAM);
+    /* Invalid boolean enable. */
+    SPL_REQUIRE(enable <= 1U, SPL_ERR_PARAM);
     cr = RNG->CR;
     /* RM0440 26.7.1: CED cannot change while the RNG is enabled. */
     if ((cr & RNG_CR_RNGEN) != 0U)
@@ -55,8 +55,8 @@ SPL_Status RNG_InterruptConfig(uint8_t enable)
 {
     uint32_t cr;
 
-    /* SAFE: Invalid boolean enable. */
-    SPL_REQUIRE_SAFE(enable <= 1U, SPL_ERR_PARAM);
+    /* Invalid boolean enable. */
+    SPL_REQUIRE(enable <= 1U, SPL_ERR_PARAM);
     cr = RNG->CR & (RNG_CR_KNOWN_BITS & ~RNG_CR_IE);
     if (enable != 0U)
     {
@@ -72,8 +72,8 @@ SPL_Status RNG_TryRead(uint32_t *value)
     uint32_t cr;
     uint32_t data;
 
-    /* SAFE: NULL output pointer. */
-    SPL_REQUIRE_SAFE(value != (uint32_t *)0, SPL_ERR_PARAM);
+    /* NULL output pointer. */
+    SPL_REQUIRE(value != (uint32_t *)0, SPL_ERR_PARAM);
     cr = RNG->CR;
     sr = RNG->SR;
     /* RM0440 26.3.5: DR must not be read when SEIS or CEIS is set. */
@@ -104,8 +104,8 @@ SPL_Status RNG_TryRead(uint32_t *value)
 
 SPL_Status RNG_GetErrors(uint32_t *errors)
 {
-    /* SAFE: NULL output pointer. */
-    SPL_REQUIRE_SAFE(errors != (uint32_t *)0, SPL_ERR_PARAM);
+    /* NULL output pointer. */
+    SPL_REQUIRE(errors != (uint32_t *)0, SPL_ERR_PARAM);
     *errors = RNG->SR & RNG_ERRORS_ALL;
     return SPL_OK;
 }

@@ -122,16 +122,16 @@ extern "C"
      * TXBRP. Retry when the requests complete, or cancel them first with FDCAN_TxCancel (a
      * request that never completes, e.g. no ACK, needs the cancel). INIT = 1 already (software
      * or bus-off) is accepted. */
-    /* Seviye: PARAM[S] BUSY[r] */
+    /* Level: PARAM[F] BUSY[r] */
     SPL_Status FDCAN_RequestInit(FDCAN_GlobalTypeDef *can);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status FDCAN_InitReady(FDCAN_GlobalTypeDef *can, uint8_t *ready);
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status FDCAN_SetNominalTiming(FDCAN_GlobalTypeDef *can,
                                       const FDCAN_NominalTimingTypeDef *cfg);
     /* Clears CCCR.INIT. The read-back follows only after clock-domain sync:
      * poll FDCAN_InitReady until *ready == 0 before TryWrite/TryRead. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status FDCAN_LeaveInit(FDCAN_GlobalTypeDef *can);
     /* DESTRUCTIVE STATUS READ: Reading PSR may reset LEC/DLEC to 7,
      * and reading ECR resets CEL on M_CAN. Capture or log the returned
@@ -139,9 +139,9 @@ extern "C"
      * Callers coordinating multiple diagnostics must serialize this read.
      * Caller duty (CCL-2 CAN-10b): detect error passive, either by enabling FDCAN_IE_EPE
      * and handling it, or by calling this API periodically and evaluating PSR.EP / ECR. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status FDCAN_Status(FDCAN_GlobalTypeDef *can, uint32_t *psr, uint32_t *ecr);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status FDCAN_ClearIrq(FDCAN_GlobalTypeDef *can, uint32_t mask);
 
     /* INIT=1 required; sets CCE. Zeroes this instance's 212 Message RAM words
@@ -150,19 +150,19 @@ extern "C"
      * keep it 0.
      * ERRATA ES0431 2.15.2 / ES0430 2.19.2 / ES0523 2.15.2: not reachable, G4 has no dedicated
      * Tx buffers (3 FIFO/queue elements, RM0440 44.3.9). */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status FDCAN_Configure(FDCAN_GlobalTypeDef *can, const FDCAN_ConfigTypeDef *cfg);
     /* INIT=1 required; sets CCE. Writes DBTP and TDCR. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status FDCAN_SetDataTiming(FDCAN_GlobalTypeDef *can, const FDCAN_DataTimingTypeDef *cfg);
     /* INIT=1 required; sets CCE. Bench/self-test only. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status FDCAN_SetTestMode(FDCAN_GlobalTypeDef *can, FDCAN_TestModeTypeDef mode);
     /* INIT=1 required; index < configured LSS / LSE (RXGFC). */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status FDCAN_SetStdFilter(FDCAN_GlobalTypeDef *can, uint32_t index,
                                   const FDCAN_FilterTypeDef *filter);
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status FDCAN_SetExtFilter(FDCAN_GlobalTypeDef *can, uint32_t index,
                                   const FDCAN_FilterTypeDef *filter);
 
@@ -172,14 +172,14 @@ extern "C"
      * FDCAN_SetTestMode) => STATE: the core cannot transmit there.
      * WOULD_BLOCK when the FIFO/queue is full. buffer (may be NULL) returns
      * the Tx buffer index 0..2 used, for TxCancel/TxStatus. */
-    /* Seviye: PARAM[S,r] STATE[r] HW[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F,r] STATE[r] HW[r] WOULD_BLOCK[r] */
     SPL_Status FDCAN_TryWrite(FDCAN_GlobalTypeDef *can, const FDCAN_FrameTypeDef *frame,
                               uint32_t *buffer);
     /* mask: Tx buffer bits 1..7. CCE must be 0. Intended for queue mode. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status FDCAN_TxCancel(FDCAN_GlobalTypeDef *can, uint32_t mask);
     /* Plain reads of TXBRP / TXBTO / TXBCF (bits 2:0). */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status FDCAN_TxStatus(FDCAN_GlobalTypeDef *can, uint32_t *pending, uint32_t *occurred,
                               uint32_t *cancelled);
 
@@ -189,30 +189,30 @@ extern "C"
      * INIT=1. Bytes >= length are zero. Does not report message lost.
      * Caller duty (CCL-2 CAN-06a): one call reads one frame and RFxN is a per-message event
      * flag, so the RX interrupt handler must call this until WOULD_BLOCK (FIFO empty). */
-    /* Seviye: PARAM[S] STATE[r] HW[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] HW[r] WOULD_BLOCK[r] */
     SPL_Status FDCAN_TryRead(FDCAN_GlobalTypeDef *can, uint32_t fifo, FDCAN_FrameTypeDef *frame);
     /* Plain read of RXFxS: fill level 0..3 and message-lost flag (RFxL). */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status FDCAN_RxFifoStatus(FDCAN_GlobalTypeDef *can, uint32_t fifo, uint32_t *fill,
                                   uint8_t *lost);
     /* Clears IR.RFxL (W1C); RXFxS.RFxL follows. Capture it first. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status FDCAN_ClearRxLost(FDCAN_GlobalTypeDef *can, uint32_t fifo);
 
     /* IE / ILS / ILE full-register writes; unknown bits => SPL_ERR_PARAM.
      * Caller duty (CCL-2 CAN-11a): route each enabled source group (ILS) to a line (IT0/IT1)
      * enabled in ILE whose NVIC handler is defined and services that source's IR flags. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status FDCAN_IrqEnable(FDCAN_GlobalTypeDef *can, uint32_t ie_mask);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status FDCAN_IrqLineSelect(FDCAN_GlobalTypeDef *can, uint32_t ils_mask);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status FDCAN_IrqLineEnable(FDCAN_GlobalTypeDef *can, uint32_t ile_mask);
 
     /* Pure helpers. fd=0: DLC 9..15 => 8 bytes; length 0..8 only. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status FDCAN_DlcToLength(uint32_t dlc, uint8_t fd, uint8_t *length);
-    /* Seviye: PARAM[S,r] */
+    /* Level: PARAM[F,r] */
     SPL_Status FDCAN_LengthToDlc(uint32_t length, uint8_t fd, uint8_t *dlc);
 
 #ifdef __cplusplus

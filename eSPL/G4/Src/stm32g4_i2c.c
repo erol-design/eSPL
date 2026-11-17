@@ -106,12 +106,12 @@ static SPL_Status I2c_RestartGate(const I2C_TypeDef *i2c, uint32_t errors)
 
 SPL_Status I2C_MasterInit(I2C_TypeDef *i2c, uint32_t timingr)
 {
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((timingr == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!(((timingr & 0x0F000000UL) != 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((timingr == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!(((timingr & 0x0F000000UL) != 0U)), SPL_ERR_PARAM);
     if ((i2c->CR1 & I2C_CR1_PE) != 0U)
     {
         return SPL_ERR_STATE;
@@ -127,14 +127,14 @@ SPL_Status I2C_Start(I2C_TypeDef *i2c, uint8_t address7, uint8_t length, uint8_t
     uint32_t cr2;
     SPL_Status gate;
 
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((address7 > 127U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((length == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((read > 1U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((address7 > 127U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((length == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((read > 1U)), SPL_ERR_PARAM);
     if ((i2c->CR1 & I2C_CR1_PE) == 0U)
     {
         return SPL_ERR_STATE;
@@ -163,8 +163,8 @@ SPL_Status I2C_Start(I2C_TypeDef *i2c, uint8_t address7, uint8_t length, uint8_t
 
 SPL_Status I2C_TryWrite(I2C_TypeDef *i2c, uint8_t byte)
 {
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!(I2c_Valid(i2c) == 0U), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!(I2c_Valid(i2c) == 0U), SPL_ERR_PARAM);
     if ((i2c->CR1 & I2C_CR1_PE) == 0U)
     {
         return SPL_ERR_STATE;
@@ -185,10 +185,10 @@ SPL_Status I2C_TryWrite(I2C_TypeDef *i2c, uint8_t byte)
 
 SPL_Status I2C_TryRead(I2C_TypeDef *i2c, uint8_t *byte)
 {
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((byte == (uint8_t *)0)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((byte == (uint8_t *)0)), SPL_ERR_PARAM);
     if ((i2c->CR1 & I2C_CR1_PE) == 0U)
     {
         return SPL_ERR_STATE;
@@ -209,8 +209,8 @@ SPL_Status I2C_TryRead(I2C_TypeDef *i2c, uint8_t *byte)
 
 SPL_Status I2C_Stop(I2C_TypeDef *i2c)
 {
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!(I2c_Valid(i2c) == 0U), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!(I2c_Valid(i2c) == 0U), SPL_ERR_PARAM);
 
     /* START is cleared by hardware and writing 0 has no effect. Never copy a
      * START=1 read back: hardware may clear it between read and write, and
@@ -221,8 +221,8 @@ SPL_Status I2C_Stop(I2C_TypeDef *i2c)
 
 SPL_Status I2C_ClearErrors(I2C_TypeDef *i2c)
 {
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!(I2c_Valid(i2c) == 0U), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!(I2c_Valid(i2c) == 0U), SPL_ERR_PARAM);
 
     /* ICR is write-one-to-clear; do not use read-modify-write. */
     /* STOPF is a transfer-completion event, not an error.
@@ -239,10 +239,10 @@ SPL_Status I2C_ClearErrors(I2C_TypeDef *i2c)
 
 SPL_Status I2C_Status(I2C_TypeDef *i2c, uint32_t *status)
 {
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((status == (uint32_t *)0)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((status == (uint32_t *)0)), SPL_ERR_PARAM);
 
     *status = i2c->ISR;
     return SPL_OK;
@@ -255,14 +255,14 @@ SPL_Status I2C_StartNoStop(I2C_TypeDef *i2c, uint8_t address7, uint8_t length, u
     uint32_t cr2;
     SPL_Status gate;
 
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((address7 > 127U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((length == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((read > 1U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((address7 > 127U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((length == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((read > 1U)), SPL_ERR_PARAM);
     if ((i2c->CR1 & I2C_CR1_PE) == 0U)
     {
         return SPL_ERR_STATE;
@@ -289,16 +289,16 @@ SPL_Status I2C_Restart(I2C_TypeDef *i2c, uint8_t address7, uint8_t length, uint8
     uint32_t cr2;
     SPL_Status gate;
 
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((address7 > 127U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((length == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((read > 1U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((autoend > 1U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((address7 > 127U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((length == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((read > 1U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((autoend > 1U)), SPL_ERR_PARAM);
     if ((i2c->CR1 & I2C_CR1_PE) == 0U)
     {
         return SPL_ERR_STATE;
@@ -328,10 +328,10 @@ SPL_Status I2C_Restart(I2C_TypeDef *i2c, uint8_t address7, uint8_t length, uint8
 
 SPL_Status I2C_TransferComplete(I2C_TypeDef *i2c, uint8_t *complete)
 {
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((complete == (uint8_t *)0)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((complete == (uint8_t *)0)), SPL_ERR_PARAM);
     /* ERRATA ES0431 2.11.2 / ES0430 2.15.2 / ES0523 2.11.2: spurious BERR does not abort.
      * PECERR (PEC enabled; CCL-2 I2C-27) is reported too, flags kept for I2C_GetErrors. */
     if ((i2c->ISR & (I2C_XFER_ABORT_LEGACY | I2C_ISR_PECERR)) != 0U)
@@ -344,10 +344,10 @@ SPL_Status I2C_TransferComplete(I2C_TypeDef *i2c, uint8_t *complete)
 
 SPL_Status I2C_StopDetected(I2C_TypeDef *i2c, uint8_t *detected)
 {
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((detected == (uint8_t *)0)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((detected == (uint8_t *)0)), SPL_ERR_PARAM);
     /* A target NACK in an AUTOEND transfer also ends with STOPF: report it as
      * ERR_HW like I2C_TransferComplete (flags kept for I2C_GetErrors); PECERR as well. */
     if ((i2c->ISR & (I2C_XFER_ABORT_LEGACY | I2C_ISR_PECERR)) != 0U)
@@ -362,8 +362,8 @@ SPL_Status I2C_StopDetected(I2C_TypeDef *i2c, uint8_t *detected)
  * ICR is write-one-to-clear; do not read/modify/write this register. */
 SPL_Status I2C_ClearStop(I2C_TypeDef *i2c)
 {
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!(I2c_Valid(i2c) == 0U), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!(I2c_Valid(i2c) == 0U), SPL_ERR_PARAM);
 
     i2c->ICR = I2C_ICR_STOPCF;
     /* Read back: the clear reaches the peripheral before return (METHOD 1.7, issue #23). */
@@ -460,12 +460,12 @@ SPL_Status I2C_StartLong(I2C_TypeDef *i2c, I2C_LongTransferTypeDef *xfer, uint16
 {
     SPL_Status gate;
 
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((xfer == (I2C_LongTransferTypeDef *)0)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((I2c_LongArgsValid(address, options, length, 0U) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((xfer == (I2C_LongTransferTypeDef *)0)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((I2c_LongArgsValid(address, options, length, 0U) == 0U)), SPL_ERR_PARAM);
     if ((i2c->CR1 & I2C_CR1_PE) == 0U)
     {
         return SPL_ERR_STATE;
@@ -489,12 +489,12 @@ SPL_Status I2C_RestartLong(I2C_TypeDef *i2c, I2C_LongTransferTypeDef *xfer, uint
 {
     SPL_Status gate;
 
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((xfer == (I2C_LongTransferTypeDef *)0)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((I2c_LongArgsValid(address, options, length, 1U) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((xfer == (I2C_LongTransferTypeDef *)0)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((I2c_LongArgsValid(address, options, length, 1U) == 0U)), SPL_ERR_PARAM);
     if ((i2c->CR1 & I2C_CR1_PE) == 0U)
     {
         return SPL_ERR_STATE;
@@ -518,12 +518,12 @@ SPL_Status I2C_ReloadService(I2C_TypeDef *i2c, I2C_LongTransferTypeDef *xfer)
     uint32_t cr2;
     uint32_t chunk;
 
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((xfer == (I2C_LongTransferTypeDef *)0)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((xfer->autoend > 1U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((xfer == (I2C_LongTransferTypeDef *)0)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((xfer->autoend > 1U)), SPL_ERR_PARAM);
     if ((i2c->CR1 & I2C_CR1_PE) == 0U)
     {
         return SPL_ERR_STATE;
@@ -574,10 +574,10 @@ SPL_Status I2C_ReloadService(I2C_TypeDef *i2c, I2C_LongTransferTypeDef *xfer)
 
 SPL_Status I2C_GetErrors(I2C_TypeDef *i2c, uint32_t *errors)
 {
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((errors == (uint32_t *)0)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((errors == (uint32_t *)0)), SPL_ERR_PARAM);
 
     *errors = i2c->ISR & I2C_ERRORS_ALL;
     return SPL_OK;
@@ -587,12 +587,12 @@ SPL_Status I2C_ClearErrorFlags(I2C_TypeDef *i2c, uint32_t errors)
 {
     uint32_t icr = 0U;
 
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((errors == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!(((errors & ~I2C_ERRORS_ALL) != 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((errors == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!(((errors & ~I2C_ERRORS_ALL) != 0U)), SPL_ERR_PARAM);
 
     if ((errors & I2C_ISR_NACKF) != 0U)
     {
@@ -621,6 +621,15 @@ SPL_Status I2C_ClearErrorFlags(I2C_TypeDef *i2c, uint32_t errors)
 
     /* ICR is write-one-to-clear: single write, no read-modify-write. */
     i2c->ICR = icr;
+    /* CCL-2 I2C-02c (propagated from eSPL G0 84ee5e8, METHOD 7.5): a transfer-ending error
+     * (NACKF, BERR, ARLO, PECERR, TIMEOUT) leaves the byte loaded for the failed transfer in
+     * TXDR; RM0440 39.9.7: writing TXE = 1 flushes it, so the next transfer does not send it
+     * first (same step as I2C_ClearErrors). OVR alone does not end the transfer. */
+    if ((errors &
+         (I2C_ISR_NACKF | I2C_ISR_BERR | I2C_ISR_ARLO | I2C_ISR_PECERR | I2C_ISR_TIMEOUT)) != 0U)
+    {
+        i2c->ISR = I2C_ISR_TXE;
+    }
     /* Read back: the clear reaches the peripheral before return (METHOD 1.7, issue #23). */
     (void)i2c->ISR;
     return SPL_OK;
@@ -630,10 +639,10 @@ SPL_Status I2C_SoftwareReset(I2C_TypeDef *i2c, uint8_t reenable)
 {
     uint32_t cr1;
 
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((reenable > 1U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((reenable > 1U)), SPL_ERR_PARAM);
 
     /* RM0440 39.4.6: 1. write PE=0, 2. check PE=0, 3. write PE=1.
      * CR1 has no W1C or self-clearing bits, so read-modify-write is safe. */
@@ -653,11 +662,11 @@ SPL_Status I2C_SoftwareReset(I2C_TypeDef *i2c, uint8_t reenable)
 
 SPL_Status I2C_TimeoutConfig(I2C_TypeDef *i2c, uint32_t timeoutr)
 {
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!(((timeoutr & ~I2C_TIMEOUTR_VALID) != 0U)), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(I2c_HasSmbus(i2c) != 0U, SPL_ERR_UNSUPPORTED);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!(((timeoutr & ~I2C_TIMEOUTR_VALID) != 0U)), SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_HasSmbus(i2c) != 0U, SPL_ERR_UNSUPPORTED);
     if ((i2c->ISR & I2C_ISR_BUSY) != 0U)
     {
         return SPL_BUSY;
@@ -682,24 +691,24 @@ SPL_Status I2C_TargetInit(I2C_TypeDef *i2c, const I2C_TargetConfigTypeDef *cfg)
     uint32_t oar2 = 0U;
     uint32_t cr1 = I2C_CR1_PE;
 
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(cfg != (const I2C_TargetConfigTypeDef *)0, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((cfg->timingr != 0U) && ((cfg->timingr & 0x0F000000UL) == 0U) &&
-                         ((cfg->addr10 != 0U) || (cfg->own_address <= 127U)) &&
-                         (cfg->own_address <= 1023U) && (cfg->own_address2 <= 127U) &&
-                         (cfg->oa2_mask <= 7U),
-                     SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(cfg != (const I2C_TargetConfigTypeDef *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE((cfg->timingr != 0U) && ((cfg->timingr & 0x0F000000UL) == 0U) &&
+                    ((cfg->addr10 != 0U) || (cfg->own_address <= 127U)) &&
+                    (cfg->own_address <= 1023U) && (cfg->own_address2 <= 127U) &&
+                    (cfg->oa2_mask <= 7U),
+                SPL_ERR_PARAM);
     SPL_REQUIRE((cfg->addr10 <= 1U) && (cfg->oa2_enable <= 1U) && (cfg->general_call <= 1U) &&
                     (cfg->no_stretch <= 1U) && (cfg->byte_control <= 1U) && (cfg->wakeup <= 1U) &&
                     (cfg->reserved[0] == 0U) && (cfg->reserved[1] == 0U),
                 SPL_ERR_PARAM);
     /* RM0440 39.4.8: SBC and NOSTRETCH must not be enabled together. */
-    SPL_REQUIRE_SAFE((cfg->byte_control == 0U) || (cfg->no_stretch == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE((cfg->byte_control == 0U) || (cfg->no_stretch == 0U), SPL_ERR_PARAM);
     /* Table 352: WUPEN is implemented only on I2C1. Wake-up also requires
      * clock stretching; the CR1 image below leaves DNF at zero. */
-    SPL_REQUIRE_SAFE((cfg->wakeup == 0U) || (I2c_HasSmbus(i2c) != 0U), SPL_ERR_UNSUPPORTED);
-    SPL_REQUIRE_SAFE((cfg->wakeup == 0U) || (cfg->no_stretch == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((i2c->CR1 & I2C_CR1_PE) == 0U, SPL_ERR_STATE);
+    SPL_REQUIRE((cfg->wakeup == 0U) || (I2c_HasSmbus(i2c) != 0U), SPL_ERR_UNSUPPORTED);
+    SPL_REQUIRE((cfg->wakeup == 0U) || (cfg->no_stretch == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE((i2c->CR1 & I2C_CR1_PE) == 0U, SPL_ERR_STATE);
 
     oar1 = I2C_OAR1_OA1EN | ((cfg->addr10 != 0U) ? ((uint32_t)cfg->own_address | I2C_OAR1_OA1MODE)
                                                  : ((uint32_t)cfg->own_address << 1U));
@@ -738,9 +747,8 @@ SPL_Status I2C_TargetPollAddress(I2C_TypeDef *i2c, uint8_t *addcode, uint8_t *co
 {
     uint32_t isr;
 
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((addcode != (uint8_t *)0) && (controller_reads != (uint8_t *)0),
-                     SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE((addcode != (uint8_t *)0) && (controller_reads != (uint8_t *)0), SPL_ERR_PARAM);
     isr = i2c->ISR;
     if ((isr & I2C_ISR_ADDR) == 0U)
     {
@@ -753,10 +761,10 @@ SPL_Status I2C_TargetPollAddress(I2C_TypeDef *i2c, uint8_t *addcode, uint8_t *co
 
 SPL_Status I2C_TargetSetBytes(I2C_TypeDef *i2c, uint8_t nbytes, uint8_t reload)
 {
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
     SPL_REQUIRE(reload <= 1U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((i2c->CR1 & (I2C_CR1_PE | I2C_CR1_SBC)) == (I2C_CR1_PE | I2C_CR1_SBC),
-                     SPL_ERR_STATE);
+    SPL_REQUIRE((i2c->CR1 & (I2C_CR1_PE | I2C_CR1_SBC)) == (I2C_CR1_PE | I2C_CR1_SBC),
+                SPL_ERR_STATE);
     i2c->CR2 = (i2c->CR2 & ~(I2C_CR2_NBYTES_Msk | I2C_CR2_RELOAD | I2C_CR2_COMMANDS)) |
                ((uint32_t)nbytes << I2C_CR2_NBYTES_Pos) | ((reload != 0U) ? I2C_CR2_RELOAD : 0U);
     return SPL_OK;
@@ -766,7 +774,7 @@ SPL_Status I2C_TargetAckAddress(I2C_TypeDef *i2c)
 {
     uint32_t cr2;
 
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
     SPL_REQUIRE((i2c->ISR & I2C_ISR_ADDR) != 0U, SPL_ERR_STATE);
     /* ES0431 2.11.3 / ES0430 2.15.3: after own-address match, clear ADDR
      * and write CR2 with START low before STOP to prevent a spurious
@@ -779,15 +787,15 @@ SPL_Status I2C_TargetAckAddress(I2C_TypeDef *i2c)
 
 SPL_Status I2C_TargetNack(I2C_TypeDef *i2c)
 {
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((i2c->CR1 & I2C_CR1_PE) != 0U, SPL_ERR_STATE);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE((i2c->CR1 & I2C_CR1_PE) != 0U, SPL_ERR_STATE);
     i2c->CR2 = (i2c->CR2 & ~I2C_CR2_COMMANDS) | I2C_CR2_NACK;
     return SPL_OK;
 }
 
 SPL_Status I2C_TargetFlushTx(I2C_TypeDef *i2c)
 {
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
     i2c->ISR = I2C_ISR_TXE;
     return SPL_OK;
 }
@@ -796,7 +804,7 @@ SPL_Status I2C_TargetTryWrite(I2C_TypeDef *i2c, uint8_t byte)
 {
     uint32_t isr;
 
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
     isr = i2c->ISR;
     if ((isr & (I2C_ISR_OVR | I2C_ISR_BERR | I2C_ISR_PECERR)) != 0U)
     {
@@ -818,8 +826,8 @@ SPL_Status I2C_TargetTryRead(I2C_TypeDef *i2c, uint8_t *byte)
 {
     uint32_t isr;
 
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(byte != (uint8_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(byte != (uint8_t *)0, SPL_ERR_PARAM);
     isr = i2c->ISR;
     /* PECERR (PEC enabled; CCL-2 I2C-27): the received PEC byte did not match. */
     if ((isr & (I2C_ISR_OVR | I2C_ISR_BERR | I2C_ISR_PECERR)) != 0U)
@@ -838,8 +846,8 @@ SPL_Status I2C_TargetTimeoutRecover(I2C_TypeDef *i2c)
 {
     uint32_t i;
 
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(I2c_HasSmbus(i2c) != 0U, SPL_ERR_UNSUPPORTED);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_HasSmbus(i2c) != 0U, SPL_ERR_UNSUPPORTED);
     if ((i2c->ISR & I2C_ISR_TIMEOUT) == 0U)
     {
         return SPL_ERR_STATE;
@@ -862,30 +870,30 @@ SPL_Status I2C_TargetTimeoutRecover(I2C_TypeDef *i2c)
 
 SPL_Status I2C_SmbusConfig(I2C_TypeDef *i2c, uint32_t options)
 {
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((options & ~I2C_SMBUS_ALL) == 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(I2c_HasSmbus(i2c) != 0U, SPL_ERR_UNSUPPORTED);
-    SPL_REQUIRE_SAFE((i2c->CR1 & I2C_CR1_PE) == 0U, SPL_ERR_STATE);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE((options & ~I2C_SMBUS_ALL) == 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_HasSmbus(i2c) != 0U, SPL_ERR_UNSUPPORTED);
+    SPL_REQUIRE((i2c->CR1 & I2C_CR1_PE) == 0U, SPL_ERR_STATE);
     i2c->CR1 = (i2c->CR1 & ~I2C_SMBUS_ALL) | options;
     return SPL_OK;
 }
 
 SPL_Status I2C_SetPecByte(I2C_TypeDef *i2c)
 {
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(I2c_HasSmbus(i2c) != 0U, SPL_ERR_UNSUPPORTED);
-    SPL_REQUIRE_SAFE((i2c->CR1 & (I2C_CR1_PE | I2C_CR1_PECEN)) == (I2C_CR1_PE | I2C_CR1_PECEN),
-                     SPL_ERR_STATE);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_HasSmbus(i2c) != 0U, SPL_ERR_UNSUPPORTED);
+    SPL_REQUIRE((i2c->CR1 & (I2C_CR1_PE | I2C_CR1_PECEN)) == (I2C_CR1_PE | I2C_CR1_PECEN),
+                SPL_ERR_STATE);
     i2c->CR2 = (i2c->CR2 & ~I2C_CR2_COMMANDS) | I2C_CR2_PECBYTE;
     return SPL_OK;
 }
 
 SPL_Status I2C_GetPec(I2C_TypeDef *i2c, uint8_t *pec)
 {
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(pec != (uint8_t *)0, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(I2c_HasSmbus(i2c) != 0U, SPL_ERR_UNSUPPORTED);
-    SPL_REQUIRE_SAFE((i2c->CR1 & I2C_CR1_PECEN) != 0U, SPL_ERR_STATE);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(pec != (uint8_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_HasSmbus(i2c) != 0U, SPL_ERR_UNSUPPORTED);
+    SPL_REQUIRE((i2c->CR1 & I2C_CR1_PECEN) != 0U, SPL_ERR_STATE);
     *pec = (uint8_t)(i2c->PECR & I2C_PECR_PEC_Msk);
     return SPL_OK;
 }

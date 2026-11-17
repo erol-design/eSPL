@@ -60,36 +60,36 @@ extern "C"
     /* Writes AIRCR.PRIGROUP = 7 - group with VECTKEY 0x5FA (CMSIS
      * NVIC_SetPriorityGrouping). group > NVIC_PRIOGROUP_4 -> PARAM, no write.
      * Changing the grouping re-interprets every priority already programmed. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status NVIC_SetGrouping(NVIC_PriorityGroupTypeDef group);
     /* Reads AIRCR.PRIGROUP and reports the effective number of preemption bits
      * (PRIGROUP 0..3 all give NVIC_PRIOGROUP_4 with 4 priority bits). */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status NVIC_GetGrouping(NVIC_PriorityGroupTypeDef *group);
 
     /* Encodes (preempt, sub) for the CURRENT grouping and writes IPR/SHPR via
      * CMSIS NVIC_SetPriority. preempt >= 2^preemptBits or sub >= 2^subBits ->
      * PARAM, no write. Lower value = higher urgency. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status NVIC_SetIrqPriority(IRQn_Type irq, uint32_t preempt, uint32_t sub);
     /* Decodes the programmed priority with the CURRENT grouping. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status NVIC_GetIrqPriority(IRQn_Type irq, uint32_t *preempt, uint32_t *sub);
 
     /* Device IRQs only (0..NVIC_IRQ_MAX). ISER/ICER/ISPR/ICPR single-bit writes. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status NVIC_Enable(IRQn_Type irq);
     /* ICER write followed by DSB/ISB (CMSIS NVIC_DisableIRQ): after return the
      * IRQ can no longer be taken. A pending bit stays pending. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status NVIC_Disable(IRQn_Type irq);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status NVIC_IsEnabled(IRQn_Type irq, uint8_t *enabled);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status NVIC_SetPending(IRQn_Type irq);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status NVIC_ClearPending(IRQn_Type irq);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status NVIC_GetPending(IRQn_Type irq, uint8_t *pending);
 
     /* Programs and starts SysTick: LOAD = reload, VAL = 0 (clears the counter
@@ -99,12 +99,12 @@ extern "C"
      * may be owned by an RTOS). Does not wait for anything and does not touch
      * the SysTick exception priority (use NVIC_SetIrqPriority(SysTick_IRQn)).
      * Note: reading CTRL clears COUNTFLAG (PM0214 4.5.1). */
-    /* Seviye: PARAM[S,r] STATE[r] */
+    /* Level: PARAM[F,r] STATE[r] */
     SPL_Status NVIC_SysTickConfig(uint32_t reload, NVIC_SysTickClockTypeDef clock,
                                   uint8_t interrupt);
     /* Clears CTRL.ENABLE and CTRL.TICKINT, keeps CLKSOURCE. LOAD/VAL unchanged.
      * A SysTick exception already pending stays pending (ICSR.PENDSTSET). */
-    /* Seviye: - */
+    /* Level: - */
     SPL_Status NVIC_SysTickStop(void);
 
 #ifdef __cplusplus

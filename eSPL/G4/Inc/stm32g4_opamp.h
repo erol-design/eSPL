@@ -76,46 +76,46 @@ extern "C"
      * FORCE_VP=0, CALON=0, CALSEL=00, OPAEN=0; USERTRIM and trim values preserved. */
     /* ERRATA ES0431 2.7.1 / ES0430 2.10.1 / ES0523 2.7.1: in non-inverting PGA mode fast edges on
      * the VINM0 pin are amplified at the output; keep VINM0 static/slow (pins: contract). */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status OPAMP_Config(OPAMP_TypeDef *opamp, const OPAMP_ConfigTypeDef *config);
     /* LOCK=1: STATE. Sets OPAEN. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status OPAMP_Enable(OPAMP_TypeDef *opamp);
     /* LOCK=1: STATE; CALON=1: STATE (exit calibration first). Clears OPAEN. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status OPAMP_Disable(OPAMP_TypeDef *opamp);
 
     /* User trimming. LOCK=1: STATE. Sets USERTRIM (separate write if it was 0), then writes
      * TRIMOFFSETP/TRIMOFFSETN (RM0440 25.5.1: modifiable only with USERTRIM=1). */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status OPAMP_SetUserTrim(OPAMP_TypeDef *opamp, uint32_t trim_p, uint32_t trim_n);
     /* Reads TRIMOFFSETP/N (factory values after reset while USERTRIM=0). */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status OPAMP_GetTrim(const OPAMP_TypeDef *opamp, uint32_t *trim_p, uint32_t *trim_n);
     /* LOCK=1: STATE; CALON=1: STATE. Clears USERTRIM: factory trim used again. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status OPAMP_UseFactoryTrim(OPAMP_TypeDef *opamp);
 
     /* Calibration steps (RM0440 25.3.8), see contract for the full sequence.
      * Enter: OPAEN=1 required (STATE). Sets USERTRIM, CALSEL for pair, then CALON=1.
      * CALOUT is a valid indicator only with OPAINTOEN=0 (output on the VOUT pin, RM 25.3.8);
      * with OPAINTOEN=1 use the ADC reading of the internal output instead (contract). */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status OPAMP_CalibrationEnter(OPAMP_TypeDef *opamp, uint32_t pair);
     /* CALON=1 required (STATE). Changes CALSEL to the other pair. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status OPAMP_CalibrationSelect(OPAMP_TypeDef *opamp, uint32_t pair);
     /* CALON=1 required (STATE). Reads CALOUT; valid only tOFFTRIM after the last trim write. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status OPAMP_CalibrationOutput(const OPAMP_TypeDef *opamp, uint8_t *calout);
     /* CALON=1 required (STATE). Clears CALON and CALSEL; USERTRIM and trims kept. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status OPAMP_CalibrationExit(OPAMP_TypeDef *opamp);
 
     /* Sets LOCK (irreversible until system reset). Already locked: STATE. CALON=1: STATE. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status OPAMP_Lock(OPAMP_TypeDef *opamp);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status OPAMP_GetLockState(const OPAMP_TypeDef *opamp, uint8_t *locked);
 
 #endif /* OPAMP1 */

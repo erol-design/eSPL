@@ -8,9 +8,9 @@ project(G431_Template C ASM)
 set(ESPL_G4 ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 set(ESPL_COMMON ${ESPL_G4}/../Common)
 
-# Cihaz ve denetim seviyesi: SPL_CHECK_LEVEL 0 = FULL, 1 = MIX, 2 = FAST (butun derlemede ayni).
+# Cihaz ve denetim seviyesi: SPL_CHECK_LEVEL 0 = FULL, 2 = FAST (butun derlemede ayni).
 set(DEVICE STM32G431xx)
-set(SPL_CHECK_LEVEL 0 CACHE STRING "eSPL denetim seviyesi (0 FULL, 1 MIX, 2 FAST)")
+set(SPL_CHECK_LEVEL 0 CACHE STRING "eSPL denetim seviyesi (0 FULL, 2 FAST)")
 
 add_executable(${PROJECT_NAME}
     main.c

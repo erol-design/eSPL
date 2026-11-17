@@ -1,7 +1,8 @@
 /* RCC driver for STM32G0 (RM0444 Rev 6 section 5, DS13560 Rev 6 Table 47); v0.8: every G0 SKU
- * through stm32g0_sku.h (HSI48, PLL Q output, CCIPR2 and kernel selectors only where present). */
-/* Kutuphane birimi: spl_check.h karisma korumasi referansini bu birim de uretir; uretmeyen tek
- * birim stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
+ * through stm32g0_sku.h (HSI48, PLL Q output, CCIPR2 and kernel selectors only where present).
+ * Public contract: stm32g0_rcc.h. */
+/* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit
+ * that does not is stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
 #define SPL_LIBRARY_BUILD 1
 #include <stddef.h>
 #include "stm32g0_rcc.h"
@@ -23,11 +24,11 @@
 
 #define RCC_CFGR_SWS_VAL(cfgr) (((cfgr) & RCC_CFGR_SWS_Msk) >> RCC_CFGR_SWS_Pos)
 
-/* Denetim seviyesi (A4 dalga 1, Docs/CHECK_LEVEL.md 5.4 RCC tablosu): SPL_REQUIRE = normal sinif
- * (yalniz FULL), SPL_REQUIRE_SAFE = SAFE sinif (FULL ve MIX). Yapisal donusler (switch default,
- * arama sonu, SKU'da olmayan secici) ve saat hesabinin result donusleri her seviyede duz if.
- * Yalniz dogrulamada kullanilan yardimcilar (kullanimdaki saat, HCLK siniri, VOS) FAST'ta
- * derlenmez. Butun makrolar ilk MMIO yazimindan once (METHOD 1.3). */
+/* Check level (A4 wave 1, Docs/CHECK_LEVEL.md 5.4 RCC table): SPL_REQUIRE = checked at FULL only
+ * (not compiled at FAST). Structural returns (switch default, end of search, selector not on the
+ * SKU) and the result returns of the clock calculation are plain ifs at every level. Helpers used
+ * only for validation (clock in use, HCLK limit, VOS) are not compiled in FAST. All macros come
+ * before the first MMIO write (METHOD 1.3). */
 
 typedef struct
 {
@@ -36,10 +37,10 @@ typedef struct
     uint32_t reset_mask;
 } Rcc_Bus;
 
-/* 2026-11-13 (UFAST'tan): ENR / RSTR adresi bus numarasindan hesaplanir (switch yerine).
- * IOPRSTR..APBRSTR2 (0x24..0x30) ve IOPENR..APBENR2 (0x34..0x40) her G0 SKU'sunda bitisik
- * (RM0444 / RM0454 5.4); asagidaki typedef'ler bunu derleme zamaninda dogrular. Dogrulama
- * degismedi: id >= 0x80 ya da SKU maskesinde olmayan bit -> 0. Bus sirasi RCC_BUS_IOP..APB2. */
+/* 2026-11-13 (from UFAST): the ENR / RSTR address is computed from the bus number (instead of a
+ * switch). IOPRSTR..APBRSTR2 (0x24..0x30) and IOPENR..APBENR2 (0x34..0x40) are contiguous on every
+ * G0 SKU (RM0444 / RM0454 5.4); the typedefs below verify this at compile time. Validation is
+ * unchanged: id >= 0x80 or a bit not in the SKU mask -> 0. Bus order RCC_BUS_IOP..APB2. */
 typedef char Rcc_EnrContiguous[((offsetof(RCC_TypeDef, APBENR2) - offsetof(RCC_TypeDef, IOPENR)) ==
                                 (3U * sizeof(uint32_t)))
                                    ? 1
@@ -53,10 +54,11 @@ typedef char Rcc_BusOrder[((RCC_BUS_IOP == 0U) && (RCC_BUS_AHB == 1U) && (RCC_BU
                               ? 1
                               : -1];
 
-/* A4 (CHECK_LEVEL.md 4.2): eski Rcc_Lookup ikiye ayrildi. Rcc_IsPeriph saf dogrulayici (SAFE:
- * id >= 0x80 tablo disi okuma ve rastgele adrese yazma, aksi halde ayrilmis bite yazim); yalniz
- * FULL / MIX'te derlenir. Rcc_Locate dogrulama yapmaz, yol ve biti hesaplar (gecerli id ile). */
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
+/* A4 (CHECK_LEVEL.md 4.2): the old Rcc_Lookup was split in two. Rcc_IsPeriph is a pure validator
+ * (id >= 0x80 is an out-of-table read and a write to an arbitrary address, otherwise a write
+ * to a reserved bit); compiled only in FULL. Rcc_Locate does no validation, it computes the
+ * path and the bit (with a valid id). */
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
 static uint32_t Rcc_IsPeriph(RCC_PeriphTypeDef periph)
 {
     static const uint32_t mask[4] = {RCC_IOP_MASK, RCC_AHB_MASK, RCC_APB1_MASK, RCC_APB2_MASK};
@@ -66,13 +68,13 @@ static uint32_t Rcc_IsPeriph(RCC_PeriphTypeDef periph)
 }
 #endif
 
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
 #define RCC_PERIPH_OK(periph) (Rcc_IsPeriph(periph) != 0U)
 #else
-#define RCC_PERIPH_OK(periph) (1) /* kapali seviyede degerlendirilmez */
+#define RCC_PERIPH_OK(periph) (1) /* not evaluated at a disabled level */
 #endif
 
-/* GPIOE yalniz GPIOE olan SKU'da (makro: SPL_REQUIRE argumaninda #if olamaz). */
+/* GPIOE only on SKUs that have GPIOE (macro: an SPL_REQUIRE argument cannot contain #if). */
 #if defined(GPIOE)
 #define RCC_GPIOE_ABSENT(bit) (0)
 #else
@@ -92,9 +94,9 @@ static uint32_t Rcc_Locate(RCC_PeriphTypeDef periph, Rcc_Bus *bus)
     return 1U << (id & 31U);
 }
 
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
 /* 1 = range 1, 2 = range 2, 0 = unreadable value (00/11 cannot be written: treated as an error).
- * Yalniz SAFE denetimlerde (HCLK siniri, PLL frekans sinirlari): FAST'ta derlenmez. */
+ * Used only by checks (HCLK limit, PLL frequency limits): not compiled in FAST. */
 static uint32_t Rcc_VosRange(void)
 {
     const uint32_t vos = (PWR->CR1 & PWR_CR1_VOS_Msk) >> PWR_CR1_VOS_Pos;
@@ -102,8 +104,8 @@ static uint32_t Rcc_VosRange(void)
 }
 #endif
 
-/* 2026-11-13 (UFAST'tan): HPRE / PPRE bolenleri 2'nin kuvveti: bolme yerine kaydirma (M0+'ta
- * bolme komutu yok, x / 2^k == x >> k isaretsiz sayida). */
+/* 2026-11-13 (from UFAST): HPRE / PPRE dividers are powers of 2: a shift instead of a division
+ * (M0+ has no divide instruction, x / 2^k == x >> k for unsigned numbers). */
 static uint32_t Rcc_HpreShift(uint32_t code)
 {
     static const uint8_t shift[8] = {1U, 2U, 3U, 4U, 6U, 7U, 8U, 9U}; /* 2..512 */
@@ -115,10 +117,10 @@ static uint32_t Rcc_PpreShift(uint32_t code)
     return ((code & 4U) == 0U) ? 0U : ((code & 3U) + 1U);
 }
 
-/* 2026-11-13 (UFAST'tan): in * n / d, 64 bit olmadan ve HER girdide eski
- * (uint32_t)(((uint64_t)in * n) / d) ile ayni (__aeabi_uldivmod 272 B). in = q * d + rem iken
- * in * n / d = q * n + rem * n / d tamsayida tam esitlik; iki taraf mod 2^32'de de ayni.
- * rem * n < d * n < 2^32 (d <= 256, n <= 127). */
+/* 2026-11-13 (from UFAST): in * n / d without 64 bits and, for EVERY input, equal to the old
+ * (uint32_t)(((uint64_t)in * n) / d) (__aeabi_uldivmod 272 B). With in = q * d + rem,
+ * in * n / d = q * n + rem * n / d is an exact integer equality; both sides are also equal
+ * mod 2^32. rem * n < d * n < 2^32 (d <= 256, n <= 127). */
 static uint32_t Rcc_MulDiv(uint32_t in, uint32_t n, uint32_t d)
 {
     const uint32_t q = in / d;
@@ -196,22 +198,22 @@ static SPL_Status Rcc_SourceHz(uint32_t source, uint32_t hse_hz, uint32_t *hz)
     }
 }
 
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
-/* New HCLK allowed by the voltage range and by the programmed flash latency. SAFE denetimi
- * (CHECK_LEVEL.md 5.3: rastgele HardFault); FAST'ta derlenmez. FLASH_CalcLatency'nin "bu frekans
- * olmaz" cevabi result sinifi, her seviyede doner. */
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
+/* New HCLK allowed by the voltage range and by the programmed flash latency. Check
+ * (CHECK_LEVEL.md 5.3: random HardFault); not compiled in FAST. The "frequency not possible"
+ * answer of FLASH_CalcLatency is result class and is returned at every level. */
 static SPL_Status Rcc_HclkAllowed(uint32_t hclk_hz)
 {
     const uint32_t range = Rcc_VosRange();
     uint32_t needed = 0U;
 
-    SPL_REQUIRE_SAFE(range != 0U, SPL_ERR_STATE);
+    SPL_REQUIRE(range != 0U, SPL_ERR_STATE);
     if (FLASH_CalcLatency(hclk_hz, (range == 1U) ? FLASH_RANGE1 : FLASH_RANGE2, &needed) != SPL_OK)
     {
         return SPL_ERR_STATE; /* above the range maximum (64 / 16 MHz) */
     }
-    SPL_REQUIRE_SAFE(needed <= ((FLASH->ACR & FLASH_ACR_LATENCY_Msk) >> FLASH_ACR_LATENCY_Pos),
-                     SPL_ERR_STATE);
+    SPL_REQUIRE(needed <= ((FLASH->ACR & FLASH_ACR_LATENCY_Msk) >> FLASH_ACR_LATENCY_Pos),
+                SPL_ERR_STATE);
     return SPL_OK;
 }
 
@@ -223,18 +225,19 @@ static uint32_t Rcc_CurrentHpreShift(void)
 
 SPL_Status RCC_GpioClockEnable(GPIO_TypeDef *port)
 {
-    /* IOPENR bit = port letter index (A = 0 .. F = 5). 2026-11-13 (UFAST'tan): tablo yerine adres
-     * farki; portlar GPIOA_BASE + 0x400 * k. Kabul edilenler degismedi: A, B, C, D, (E yalniz
-     * GPIOE olan SKU'da), F; NULL ve baska her adres (isaretsiz fark tasar) -> PARAM. */
+    /* IOPENR bit = port letter index (A = 0 .. F = 5). 2026-11-13 (from UFAST): address difference
+     * instead of a table; ports are at GPIOA_BASE + 0x400 * k. Accepted ports unchanged: A, B, C,
+     * D, (E only on SKUs that have GPIOE), F; NULL and every other address (the unsigned
+     * difference overflows) -> PARAM. */
     const uintptr_t offset = (uintptr_t)port - (uintptr_t)GPIOA_BASE;
     const uint32_t bit = (uint32_t)(offset >> 10U);
 
-    /* SAFE: baska adres kaydirmayla IOPENR'nin baska bitine ya da tanimsiz kaydirmaya donusur. */
-    SPL_REQUIRE_SAFE(((offset & 0x3FFU) == 0U) && (offset <= ((uintptr_t)5U << 10U)) &&
-                         !RCC_GPIOE_ABSENT(bit),
-                     SPL_ERR_PARAM);
+    /* another address turns into another IOPENR bit or an undefined shift. */
+    SPL_REQUIRE(((offset & 0x3FFU) == 0U) && (offset <= ((uintptr_t)5U << 10U)) &&
+                    !RCC_GPIOE_ABSENT(bit),
+                SPL_ERR_PARAM);
     RCC->IOPENR = RCC->IOPENR | ((uint32_t)1U << bit);
-    /* RM0444 5.2.17: saat, etkinlestirme bitinden 2 cevrim sonra baslar; geri okuma bunu bekler. */
+    /* RM0444 5.2.17: the clock starts 2 cycles after the enable bit; the read-back waits for it. */
     /* Read back: the clock is active before the caller's first access (METHOD 1.7, issue #21). */
     (void)RCC->IOPENR;
     return SPL_OK;
@@ -245,10 +248,10 @@ SPL_Status RCC_EnablePeriphClock(RCC_PeriphTypeDef periph)
     Rcc_Bus bus;
     uint32_t bit;
 
-    SPL_REQUIRE_SAFE(RCC_PERIPH_OK(periph), SPL_ERR_PARAM);
+    SPL_REQUIRE(RCC_PERIPH_OK(periph), SPL_ERR_PARAM);
     bit = Rcc_Locate(periph, &bus);
     *bus.enr = *bus.enr | bit;
-    /* RM0444 5.2.17: saat, etkinlestirme bitinden 2 cevrim sonra baslar; geri okuma bunu bekler. */
+    /* RM0444 5.2.17: the clock starts 2 cycles after the enable bit; the read-back waits for it. */
     /* Read back: the clock is active before the caller's first access (METHOD 1.7, issue #21). */
     (void)*bus.enr;
     return SPL_OK;
@@ -259,7 +262,7 @@ SPL_Status RCC_DisablePeriphClock(RCC_PeriphTypeDef periph)
     Rcc_Bus bus;
     uint32_t bit;
 
-    SPL_REQUIRE_SAFE(RCC_PERIPH_OK(periph), SPL_ERR_PARAM);
+    SPL_REQUIRE(RCC_PERIPH_OK(periph), SPL_ERR_PARAM);
     bit = Rcc_Locate(periph, &bus);
     *bus.enr = *bus.enr & ~bit;
     return SPL_OK;
@@ -270,8 +273,8 @@ SPL_Status RCC_GetPeriphClock(RCC_PeriphTypeDef periph, uint8_t *enabled)
     Rcc_Bus bus;
     uint32_t bit;
 
-    SPL_REQUIRE_SAFE(enabled != NULL, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(RCC_PERIPH_OK(periph), SPL_ERR_PARAM);
+    SPL_REQUIRE(enabled != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(RCC_PERIPH_OK(periph), SPL_ERR_PARAM);
     bit = Rcc_Locate(periph, &bus);
     *enabled = ((*bus.enr & bit) != 0U) ? 1U : 0U;
     return SPL_OK;
@@ -282,10 +285,10 @@ static SPL_Status Rcc_SetReset(RCC_PeriphTypeDef periph, uint8_t assert_reset)
     Rcc_Bus bus;
     uint32_t bit;
 
-    SPL_REQUIRE_SAFE(RCC_PERIPH_OK(periph), SPL_ERR_PARAM);
+    SPL_REQUIRE(RCC_PERIPH_OK(periph), SPL_ERR_PARAM);
     bit = Rcc_Locate(periph, &bus);
-    /* SAFE: reset biti olmayan cevre (RTCAPB, WWDG): ayrilmis RSTR bitine yazim. */
-    SPL_REQUIRE_SAFE((bus.reset_mask & bit) != 0U, SPL_ERR_UNSUPPORTED);
+    /* peripheral without a reset bit (RTCAPB, WWDG): write to a reserved RSTR bit. */
+    SPL_REQUIRE((bus.reset_mask & bit) != 0U, SPL_ERR_UNSUPPORTED);
     *bus.rstr = (assert_reset != 0U) ? (*bus.rstr | bit) : (*bus.rstr & ~bit);
     return SPL_OK;
 }
@@ -303,9 +306,9 @@ SPL_Status RCC_ReleasePeriphReset(RCC_PeriphTypeDef periph)
 /* v0.4 (G4 v0.13.4 #7, CLK-09): 1 when src is the kernel clock of a peripheral whose bus clock is
  * on, or (rtcsel != 0) the RTC clock with RTCEN = 1 (RM0444 5.4.21..5.4.23). A selector left on src
  * with the peripheral clock off is not a user. Defined below (uses the kernel table). */
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
-/* A4: kullanimdaki saat denetimleri SAFE (CHECK_LEVEL.md 5.3); bu yardimcilar yalniz o
- * denetimlerde kullanilir, FAST'ta derlenmez. Saf: MMIO okur, yazmaz (Tools/pure_checks.txt). */
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
+/* A4: the clock-in-use checks are (CHECK_LEVEL.md 5.3); these helpers are used only by those
+ * checks and are not compiled in FAST. Pure: reads MMIO, does not write (Tools/pure_checks.txt). */
 static uint32_t Rcc_SourceInUse(uint32_t src, uint32_t rtcsel);
 
 static uint32_t Rcc_PllSourceIs(uint32_t pllsrc)
@@ -318,7 +321,7 @@ static uint32_t Rcc_PllSourceIs(uint32_t pllsrc)
 #define RCC_PLL_SOURCE_IS(pllsrc) (Rcc_PllSourceIs(pllsrc) != 0U)
 #define RCC_SOURCE_IN_USE(src, rtcsel) (Rcc_SourceInUse((src), (rtcsel)) != 0U)
 #else
-#define RCC_PLL_SOURCE_IS(pllsrc) (0) /* kapali seviyede degerlendirilmez */
+#define RCC_PLL_SOURCE_IS(pllsrc) (0) /* not evaluated at a disabled level */
 #define RCC_SOURCE_IN_USE(src, rtcsel) (0)
 #endif
 
@@ -343,8 +346,8 @@ SPL_Status RCC_StartOsc(RCC_OscTypeDef osc)
         RCC->CSR = (RCC->CSR & ~RCC_CSR_RMVF) | RCC_CSR_LSION;
         return SPL_OK;
     case RCC_OSC_LSE:
-        /* SAFE: DBP = 0 iken BDCR yazimi sessizce yok sayilir. */
-        SPL_REQUIRE_SAFE((PWR->CR1 & PWR_CR1_DBP) != 0U, SPL_ERR_STATE);
+        /* while DBP = 0 a BDCR write is silently ignored. */
+        SPL_REQUIRE((PWR->CR1 & PWR_CR1_DBP) != 0U, SPL_ERR_STATE);
         RCC->BDCR = RCC->BDCR | RCC_BDCR_LSEON;
         return SPL_OK;
     default:
@@ -352,46 +355,47 @@ SPL_Status RCC_StartOsc(RCC_OscTypeDef osc)
     }
 }
 
-/* SAFE (CHECK_LEVEL.md 5.3): osilator SYSCLK, PLL kaynagi, RTC ya da acik bir cevrenin cekirdek
- * saatiyse kullanilan saat kesilir. SWS her case'te bir kez okunur (FAST'ta hic). */
+/* (CHECK_LEVEL.md 5.3): if the oscillator is SYSCLK, the PLL source, the RTC clock or the
+ * kernel clock of an enabled peripheral, a clock in use is cut. SWS is read once per case
+ * (never in FAST). */
 SPL_Status RCC_StopOsc(RCC_OscTypeDef osc)
 {
     switch (osc)
     {
     case RCC_OSC_HSI16:
-        SPL_REQUIRE_SAFE((RCC_CFGR_SWS_VAL(RCC->CFGR) != (uint32_t)RCC_SYSCLK_HSISYS) &&
-                             !RCC_PLL_SOURCE_IS(RCC_PLLSRC_HSI16) &&
-                             !RCC_SOURCE_IN_USE(RCC_KSRC_HSI16, 0U),
-                         SPL_ERR_STATE);
+        SPL_REQUIRE((RCC_CFGR_SWS_VAL(RCC->CFGR) != (uint32_t)RCC_SYSCLK_HSISYS) &&
+                        !RCC_PLL_SOURCE_IS(RCC_PLLSRC_HSI16) &&
+                        !RCC_SOURCE_IN_USE(RCC_KSRC_HSI16, 0U),
+                    SPL_ERR_STATE);
         RCC->CR = RCC->CR & ~RCC_CR_HSION;
         return SPL_OK;
     case RCC_OSC_HSE:
-        SPL_REQUIRE_SAFE((RCC_CFGR_SWS_VAL(RCC->CFGR) != (uint32_t)RCC_SYSCLK_HSE) &&
-                             !RCC_PLL_SOURCE_IS(RCC_PLLSRC_HSE) &&
-                             !RCC_SOURCE_IN_USE(RCC_KSRC_HSE, 3U), /* RTCSEL 11 = HSE / 32 */
-                         SPL_ERR_STATE);
+        SPL_REQUIRE((RCC_CFGR_SWS_VAL(RCC->CFGR) != (uint32_t)RCC_SYSCLK_HSE) &&
+                        !RCC_PLL_SOURCE_IS(RCC_PLLSRC_HSE) &&
+                        !RCC_SOURCE_IN_USE(RCC_KSRC_HSE, 3U), /* RTCSEL 11 = HSE / 32 */
+                    SPL_ERR_STATE);
         RCC->CR = RCC->CR & ~RCC_CR_HSEON;
         return SPL_OK;
     case RCC_OSC_HSI48:
 #if defined(RCC_CR_HSI48ON)
-        SPL_REQUIRE_SAFE(!RCC_SOURCE_IN_USE(RCC_KSRC_HSI48, 0U), SPL_ERR_STATE);
+        SPL_REQUIRE(!RCC_SOURCE_IN_USE(RCC_KSRC_HSI48, 0U), SPL_ERR_STATE);
         RCC->CR = RCC->CR & ~RCC_CR_HSI48ON;
         return SPL_OK;
 #else
         return SPL_ERR_UNSUPPORTED;
 #endif
     case RCC_OSC_LSI:
-        SPL_REQUIRE_SAFE((RCC_CFGR_SWS_VAL(RCC->CFGR) != (uint32_t)RCC_SYSCLK_LSI) &&
-                             !RCC_SOURCE_IN_USE(RCC_KSRC_LSI, 2U), /* RTCSEL 10 = LSI */
-                         SPL_ERR_STATE);
+        SPL_REQUIRE((RCC_CFGR_SWS_VAL(RCC->CFGR) != (uint32_t)RCC_SYSCLK_LSI) &&
+                        !RCC_SOURCE_IN_USE(RCC_KSRC_LSI, 2U), /* RTCSEL 10 = LSI */
+                    SPL_ERR_STATE);
         RCC->CSR = RCC->CSR & ~(RCC_CSR_LSION | RCC_CSR_RMVF);
         return SPL_OK;
     case RCC_OSC_LSE:
-        /* DBP = 0: BDCR yazimi sessizce yok sayilir (SAFE, ayni donus). */
-        SPL_REQUIRE_SAFE((RCC_CFGR_SWS_VAL(RCC->CFGR) != (uint32_t)RCC_SYSCLK_LSE) &&
-                             ((PWR->CR1 & PWR_CR1_DBP) != 0U) &&
-                             !RCC_SOURCE_IN_USE(RCC_KSRC_LSE, 1U), /* RTCSEL 01 = LSE */
-                         SPL_ERR_STATE);
+        /* DBP = 0: a BDCR write is silently ignored (same return). */
+        SPL_REQUIRE((RCC_CFGR_SWS_VAL(RCC->CFGR) != (uint32_t)RCC_SYSCLK_LSE) &&
+                        ((PWR->CR1 & PWR_CR1_DBP) != 0U) &&
+                        !RCC_SOURCE_IN_USE(RCC_KSRC_LSE, 1U), /* RTCSEL 01 = LSE */
+                    SPL_ERR_STATE);
         RCC->BDCR = RCC->BDCR & ~RCC_BDCR_LSEON;
         return SPL_OK;
     default:
@@ -422,19 +426,19 @@ static uint8_t Rcc_OscReady(uint32_t osc)
 
 SPL_Status RCC_GetOscReady(RCC_OscTypeDef osc, uint8_t *ready)
 {
-    SPL_REQUIRE_SAFE(ready != NULL, SPL_ERR_PARAM);
-    /* SAFE: gecersiz osc sessizce LSE'nin durumunu dondururdu (Rcc_OscReady default). */
-    SPL_REQUIRE_SAFE((uint32_t)osc <= (uint32_t)RCC_OSC_LSE, SPL_ERR_PARAM);
+    SPL_REQUIRE(ready != NULL, SPL_ERR_PARAM);
+    /* an invalid osc would silently return the LSE state (Rcc_OscReady default). */
+    SPL_REQUIRE((uint32_t)osc <= (uint32_t)RCC_OSC_LSE, SPL_ERR_PARAM);
     *ready = Rcc_OscReady((uint32_t)osc);
     return SPL_OK;
 }
 
 SPL_Status RCC_SetHseBypass(uint8_t bypass)
 {
-    SPL_REQUIRE(bypass <= 1U, SPL_ERR_PARAM); /* normal: 1 gibi davranir */
-    /* RM0444 5.4.1: HSEBYP can be written only while the HSE oscillator is disabled. SAFE: HSE
-     * acikken yazim sessizce yok sayilir. */
-    SPL_REQUIRE_SAFE((RCC->CR & RCC_CR_HSEON) == 0U, SPL_ERR_STATE);
+    SPL_REQUIRE(bypass <= 1U, SPL_ERR_PARAM); /* acts as 1 */
+    /* RM0444 5.4.1: HSEBYP can be written only while the HSE oscillator is disabled. while
+     * HSE is on, the write is silently ignored. */
+    SPL_REQUIRE((RCC->CR & RCC_CR_HSEON) == 0U, SPL_ERR_STATE);
     RCC->CR = (bypass != 0U) ? (RCC->CR | RCC_CR_HSEBYP) : (RCC->CR & ~RCC_CR_HSEBYP);
     return SPL_OK;
 }
@@ -447,10 +451,11 @@ SPL_Status RCC_SetHsiDiv(uint32_t divider)
     {
         ++code;
     }
-    /* SAFE: 2'nin kuvveti olmayan bolen en yakin koda yuvarlanir (sessizce baska frekans). */
-    SPL_REQUIRE_SAFE((divider != 0U) && ((1U << code) == divider), SPL_ERR_PARAM);
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
-    /* SAFE (5.3): yeni HCLK VOS / flash bekleme durumunu asarsa rastgele HardFault. */
+    /* a divider that is not a power of 2 is rounded to the nearest code (silently another
+     * frequency). */
+    SPL_REQUIRE((divider != 0U) && ((1U << code) == divider), SPL_ERR_PARAM);
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
+    /* (5.3): a new HCLK above the VOS / flash wait-state limit gives a random HardFault. */
     if (RCC_CFGR_SWS_VAL(RCC->CFGR) == (uint32_t)RCC_SYSCLK_HSISYS)
     {
         const SPL_Status st = Rcc_HclkAllowed((RCC_HSI16_HZ >> code) >> Rcc_CurrentHpreShift());
@@ -464,8 +469,8 @@ SPL_Status RCC_SetHsiDiv(uint32_t divider)
     return SPL_OK;
 }
 
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
-/* Output frequency limits in MHz [range-1][output]: P, Q, R. Yalniz SAFE denetimde, saf. */
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
+/* Output frequency limits in MHz [range-1][output]: P, Q, R. Used only by the check, pure. */
 static uint8_t Rcc_OutputOk(uint32_t range, uint32_t out, uint32_t hz)
 {
     static const uint8_t max_mhz[2][3] = {{122U, 128U, 64U}, {40U, 33U, 16U}};
@@ -479,49 +484,49 @@ SPL_Status RCC_ConfigPll(const RCC_PllConfigTypeDef *config, uint32_t hse_hz)
 {
     uint32_t cfg;
 
-    SPL_REQUIRE_SAFE(config != NULL, SPL_ERR_PARAM);
-    /* SAFE: gecersiz kaynak ya da aralik disi M / N / P / Q / R PLLCFGR'de komsu alana tasar ya da
-     * ayrilmis kod yazar. */
-    SPL_REQUIRE_SAFE(((config->source == (uint32_t)RCC_PLLSRC_HSI16) ||
-                      (config->source == (uint32_t)RCC_PLLSRC_HSE)) &&
-                         (config->m >= 1U) && (config->m <= 8U) && (config->n >= 8U) &&
-                         (config->n <= 86U) && (config->p >= 2U) && (config->p <= 32U) &&
-                         (config->q >= 2U) && (config->q <= 8U) && (config->r >= 2U) &&
-                         (config->r <= 8U),
-                     SPL_ERR_PARAM);
-    /* normal: cikissiz PLL (SYSCLK gecisi reddedilir) / fazla bit atilir. */
+    SPL_REQUIRE(config != NULL, SPL_ERR_PARAM);
+    /* an invalid source or an out-of-range M / N / P / Q / R overflows into a neighbouring
+     * PLLCFGR field or writes a reserved code. */
+    SPL_REQUIRE(((config->source == (uint32_t)RCC_PLLSRC_HSI16) ||
+                 (config->source == (uint32_t)RCC_PLLSRC_HSE)) &&
+                    (config->m >= 1U) && (config->m <= 8U) && (config->n >= 8U) &&
+                    (config->n <= 86U) && (config->p >= 2U) && (config->p <= 32U) &&
+                    (config->q >= 2U) && (config->q <= 8U) && (config->r >= 2U) &&
+                    (config->r <= 8U),
+                SPL_ERR_PARAM);
+    /* a PLL without outputs (the SYSCLK switch is refused) / extra bits are dropped. */
     SPL_REQUIRE((config->outputs != 0U) &&
                     ((config->outputs & ~(RCC_PLL_OUT_P | RCC_PLL_OUT_Q | RCC_PLL_OUT_R)) == 0U),
                 SPL_ERR_PARAM);
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
-    /* SAFE: spesifikasyon disi giris / PFD / VCO / cikis frekansi kararsiz saat verir. Frekans
-     * hesabi yalniz bu denetimler icin: FAST'ta derlenmez. */
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
+    /* an input / PFD / VCO / output frequency outside the specification gives an unstable
+     * clock. The frequency calculation serves only these checks: not compiled in FAST. */
     {
         uint32_t in;
         uint32_t pfd;
         uint32_t vco;
         uint32_t range;
 
-        SPL_REQUIRE_SAFE((config->source != (uint32_t)RCC_PLLSRC_HSE) ||
-                             ((hse_hz >= RCC_HSE_MIN_HZ) && (hse_hz <= RCC_HSE_MAX_HZ)),
-                         SPL_ERR_PARAM);
+        SPL_REQUIRE((config->source != (uint32_t)RCC_PLLSRC_HSE) ||
+                        ((hse_hz >= RCC_HSE_MIN_HZ) && (hse_hz <= RCC_HSE_MAX_HZ)),
+                    SPL_ERR_PARAM);
         in = (config->source == (uint32_t)RCC_PLLSRC_HSE) ? hse_hz : RCC_HSI16_HZ;
         pfd = in / config->m;
         /* Multiply before dividing so a fractional PFD (25 MHz / 3) is not truncated (Rcc_MulDiv:
-         * 48 MHz * 86 asmadan, 64 bit yok). */
+         * 48 MHz * 86 without overflow, no 64 bits). */
         vco = Rcc_MulDiv(in, config->n, config->m);
         range = Rcc_VosRange();
-        SPL_REQUIRE_SAFE(range != 0U, SPL_ERR_STATE);
-        SPL_REQUIRE_SAFE((pfd >= 2660000UL) && (pfd <= 16000000UL) && (vco >= 96000000UL) &&
-                             (vco <= ((range == 1U) ? 344000000UL : 128000000UL)),
-                         SPL_ERR_PARAM);
-        SPL_REQUIRE_SAFE((((config->outputs & RCC_PLL_OUT_P) == 0U) ||
-                          (Rcc_OutputOk(range, 0U, vco / config->p) != 0U)) &&
-                             (((config->outputs & RCC_PLL_OUT_Q) == 0U) ||
-                              (Rcc_OutputOk(range, 1U, vco / config->q) != 0U)) &&
-                             (((config->outputs & RCC_PLL_OUT_R) == 0U) ||
-                              (Rcc_OutputOk(range, 2U, vco / config->r) != 0U)),
-                         SPL_ERR_PARAM);
+        SPL_REQUIRE(range != 0U, SPL_ERR_STATE);
+        SPL_REQUIRE((pfd >= 2660000UL) && (pfd <= 16000000UL) && (vco >= 96000000UL) &&
+                        (vco <= ((range == 1U) ? 344000000UL : 128000000UL)),
+                    SPL_ERR_PARAM);
+        SPL_REQUIRE((((config->outputs & RCC_PLL_OUT_P) == 0U) ||
+                     (Rcc_OutputOk(range, 0U, vco / config->p) != 0U)) &&
+                        (((config->outputs & RCC_PLL_OUT_Q) == 0U) ||
+                         (Rcc_OutputOk(range, 1U, vco / config->q) != 0U)) &&
+                        (((config->outputs & RCC_PLL_OUT_R) == 0U) ||
+                         (Rcc_OutputOk(range, 2U, vco / config->r) != 0U)),
+                    SPL_ERR_PARAM);
     }
 #else
     (void)hse_hz;
@@ -532,9 +537,9 @@ SPL_Status RCC_ConfigPll(const RCC_PllConfigTypeDef *config, uint32_t hse_hz)
         return SPL_ERR_UNSUPPORTED; /* no PLLQCLK on this SKU (CMSIS: no PLLCFGR.PLLQ) */
     }
 #endif
-    /* RM0444 5.4.4: every bitfield can be written only when the PLL is disabled. SAFE: PLL acikken
-     * PLLCFGR yazimi sessizce yok sayilir. */
-    SPL_REQUIRE_SAFE((RCC->CR & RCC_CR_PLLON) == 0U, SPL_ERR_STATE);
+    /* RM0444 5.4.4: every bitfield can be written only when the PLL is disabled. while the
+     * PLL is on, a PLLCFGR write is silently ignored. */
+    SPL_REQUIRE((RCC->CR & RCC_CR_PLLON) == 0U, SPL_ERR_STATE);
 
     cfg = (config->source << RCC_PLLCFGR_PLLSRC_Pos) | ((config->m - 1U) << RCC_PLLCFGR_PLLM_Pos) |
           (config->n << RCC_PLLCFGR_PLLN_Pos) | ((config->p - 1U) << RCC_PLLCFGR_PLLP_Pos) |
@@ -561,8 +566,8 @@ SPL_Status RCC_ConfigPll(const RCC_PllConfigTypeDef *config, uint32_t hse_hz)
 }
 
 #if SPL_CHECK_LEVEL == SPL_CHECK_FULL
-/* normal: kaynak hazir degilse PLL kilitlenmez, RCC_GetPllReady 0 kalir (hemen gorunur). Yalniz
- * FULL'da derlenir. Saf: MMIO okur. */
+/* if the source is not ready the PLL does not lock, RCC_GetPllReady stays 0 (visible at
+ * once). Compiled only in FULL. Pure: reads MMIO. */
 static uint32_t Rcc_PllSourceReady(void)
 {
     const uint32_t src = (RCC->PLLCFGR & RCC_PLLCFGR_PLLSRC_Msk) >> RCC_PLLCFGR_PLLSRC_Pos;
@@ -574,7 +579,7 @@ static uint32_t Rcc_PllSourceReady(void)
 }
 #define RCC_PLL_SOURCE_READY() (Rcc_PllSourceReady() != 0U)
 #else
-#define RCC_PLL_SOURCE_READY() (1) /* kapali seviyede degerlendirilmez */
+#define RCC_PLL_SOURCE_READY() (1) /* not evaluated at a disabled level */
 #endif
 
 SPL_Status RCC_EnablePll(void)
@@ -586,25 +591,25 @@ SPL_Status RCC_EnablePll(void)
 
 SPL_Status RCC_DisablePll(void)
 {
-    /* SAFE: PLL SYSCLK ya da acik bir cevrenin cekirdek saatiyse kullanilan saat kesilir. */
-    SPL_REQUIRE_SAFE((RCC_CFGR_SWS_VAL(RCC->CFGR) != (uint32_t)RCC_SYSCLK_PLLR) &&
-                         !RCC_SOURCE_IN_USE(RCC_KSRC_PLLP, 0U) &&
-                         !RCC_SOURCE_IN_USE(RCC_KSRC_PLLQ, 0U),
-                     SPL_ERR_STATE);
+    /* if the PLL is SYSCLK or the kernel clock of an enabled peripheral, a clock in use is
+     * cut. */
+    SPL_REQUIRE((RCC_CFGR_SWS_VAL(RCC->CFGR) != (uint32_t)RCC_SYSCLK_PLLR) &&
+                    !RCC_SOURCE_IN_USE(RCC_KSRC_PLLP, 0U) && !RCC_SOURCE_IN_USE(RCC_KSRC_PLLQ, 0U),
+                SPL_ERR_STATE);
     RCC->CR = RCC->CR & ~RCC_CR_PLLON;
     return SPL_OK;
 }
 
 SPL_Status RCC_GetPllReady(uint8_t *ready)
 {
-    SPL_REQUIRE_SAFE(ready != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(ready != NULL, SPL_ERR_PARAM);
     *ready = ((RCC->CR & RCC_CR_PLLRDY) != 0U) ? 1U : 0U;
     return SPL_OK;
 }
 
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
-/* SAFE: hazir olmayan kaynaga gecis beklemede kalir, SWS degismez ve OK donerdi. Yalniz
- * FULL / MIX'te. Saf: MMIO okur. */
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
+/* a switch to a source that is not ready stays pending, SWS does not change and OK would be
+ * returned. FULL only. Pure: reads MMIO. */
 static uint32_t Rcc_SysclkReady(uint32_t s)
 {
     switch (s)
@@ -625,17 +630,17 @@ static uint32_t Rcc_SysclkReady(uint32_t s)
 }
 #define RCC_SYSCLK_READY(s) (Rcc_SysclkReady(s) != 0U)
 #else
-#define RCC_SYSCLK_READY(s) (1) /* kapali seviyede degerlendirilmez */
+#define RCC_SYSCLK_READY(s) (1) /* not evaluated at a disabled level */
 #endif
 
 SPL_Status RCC_SetSysclkSource(RCC_SysclkTypeDef source, uint32_t hse_hz)
 {
     const uint32_t s = (uint32_t)source;
 
-    SPL_REQUIRE_SAFE(s <= (uint32_t)RCC_SYSCLK_LSE, SPL_ERR_PARAM); /* SAFE: SW ayrilmis kod */
-    SPL_REQUIRE_SAFE(RCC_SYSCLK_READY(s), SPL_ERR_STATE);
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
-    /* SAFE (5.3): yeni HCLK VOS / flash bekleme durumunu asarsa rastgele HardFault. */
+    SPL_REQUIRE(s <= (uint32_t)RCC_SYSCLK_LSE, SPL_ERR_PARAM); /* SW reserved code */
+    SPL_REQUIRE(RCC_SYSCLK_READY(s), SPL_ERR_STATE);
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
+    /* (5.3): a new HCLK above the VOS / flash wait-state limit gives a random HardFault. */
     {
         uint32_t hz = 0U;
         SPL_Status st = Rcc_SourceHz(s, hse_hz, &hz);
@@ -660,7 +665,7 @@ SPL_Status RCC_GetSysclkSource(RCC_SysclkTypeDef *source)
 {
     const uint32_t sws = RCC_CFGR_SWS_VAL(RCC->CFGR);
 
-    SPL_REQUIRE_SAFE(source != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(source != NULL, SPL_ERR_PARAM);
     if (sws > (uint32_t)RCC_SYSCLK_LSE)
     {
         return SPL_ERR_HW; /* reserved SWS encoding */
@@ -681,9 +686,9 @@ SPL_Status RCC_SetAhbPrescaler(uint32_t divider, uint32_t hse_hz)
             break;
         }
     }
-    SPL_REQUIRE_SAFE(i != 9U, SPL_ERR_PARAM); /* SAFE: i = 9 HPRE'ye tasan kod yazardi */
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
-    /* SAFE (5.3): yeni HCLK VOS / flash bekleme durumunu asarsa rastgele HardFault. */
+    SPL_REQUIRE(i != 9U, SPL_ERR_PARAM); /* i = 9 would write a code overflowing HPRE */
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
+    /* (5.3): a new HCLK above the VOS / flash wait-state limit gives a random HardFault. */
     {
         uint32_t sysclk = 0U;
         SPL_Status st = Rcc_SourceHz(RCC_CFGR_SWS_VAL(RCC->CFGR), hse_hz, &sysclk);
@@ -703,8 +708,8 @@ SPL_Status RCC_SetAhbPrescaler(uint32_t divider, uint32_t hse_hz)
     /* HPRE codes: 0000 = 1, 1000 + (i - 1) for 2..512. */
     RCC->CFGR =
         (RCC->CFGR & ~RCC_CFGR_HPRE_Msk) | (((i == 0U) ? 0U : (7U + i)) << RCC_CFGR_HPRE_Pos);
-    /* RM0444 3.3.4 "Decreasing the CPU frequency" adim 3: yeni bolucunun etkin oldugu CFGR'den
-     * okunur; cagiran ardindan FLASH_SetLatency ile bekleme durumunu azaltabilir. */
+    /* RM0444 3.3.4 "Decreasing the CPU frequency" step 3: CFGR is read to confirm the new divider
+     * is in effect; the caller may then reduce the wait states with FLASH_SetLatency. */
     /* Read back: the new HCLK divider is in effect before return (METHOD 1.7, issue #22). */
     (void)RCC->CFGR;
     return SPL_OK;
@@ -745,7 +750,7 @@ SPL_Status RCC_GetClocks(uint32_t hse_hz, RCC_ClocksTypeDef *clocks)
     uint32_t sysclk = 0U;
     SPL_Status st;
 
-    SPL_REQUIRE_SAFE(clocks != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(clocks != NULL, SPL_ERR_PARAM);
     st = Rcc_SourceHz(RCC_CFGR_SWS_VAL(cfgr), hse_hz, &sysclk);
     if (st != SPL_OK)
     {
@@ -1033,7 +1038,7 @@ static SPL_Status Rcc_KernelSourceHz(uint32_t src, uint32_t hse_hz, uint32_t *hz
 }
 
 /* Peripheral clocked by each kernel selector (same order as rcc_kernel_sel). */
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
 static const RCC_PeriphTypeDef rcc_kernel_user[RCC_KERNEL_COUNT] = {
     RCC_PERIPH_USART1,  RCC_PERIPH_USART2, RCC_PERIPH_USART3, RCC_PERIPH_LPUART1,
     RCC_PERIPH_LPUART2, RCC_PERIPH_I2C1,   RCC_PERIPH_I2C2,   RCC_PERIPH_LPTIM1,
@@ -1063,7 +1068,7 @@ static uint32_t Rcc_SourceInUse(uint32_t src, uint32_t rtcsel)
     }
     return 0U;
 }
-#endif /* SPL_CHECK_LEVEL <= SPL_CHECK_MIX: Rcc_SourceInUse */
+#endif /* SPL_CHECK_LEVEL == SPL_CHECK_FULL: Rcc_SourceInUse */
 
 SPL_Status RCC_SetKernelClock(RCC_KernelTypeDef kernel, RCC_KernelSrcTypeDef source)
 {
@@ -1071,8 +1076,8 @@ SPL_Status RCC_SetKernelClock(RCC_KernelTypeDef kernel, RCC_KernelSrcTypeDef sou
     volatile uint32_t *reg;
     uint32_t code;
 
-    /* SAFE: tablo disi okuma ve rastgele register'a yazim. */
-    SPL_REQUIRE_SAFE((uint32_t)kernel < RCC_KERNEL_COUNT, SPL_ERR_PARAM);
+    /* out-of-table read and a write to an arbitrary register. */
+    SPL_REQUIRE((uint32_t)kernel < RCC_KERNEL_COUNT, SPL_ERR_PARAM);
     sel = &rcc_kernel_sel[(uint32_t)kernel];
     if (sel->present == 0U)
     {
@@ -1085,8 +1090,8 @@ SPL_Status RCC_SetKernelClock(RCC_KernelTypeDef kernel, RCC_KernelSrcTypeDef sou
             break;
         }
     }
-    /* SAFE: secicide olmayan kaynak alan genisliginden tasan kod yazardi. */
-    SPL_REQUIRE_SAFE(code <= Rcc_FieldMask(sel), SPL_ERR_PARAM);
+    /* a source not in the selector would write a code wider than the field. */
+    SPL_REQUIRE(code <= Rcc_FieldMask(sel), SPL_ERR_PARAM);
     reg = Rcc_KernelReg(sel);
     *reg = (*reg & ~(Rcc_FieldMask(sel) << sel->pos)) | (code << sel->pos);
     return SPL_OK;
@@ -1097,8 +1102,8 @@ SPL_Status RCC_GetKernelSource(RCC_KernelTypeDef kernel, RCC_KernelSrcTypeDef *s
     const Rcc_KernelSel *sel;
     uint32_t code;
 
-    SPL_REQUIRE_SAFE((uint32_t)kernel < RCC_KERNEL_COUNT, SPL_ERR_PARAM); /* tablo disi okuma */
-    SPL_REQUIRE_SAFE(source != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE((uint32_t)kernel < RCC_KERNEL_COUNT, SPL_ERR_PARAM); /* out-of-table read */
+    SPL_REQUIRE(source != NULL, SPL_ERR_PARAM);
     sel = &rcc_kernel_sel[(uint32_t)kernel];
     if (sel->present == 0U)
     {
@@ -1118,7 +1123,7 @@ SPL_Status RCC_GetKernelClock(RCC_KernelTypeDef kernel, uint32_t hse_hz, uint32_
     RCC_KernelSrcTypeDef src = RCC_KSRC_PCLK;
     SPL_Status st;
 
-    SPL_REQUIRE_SAFE(hz != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(hz != NULL, SPL_ERR_PARAM);
     st = RCC_GetKernelSource(kernel, &src);
     if (st == SPL_OK)
     {
@@ -1169,7 +1174,7 @@ SPL_Status RCC_SetRngDivider(uint32_t divider)
 
 SPL_Status RCC_GetRngDivider(uint32_t *divider)
 {
-    SPL_REQUIRE_SAFE(divider != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(divider != NULL, SPL_ERR_PARAM);
 #if defined(RCC_CCIPR_RNGDIV_Pos)
     *divider = (uint32_t)1U << ((RCC->CCIPR & RCC_CCIPR_RNGDIV_Msk) >> RCC_CCIPR_RNGDIV_Pos);
     return SPL_OK;
@@ -1222,7 +1227,7 @@ SPL_Status RCC_GetUsartKernelClock(const USART_TypeDef *instance, uint32_t hse_h
     };
     uint32_t i;
 
-    SPL_REQUIRE_SAFE(kernel_hz != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(kernel_hz != NULL, SPL_ERR_PARAM);
     for (i = 0U; i < (uint32_t)(sizeof(sel_inst) / sizeof(sel_inst[0])); ++i)
     {
         if (instance == sel_inst[i].inst)
@@ -1248,7 +1253,7 @@ SPL_Status RCC_EnableCss(void)
 
 SPL_Status RCC_GetCssFlag(uint8_t *set)
 {
-    SPL_REQUIRE_SAFE(set != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(set != NULL, SPL_ERR_PARAM);
     *set = ((RCC->CIFR & RCC_CIFR_CSSF) != 0U) ? 1U : 0U;
     return SPL_OK;
 }
@@ -1263,7 +1268,7 @@ SPL_Status RCC_ClearCssFlag(void)
 
 SPL_Status RCC_GetResetFlags(uint32_t *flags)
 {
-    SPL_REQUIRE_SAFE(flags != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(flags != NULL, SPL_ERR_PARAM);
     *flags = RCC->CSR & RCC_RESET_FLAGS;
     return SPL_OK;
 }

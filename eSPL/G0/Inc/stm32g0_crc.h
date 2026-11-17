@@ -9,11 +9,17 @@ extern "C"
 {
 #endif
 
-/* CRC calculation unit (RM0444 Rev 6 section 14). Single instance on every
- * supported SKU, no static state, no waits. The caller enables the AHB clock
- * (RCC_AHBENR.CRCEN, RCC_EnablePeriphClock(RCC_PERIPH_CRC)) before any call. Serialize all callers:
- * one CRC computation at a time; an ISR that uses the CRC unit corrupts a computation running in
- * thread context. Contract: Docs/v0.3_CRC_CONTRACT.md. */
+/* CRC calculation unit driver (RM0444 Rev 6 section 14).
+ * Scope: single instance on every supported SKU.
+ * Usage: CRC_Config, then CRC_Feed8/16/32, then CRC_GetResult; CRC_Reset restarts a computation
+ * from INIT with the same configuration.
+ * Common rules: no static state, no dynamic memory, no function waits.
+ * Caller duties (all APIs):
+ *  - Clock: the caller enables the AHB clock (RCC_AHBENR.CRCEN,
+ *    RCC_EnablePeriphClock(RCC_PERIPH_CRC)) before any call.
+ *  - Concurrency: serialize all callers, one CRC computation at a time; an ISR that uses the CRC
+ *    unit corrupts a computation running in thread context.
+ * Contract: Docs/v0.3_CRC_CONTRACT.md. */
 
 /* CRC_CR.POLYSIZE field values (RM0444 14.4.3). */
 #define CRC_POLYSIZE_32 0U
@@ -40,21 +46,28 @@ typedef struct
  * 14.3.3), POL, CR (RESET=0), INIT. The INIT write also loads DR, so a new
  * computation starts from init. PARAM: NULL, field out of range, even
  * polynomial, polynomial/init wider than polysize. */
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status CRC_Config(const CRC_ConfigTypeDef *config);
 /* Sets CR.RESET (self-clearing) keeping REV_OUT/REV_IN/POLYSIZE: DR = INIT. */
-/* Seviye: - */
+/* Caller: none beyond the file-header duties. */
+/* Level: - */
 SPL_Status CRC_Reset(void);
 /* Feed one byte / half-word / word with an 8/16/32-bit access to DR
  * (RM0444 14.3.3: right-aligned byte and half-word accesses). */
-/* Seviye: - */
+/* Caller: CRC_Config or CRC_Reset before the first byte of a new computation. */
+/* Level: - */
 SPL_Status CRC_Feed8(uint8_t data);
-/* Seviye: - */
+/* Caller: CRC_Config or CRC_Reset before the first half-word of a new computation. */
+/* Level: - */
 SPL_Status CRC_Feed16(uint16_t data);
-/* Seviye: - */
+/* Caller: CRC_Config or CRC_Reset before the first word of a new computation. */
+/* Level: - */
 SPL_Status CRC_Feed32(uint32_t data);
 /* 32-bit DR read, masked to the configured polysize (7/8/16/32 bits). */
-/* Seviye: PARAM[S] */
+/* Caller: apply any final XOR the CRC standard needs (the unit has no XOR-out
+ * stage, RM0444 14.4). */
+/* Level: PARAM[F] */
 SPL_Status CRC_GetResult(uint32_t *result);
 
 #ifdef __cplusplus

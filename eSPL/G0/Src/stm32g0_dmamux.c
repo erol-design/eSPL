@@ -1,26 +1,28 @@
-/* DMAMUX request routing for STM32G0B1 (RM0444 Rev 6 section 11). Ported from the STM32G4 SPL
- * v0.13.3 and rewritten for the contiguous G0B1 channel map (no G431 address hole). */
-/* Kutuphane birimi: spl_check.h karisma korumasi referansini bu birim de uretir; uretmeyen tek
- * birim stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
+/* DMAMUX request routing for STM32G0B1 (RM0444 Rev 6 section 11); public contract in
+ * stm32g0_dmamux.h. Ported from the STM32G4 SPL v0.13.3 and rewritten for the contiguous G0B1
+ * channel map (no G431 address hole). */
+/* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit
+ * that does not is stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
 #define SPL_LIBRARY_BUILD 1
 #include <stddef.h>
 #include "stm32g0_dmamux.h"
 #include "stm32g0_dma_priv.h"
 
-/* Denetim seviyesi (A4 dalga 2, Docs/CHECK_LEVEL.md 5.4 DMAMUX tablosu): SPL_REQUIRE = normal sinif
- * (yalniz FULL), SPL_REQUIRE_SAFE = SAFE sinif (FULL ve MIX). Kanal dogrulamasi saf
- * STM32G0_DmaIsChannel, genel indeks STM32G0_DmaGlobalIndex (dogrulama yapmaz). Butun makrolar ilk
- * MMIO yazimindan once (METHOD 1.3). */
+/* Check level (A4 wave 2, Docs/CHECK_LEVEL.md 5.4 DMAMUX table): SPL_REQUIRE = checked at FULL only
+ * (not compiled at FAST). Channel validation by the pure STM32G0_DmaIsChannel, global index by
+ * STM32G0_DmaGlobalIndex (does not validate). All macros come before the first MMIO write
+ * (METHOD 1.3). */
 
 SPL_Status DMAMUX_SetRequest(DMA_Channel_TypeDef *dma_channel, uint8_t request_id)
 {
     DMAMUX_Channel_TypeDef *mux;
 
-    /* SAFE: maske baska istegi secer; gecersiz kanal rastgele DMAMUX adresine yazar. */
-    SPL_REQUIRE_SAFE(request_id <= STM32G0_DMAMUX_REQUEST_MAX, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(STM32G0_DmaIsChannel(dma_channel) != 0U, SPL_ERR_PARAM);
-    /* SAFE: suren aktarimin istegi degisir. */
-    SPL_REQUIRE_SAFE((dma_channel->CCR & DMA_CCR_EN) == 0U, SPL_ERR_STATE);
+    /* the mask selects another request; an invalid channel writes to an arbitrary DMAMUX
+     * address. */
+    SPL_REQUIRE(request_id <= STM32G0_DMAMUX_REQUEST_MAX, SPL_ERR_PARAM);
+    SPL_REQUIRE(STM32G0_DmaIsChannel(dma_channel) != 0U, SPL_ERR_PARAM);
+    /* the request of a running transfer changes. */
+    SPL_REQUIRE((dma_channel->CCR & DMA_CCR_EN) == 0U, SPL_ERR_STATE);
     mux = (DMAMUX_Channel_TypeDef *)(DMAMUX1_Channel0_BASE +
                                      (4U * STM32G0_DmaGlobalIndex(dma_channel)));
     /* ERRATA ES0548 2.5.4: whole-register write, SE = 0 and SPOL = 00. */
@@ -30,9 +32,9 @@ SPL_Status DMAMUX_SetRequest(DMA_Channel_TypeDef *dma_channel, uint8_t request_i
 
 SPL_Status DMAMUX_ClearOverrun(uint16_t mask)
 {
-    /* normal: ayrilmis bitlere yazim (komsu birim yok). */
-    /* SAFE (EDR-003): ayrilmis bite yazim. */
-    SPL_REQUIRE_SAFE(((uint32_t)mask & ~STM32G0_DMAMUX_VALID_MASK) == 0U, SPL_ERR_PARAM);
+    /* write to reserved bits (no neighbouring unit). */
+    /* (EDR-003): write to a reserved bit. */
+    SPL_REQUIRE(((uint32_t)mask & ~STM32G0_DMAMUX_VALID_MASK) == 0U, SPL_ERR_PARAM);
     DMAMUX1_ChannelStatus->CFR = (uint32_t)mask; /* write-1 clear: no read-modify-write */
     /* Read back: the clear reaches the peripheral before return (METHOD 1.7, issue #23). */
     (void)DMAMUX1_ChannelStatus->CSR;
@@ -46,8 +48,8 @@ SPL_Status DMAMUX_ClearOverrun(uint16_t mask)
 
 /* ERRATA ES0487 2.2.4 (ES0486 / ES0488 / ES0468 / ES0418 / ES0412 2.2.4): the EXTI sync and
  * trigger inputs are routed to it_exti_per(y) and never fire; no workaround -> UNSUPPORTED. */
-#if SPL_CHECK_LEVEL <= SPL_CHECK_MIX
-/* SAFE (errata): senkron / uretec sessizce sonsuza dek bekler. Yalniz denetimde; saf. */
+#if SPL_CHECK_LEVEL == SPL_CHECK_FULL
+/* (errata): the synchronization / generator silently waits forever. Only in checks; pure. */
 static uint8_t Dmamux_InputDead(uint32_t input)
 {
     uint8_t dead = ((SPL_G0_ERRATA_DMAMUX_EXTI != 0) && (input < DMAMUX_EXTI_INPUTS)) ? 1U : 0U;
@@ -63,7 +65,7 @@ static uint8_t Dmamux_InputDead(uint32_t input)
 }
 #define DMAMUX_INPUT_ALIVE(input) (Dmamux_InputDead(input) == 0U)
 #else
-#define DMAMUX_INPUT_ALIVE(input) (1) /* kapali seviyede degerlendirilmez */
+#define DMAMUX_INPUT_ALIVE(input) (1) /* not evaluated, checks are off */
 #endif
 #define DMAMUX_GENERATORS 4U /* RM0444 Table 54 / RM0454 Table 38 */
 
@@ -83,21 +85,21 @@ SPL_Status DMAMUX_SetSync(DMA_Channel_TypeDef *dma_channel, uint8_t request_id,
     DMAMUX_Channel_TypeDef *mux;
     uint32_t ccr;
 
-    SPL_REQUIRE_SAFE(sync != NULL, SPL_ERR_PARAM);
-    /* normal: 0 / 1 bayraklari 1 gibi davranir. */
+    SPL_REQUIRE(sync != NULL, SPL_ERR_PARAM);
+    /* 0 / 1 flags act as 1. */
     SPL_REQUIRE((sync->enable <= 1U) && (sync->event_out <= 1U) && (sync->overrun_irq <= 1U),
                 SPL_ERR_PARAM);
-    /* SAFE: komsu alana tasma (requests 0: 0 - 1 butun alanlari doldurur), baska istek, gecersiz
-     * kanal. */
-    SPL_REQUIRE_SAFE((request_id <= STM32G0_DMAMUX_REQUEST_MAX) && (sync->polarity <= 3U) &&
-                         (sync->sync_id < DMAMUX_SYNC_INPUTS) && (sync->requests != 0U) &&
-                         (sync->requests <= 32U),
-                     SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(STM32G0_DmaIsChannel(dma_channel) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(DMAMUX_INPUT_ALIVE(sync->sync_id), SPL_ERR_UNSUPPORTED);
-    /* ERRATA ES0548 2.5.4: synchronization is enabled with SPOL != 00 in the same write. SAFE. */
-    SPL_REQUIRE_SAFE((sync->enable == 0U) || (sync->polarity != 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((dma_channel->CCR & DMA_CCR_EN) == 0U, SPL_ERR_STATE);
+    /* overflow into a neighbouring field (requests 0: 0 - 1 fills all fields), another
+     * request, invalid channel. */
+    SPL_REQUIRE((request_id <= STM32G0_DMAMUX_REQUEST_MAX) && (sync->polarity <= 3U) &&
+                    (sync->sync_id < DMAMUX_SYNC_INPUTS) && (sync->requests != 0U) &&
+                    (sync->requests <= 32U),
+                SPL_ERR_PARAM);
+    SPL_REQUIRE(STM32G0_DmaIsChannel(dma_channel) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(DMAMUX_INPUT_ALIVE(sync->sync_id), SPL_ERR_UNSUPPORTED);
+    /* ERRATA ES0548 2.5.4: synchronization is enabled with SPOL != 00 in the same write. */
+    SPL_REQUIRE((sync->enable == 0U) || (sync->polarity != 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE((dma_channel->CCR & DMA_CCR_EN) == 0U, SPL_ERR_STATE);
     mux = Dmamux_Channel(STM32G0_DmaGlobalIndex(dma_channel));
     /* NBREQ is writable only with SE = 0 and EGE = 0 (RM0444 11.6.1): drop them first (SPOL = 00
      * while SE = 0, ERRATA ES0548 2.5.4). */
@@ -125,7 +127,7 @@ SPL_Status DMAMUX_SetSync(DMA_Channel_TypeDef *dma_channel, uint8_t request_id,
 
 SPL_Status DMAMUX_GetSyncOverrun(uint16_t *mask)
 {
-    SPL_REQUIRE_SAFE(mask != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(mask != NULL, SPL_ERR_PARAM);
     *mask = (uint16_t)(DMAMUX1_ChannelStatus->CSR & STM32G0_DMAMUX_VALID_MASK);
     return SPL_OK;
 }
@@ -134,17 +136,17 @@ SPL_Status DMAMUX_RequestGenConfig(uint8_t gen, const DMAMUX_RequestGenTypeDef *
 {
     DMAMUX_RequestGen_TypeDef *rg;
 
-    SPL_REQUIRE_SAFE(gen < DMAMUX_GENERATORS, SPL_ERR_PARAM); /* SAFE: baska register */
-    SPL_REQUIRE_SAFE(cfg != NULL, SPL_ERR_PARAM);
-    SPL_REQUIRE(cfg->overrun_irq <= 1U, SPL_ERR_PARAM); /* normal: 1 gibi */
-    /* SAFE: komsu alana tasma. */
-    SPL_REQUIRE_SAFE((cfg->signal_id < DMAMUX_SYNC_INPUTS) && (cfg->polarity <= 3U) &&
-                         (cfg->requests != 0U) && (cfg->requests <= 32U),
-                     SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(DMAMUX_INPUT_ALIVE(cfg->signal_id), SPL_ERR_UNSUPPORTED);
+    SPL_REQUIRE(gen < DMAMUX_GENERATORS, SPL_ERR_PARAM); /* another register */
+    SPL_REQUIRE(cfg != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(cfg->overrun_irq <= 1U, SPL_ERR_PARAM); /* acts as 1 */
+    /* overflow into a neighbouring field. */
+    SPL_REQUIRE((cfg->signal_id < DMAMUX_SYNC_INPUTS) && (cfg->polarity <= 3U) &&
+                    (cfg->requests != 0U) && (cfg->requests <= 32U),
+                SPL_ERR_PARAM);
+    SPL_REQUIRE(DMAMUX_INPUT_ALIVE(cfg->signal_id), SPL_ERR_UNSUPPORTED);
     rg = Dmamux_Generator(gen);
-    /* GNBREQ is writable only with GE = 0 (RM0444 11.6.4). SAFE: yazim sessizce yok sayilir. */
-    SPL_REQUIRE_SAFE((rg->RGCR & DMAMUX_RGxCR_GE) == 0U, SPL_ERR_STATE);
+    /* GNBREQ is writable only with GE = 0 (RM0444 11.6.4). the write is silently ignored. */
+    SPL_REQUIRE((rg->RGCR & DMAMUX_RGxCR_GE) == 0U, SPL_ERR_STATE);
     rg->RGCR = ((uint32_t)cfg->signal_id << DMAMUX_RGxCR_SIG_ID_Pos) |
                ((uint32_t)cfg->polarity << DMAMUX_RGxCR_GPOL_Pos) |
                (((uint32_t)cfg->requests - 1U) << DMAMUX_RGxCR_GNBREQ_Pos) |
@@ -156,8 +158,8 @@ SPL_Status DMAMUX_RequestGenEnable(uint8_t gen, uint8_t enable)
 {
     DMAMUX_RequestGen_TypeDef *rg;
 
-    SPL_REQUIRE_SAFE(gen < DMAMUX_GENERATORS, SPL_ERR_PARAM);
-    SPL_REQUIRE(enable <= 1U, SPL_ERR_PARAM); /* normal */
+    SPL_REQUIRE(gen < DMAMUX_GENERATORS, SPL_ERR_PARAM);
+    SPL_REQUIRE(enable <= 1U, SPL_ERR_PARAM);
     rg = Dmamux_Generator(gen);
     rg->RGCR = (rg->RGCR & ~DMAMUX_RGxCR_GE) | ((enable != 0U) ? DMAMUX_RGxCR_GE : 0U);
     return SPL_OK;
@@ -165,15 +167,15 @@ SPL_Status DMAMUX_RequestGenEnable(uint8_t gen, uint8_t enable)
 
 SPL_Status DMAMUX_GetGenOverrun(uint8_t *mask)
 {
-    SPL_REQUIRE_SAFE(mask != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(mask != NULL, SPL_ERR_PARAM);
     *mask = (uint8_t)(DMAMUX1_RequestGenStatus->RGSR & 0xFU);
     return SPL_OK;
 }
 
 SPL_Status DMAMUX_ClearGenOverrun(uint8_t mask)
 {
-    SPL_REQUIRE((mask != 0U) && (mask <= 0xFU), SPL_ERR_PARAM); /* normal */
-    DMAMUX1_RequestGenStatus->RGCFR = mask;                     /* write-1 clear */
+    SPL_REQUIRE((mask != 0U) && (mask <= 0xFU), SPL_ERR_PARAM);
+    DMAMUX1_RequestGenStatus->RGCFR = mask; /* write-1 clear */
     /* Read back: the clear reaches the peripheral before return (METHOD 1.7, issue #23). */
     (void)DMAMUX1_RequestGenStatus->RGSR;
     return SPL_OK;

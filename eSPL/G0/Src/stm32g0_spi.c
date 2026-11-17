@@ -1,26 +1,26 @@
-/* Ported from STM32G4 SPL v0.13.3 (Autometry_Mcu_Spl 130de7a); reviewed against RM0444 Rev 6
+/* SPI and I2S driver for STM32G0; public contract: stm32g0_spi.h.
+ * Ported from STM32G4 SPL v0.13.3 (Autometry_Mcu_Spl 130de7a); reviewed against RM0444 Rev 6
  * section 35 (same SPI IP; section numbers 42.x -> 35.x) and ES0548 2.14.1 / 2.14.2. */
-/* Kutuphane birimi: spl_check.h karisma korumasi referansini bu birim de uretir; uretmeyen tek
- * birim stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
+/* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit that
+ * does not is stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
 #define SPL_LIBRARY_BUILD 1
 #include <stddef.h>
 #include "stm32g0_spi.h"
 #include "stm32g0_sku.h"
 
-/* Denetim seviyesi (A4 dalga 4b, Docs/CHECK_LEVEL.md 5.4 SPI / I2S tablosu): SPL_REQUIRE = normal
- * sinif (yalniz FULL), SPL_REQUIRE_SAFE = SAFE sinif (FULL ve MIX). MODF, BSY / FTLVL (K-A4-5),
- * OVR / UDR / FRE ve WOULD_BLOCK result: her seviyede. Yalniz denetimde kullanilan yardimcilar
- * static inline (saf, Tools/pure_checks.txt). */
+/* Check level (A4 wave 4b, Docs/CHECK_LEVEL.md 5.4 SPI / I2S table): SPL_REQUIRE = checked at FULL
+ * only (not compiled at FAST). MODF, BSY / FTLVL (K-A4-5), OVR / UDR / FRE and WOULD_BLOCK: result,
+ * at every level. Helpers used only in checks are static inline (pure, Tools/pure_checks.txt). */
 
 /* DS field value 7 = 8-bit frame; values >= 8 are 9..16-bit frames
  * (RM0444 35.9.2). "Not used" values 0..2 are forced to 8 bit by hardware. */
 #define SPI_DS_8BIT_FIELD 7U
 
-/* DR'ye 16 bit erisim (veri paketleme: erisim genisligi FIFO'ya giden bayt sayisini belirler).
- * CMSIS DR'yi uint32_t tanimlar; *(uint16_t *)&spi->DR GCC'de -Wstrict-aliasing uyarisi verir
- * (uintptr_t ara cevrimi de yetmez, GCC nesneyi izler). Adres taban + offsetof ile tamsayi olarak
- * kurulur: AC6 nesnesi bayt bayt ayni, GCC uyarisi yok. 8 bit erisim (karakter tipi) kurala
- * takilmaz, degismedi. */
+/* 16-bit DR access (data packing: the access width sets the number of bytes sent to the FIFO).
+ * CMSIS defines DR as uint32_t; *(uint16_t *)&spi->DR gives a -Wstrict-aliasing warning on GCC
+ * (an intermediate uintptr_t cast is not enough either, GCC tracks the object). The address is
+ * built as an integer from base + offsetof: the AC6 object is byte-identical, no GCC warning.
+ * 8-bit access (character type) is not affected by the rule and is unchanged. */
 #define SPI_DR16(spi) (*(__IO uint16_t *)((uintptr_t)(spi) + offsetof(SPI_TypeDef, DR)))
 
 /* All defined SPIx_SR bits (RM0444 35.9.3); only CRCERR is writable. */
@@ -48,11 +48,11 @@ SPL_Status SPI_MasterInit(SPI_TypeDef *spi, const SPI_InitTypeDef *cfg)
 {
     uint32_t cr1;
 
-    SPL_REQUIRE_SAFE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(cfg != (const SPI_InitTypeDef *)0, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(cfg->prescaler <= 7U, SPL_ERR_PARAM); /* SAFE: BR tasmasi */
+    SPL_REQUIRE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(cfg != (const SPI_InitTypeDef *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(cfg->prescaler <= 7U, SPL_ERR_PARAM); /* BR overflow */
     SPL_REQUIRE((cfg->cpol <= 1U) && (cfg->cpha <= 1U) && (cfg->lsb_first <= 1U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((spi->CR1 & SPI_CR1_SPE) == 0U, SPL_ERR_STATE); /* SAFE */
+    SPL_REQUIRE((spi->CR1 & SPI_CR1_SPE) == 0U, SPL_ERR_STATE);
     /* v0.11.1: hardware refuses MSTR while MODF=1 (RM0444 35.5.11); report it like
      * SPI_Init and SPI_Enable instead of returning OK for an ignored write. */
     if ((spi->SR & SPI_SR_MODF) != 0U)
@@ -82,7 +82,7 @@ SPL_Status SPI_MasterInit(SPI_TypeDef *spi, const SPI_InitTypeDef *cfg)
 
 SPL_Status SPI_Enable(SPI_TypeDef *spi, uint8_t enable)
 {
-    SPL_REQUIRE_SAFE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     SPL_REQUIRE(enable <= 1U, SPL_ERR_PARAM);
 
     if (enable != 0U)
@@ -119,7 +119,7 @@ SPL_Status SPI_Enable(SPI_TypeDef *spi, uint8_t enable)
         {
             if (slave != 0U)
             {
-                return SPL_ERR_STATE; /* result (K-A4-5): karsi master'a bagli, her seviyede */
+                return SPL_ERR_STATE; /* result (K-A4-5): up to the remote master, every level */
             }
             return SPL_BUSY;
         }
@@ -132,9 +132,9 @@ SPL_Status SPI_Enable(SPI_TypeDef *spi, uint8_t enable)
 
 SPL_Status SPI_TryWrite8(SPI_TypeDef *spi, uint8_t data)
 {
-    SPL_REQUIRE_SAFE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    /* SAFE: SPE = 0 iken bayt FIFO'da bekler; genis cerceve FIFO hizasini bozar. */
-    SPL_REQUIRE_SAFE(((spi->CR1 & SPI_CR1_SPE) != 0U) && (Spi_IsWide(spi) == 0U), SPL_ERR_STATE);
+    SPL_REQUIRE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    /* with SPE = 0 the byte waits in the FIFO; a wide frame breaks FIFO alignment. */
+    SPL_REQUIRE(((spi->CR1 & SPI_CR1_SPE) != 0U) && (Spi_IsWide(spi) == 0U), SPL_ERR_STATE);
     if ((spi->SR & SPI_SR_TXE) == 0U)
     {
         return SPL_WOULD_BLOCK;
@@ -147,10 +147,10 @@ SPL_Status SPI_TryWrite8(SPI_TypeDef *spi, uint8_t data)
 
 SPL_Status SPI_TryRead8(SPI_TypeDef *spi, uint8_t *data)
 {
-    SPL_REQUIRE_SAFE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(data != (uint8_t *)0, SPL_ERR_PARAM);
-    /* An 8-bit read of a 9..16-bit frame breaks FIFO alignment (SAFE). */
-    SPL_REQUIRE_SAFE(Spi_IsWide(spi) == 0U, SPL_ERR_STATE);
+    SPL_REQUIRE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(data != (uint8_t *)0, SPL_ERR_PARAM);
+    /* An 8-bit read of a 9..16-bit frame breaks FIFO alignment. */
+    SPL_REQUIRE(Spi_IsWide(spi) == 0U, SPL_ERR_STATE);
     /* RX FIFO may still hold data after SPE has been cleared.
      * Draining that data is a required part of normal shutdown. */
     if ((spi->SR & SPI_SR_OVR) != 0U)
@@ -160,8 +160,8 @@ SPL_Status SPI_TryRead8(SPI_TypeDef *spi, uint8_t *data)
     if ((spi->SR & SPI_SR_RXNE) == 0U)
     {
         /* No new receive data can arrive while SPI is disabled.
-         * WOULD_BLOCK would incorrectly invite endless polling (SAFE: K-A4-4 ilkesi). */
-        SPL_REQUIRE_SAFE((spi->CR1 & SPI_CR1_SPE) != 0U, SPL_ERR_STATE);
+         * WOULD_BLOCK would incorrectly invite endless polling (K-A4-4 principle). */
+        SPL_REQUIRE((spi->CR1 & SPI_CR1_SPE) != 0U, SPL_ERR_STATE);
         return SPL_WOULD_BLOCK;
     }
 
@@ -172,8 +172,8 @@ SPL_Status SPI_TryRead8(SPI_TypeDef *spi, uint8_t *data)
 
 SPL_Status SPI_Status(SPI_TypeDef *spi, uint32_t *status)
 {
-    SPL_REQUIRE_SAFE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(status != (uint32_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(status != (uint32_t *)0, SPL_ERR_PARAM);
 
     *status = spi->SR;
     return SPL_OK;
@@ -189,7 +189,7 @@ SPL_Status SPI_ClearOverrun(SPI_TypeDef *spi)
     volatile uint16_t discarded;
     volatile uint32_t status_snapshot;
 
-    SPL_REQUIRE_SAFE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* arbitrary address */
 
     if ((spi->SR & SPI_SR_OVR) == 0U)
     {
@@ -216,7 +216,8 @@ SPL_Status SPI_ClearOverrun(SPI_TypeDef *spi)
 /* ---- v0.11 ---- */
 
 /* Validates field ranges and RM0444 cross-rules; no register access. */
-/* A4 (CHECK_LEVEL.md 5.4): 0 / 1 alanlarinin araligi normal sinif (yazimda `!= 0`); yalniz FULL. */
+/* A4 (CHECK_LEVEL.md 5.4): the range of the 0 / 1 fields is checked (written as `!= 0`); FULL
+ * only. */
 static inline uint8_t Spi_ConfigBoolsValid(const SPI_ConfigTypeDef *cfg)
 {
     return ((cfg->cpol <= 1U) && (cfg->cpha <= 1U) && (cfg->lsb_first <= 1U) &&
@@ -225,7 +226,7 @@ static inline uint8_t Spi_ConfigBoolsValid(const SPI_ConfigTypeDef *cfg)
                : 0U;
 }
 
-/* SAFE: kaydirilan alanlarin araligi, RM0444 35.5 capraz kurallari ve CRC alanlari. */
+/* range of the shifted fields, RM0444 35.5 cross-rules and the CRC fields. */
 static inline uint8_t Spi_ConfigValid(const SPI_ConfigTypeDef *cfg)
 {
     uint8_t master;
@@ -379,11 +380,11 @@ SPL_Status SPI_Init(SPI_TypeDef *spi, const SPI_ConfigTypeDef *cfg)
 {
     uint32_t cr1;
 
-    SPL_REQUIRE_SAFE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(cfg != (const SPI_ConfigTypeDef *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(cfg != (const SPI_ConfigTypeDef *)0, SPL_ERR_PARAM);
     SPL_REQUIRE(Spi_ConfigBoolsValid(cfg) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(Spi_ConfigValid(cfg) != 0U, SPL_ERR_PARAM); /* SAFE: alan tasmasi, RM kurali */
-    SPL_REQUIRE_SAFE((spi->CR1 & SPI_CR1_SPE) == 0U, SPL_ERR_STATE); /* SAFE */
+    SPL_REQUIRE(Spi_ConfigValid(cfg) != 0U, SPL_ERR_PARAM); /* field overflow, RM rule */
+    SPL_REQUIRE((spi->CR1 & SPI_CR1_SPE) == 0U, SPL_ERR_STATE);
     /* MSTR cannot be set while MODF=1 (RM0444 35.5.11). */
     if ((spi->SR & SPI_SR_MODF) != 0U)
     {
@@ -410,9 +411,9 @@ SPL_Status SPI_Init(SPI_TypeDef *spi, const SPI_ConfigTypeDef *cfg)
 
 SPL_Status SPI_TryWrite16(SPI_TypeDef *spi, uint16_t data)
 {
-    SPL_REQUIRE_SAFE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    /* SAFE: SPE = 0 iken bayt FIFO'da bekler; dar cerceve FIFO hizasini bozar. */
-    SPL_REQUIRE_SAFE(((spi->CR1 & SPI_CR1_SPE) != 0U) && (Spi_IsWide(spi) != 0U), SPL_ERR_STATE);
+    SPL_REQUIRE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    /* with SPE = 0 the byte waits in the FIFO; a narrow frame breaks FIFO alignment. */
+    SPL_REQUIRE(((spi->CR1 & SPI_CR1_SPE) != 0U) && (Spi_IsWide(spi) != 0U), SPL_ERR_STATE);
     if ((spi->SR & SPI_SR_TXE) == 0U)
     {
         return SPL_WOULD_BLOCK;
@@ -425,17 +426,17 @@ SPL_Status SPI_TryWrite16(SPI_TypeDef *spi, uint16_t data)
 
 SPL_Status SPI_TryRead16(SPI_TypeDef *spi, uint16_t *data)
 {
-    SPL_REQUIRE_SAFE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(data != (uint16_t *)0, SPL_ERR_PARAM);
-    /* 16-bit reads need a 9..16-bit frame and FRXTH=0 (RM0444 35.9.2); SAFE: FIFO hizasi. */
-    SPL_REQUIRE_SAFE((Spi_IsWide(spi) != 0U) && ((spi->CR2 & SPI_CR2_FRXTH) == 0U), SPL_ERR_STATE);
+    SPL_REQUIRE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(data != (uint16_t *)0, SPL_ERR_PARAM);
+    /* 16-bit reads need a 9..16-bit frame and FRXTH=0 (RM0444 35.9.2); FIFO alignment. */
+    SPL_REQUIRE((Spi_IsWide(spi) != 0U) && ((spi->CR2 & SPI_CR2_FRXTH) == 0U), SPL_ERR_STATE);
     if ((spi->SR & SPI_SR_OVR) != 0U)
     {
         return SPL_ERR_HW;
     }
     if ((spi->SR & SPI_SR_RXNE) == 0U)
     {
-        SPL_REQUIRE_SAFE((spi->CR1 & SPI_CR1_SPE) != 0U, SPL_ERR_STATE); /* SAFE: K-A4-4 ilkesi */
+        SPL_REQUIRE((spi->CR1 & SPI_CR1_SPE) != 0U, SPL_ERR_STATE); /* K-A4-4 rule */
         return SPL_WOULD_BLOCK;
     }
 
@@ -445,9 +446,9 @@ SPL_Status SPI_TryRead16(SPI_TypeDef *spi, uint16_t *data)
 
 SPL_Status SPI_ITConfig(SPI_TypeDef *spi, uint32_t it_mask, uint8_t enable)
 {
-    SPL_REQUIRE_SAFE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     SPL_REQUIRE((it_mask != 0U) && (enable <= 1U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((it_mask & ~SPI_IT_ALL) == 0U, SPL_ERR_PARAM); /* SAFE: CR2 |= fazla bit */
+    SPL_REQUIRE((it_mask & ~SPI_IT_ALL) == 0U, SPL_ERR_PARAM); /* CR2 |= extra bits */
 
     /* CR2 has no write-1-to-clear or self-clearing bits. */
     if (enable != 0U)
@@ -465,9 +466,9 @@ SPL_Status SPI_DmaConfig(SPI_TypeDef *spi, uint32_t dma_mask, uint8_t enable)
 {
     const uint32_t valid_mask = SPI_DMA_TX | SPI_DMA_RX;
 
-    SPL_REQUIRE_SAFE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     SPL_REQUIRE((dma_mask != 0U) && (enable <= 1U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((dma_mask & ~valid_mask) == 0U, SPL_ERR_PARAM); /* SAFE: CR2 |= fazla bit */
+    SPL_REQUIRE((dma_mask & ~valid_mask) == 0U, SPL_ERR_PARAM); /* CR2 |= extra bits */
 
     if (enable != 0U)
     {
@@ -475,8 +476,8 @@ SPL_Status SPI_DmaConfig(SPI_TypeDef *spi, uint32_t dma_mask, uint8_t enable)
     }
     else
     {
-        /* Close order: DMA requests are cleared after SPE=0 (RM0444 35.5.9); SAFE. */
-        SPL_REQUIRE_SAFE((spi->CR1 & SPI_CR1_SPE) == 0U, SPL_ERR_STATE);
+        /* Close order: DMA requests are cleared after SPE=0 (RM0444 35.5.9); */
+        SPL_REQUIRE((spi->CR1 & SPI_CR1_SPE) == 0U, SPL_ERR_STATE);
         spi->CR2 &= ~dma_mask;
     }
     return SPL_OK;
@@ -487,15 +488,15 @@ SPL_Status SPI_DmaPackingConfig(SPI_TypeDef *spi, uint32_t options)
     const uint32_t valid_mask = SPI_PACK_RX16 | SPI_PACK_TX_ODD | SPI_PACK_RX_ODD;
     uint32_t cr2;
 
-    SPL_REQUIRE_SAFE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM);     /* SAFE: rastgele adres */
-    SPL_REQUIRE((options & ~valid_mask) == 0U, SPL_ERR_PARAM); /* normal: & ile test edilir */
-    /* SAFE: RX_ODD, RX16'siz (RM yasak birlesim). */
-    SPL_REQUIRE_SAFE(((options & SPI_PACK_RX_ODD) == 0U) || ((options & SPI_PACK_RX16) != 0U),
-                     SPL_ERR_PARAM);
-    /* LDMA_TX/LDMA_RX must be written with SPE=0 (RM0444 35.9.2); SAFE. */
-    SPL_REQUIRE_SAFE((spi->CR1 & SPI_CR1_SPE) == 0U, SPL_ERR_STATE);
-    /* Packing exists only for frames of 8 bits or less (SAFE). */
-    SPL_REQUIRE_SAFE((options == 0U) || (Spi_IsWide(spi) == 0U), SPL_ERR_STATE);
+    SPL_REQUIRE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM);          /* arbitrary address */
+    SPL_REQUIRE((options & ~valid_mask) == 0U, SPL_ERR_PARAM); /* tested with & */
+    /* RX_ODD without RX16 (combination forbidden by the RM). */
+    SPL_REQUIRE(((options & SPI_PACK_RX_ODD) == 0U) || ((options & SPI_PACK_RX16) != 0U),
+                SPL_ERR_PARAM);
+    /* LDMA_TX/LDMA_RX must be written with SPE=0 (RM0444 35.9.2); */
+    SPL_REQUIRE((spi->CR1 & SPI_CR1_SPE) == 0U, SPL_ERR_STATE);
+    /* Packing exists only for frames of 8 bits or less. */
+    SPL_REQUIRE((options == 0U) || (Spi_IsWide(spi) == 0U), SPL_ERR_STATE);
 
     cr2 = spi->CR2 & ~(SPI_CR2_FRXTH | SPI_CR2_LDMATX | SPI_CR2_LDMARX);
     if ((Spi_IsWide(spi) == 0U) && ((options & SPI_PACK_RX16) == 0U))
@@ -518,8 +519,8 @@ SPL_Status SPI_GetFifoLevels(SPI_TypeDef *spi, uint32_t *tx_level, uint32_t *rx_
 {
     uint32_t sr;
 
-    SPL_REQUIRE_SAFE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE((tx_level != (uint32_t *)0) && (rx_level != (uint32_t *)0), SPL_ERR_PARAM);
+    SPL_REQUIRE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE((tx_level != (uint32_t *)0) && (rx_level != (uint32_t *)0), SPL_ERR_PARAM);
 
     sr = spi->SR;
     *tx_level = (sr & SPI_SR_FTLVL) >> SPI_SR_FTLVL_Pos;
@@ -529,8 +530,8 @@ SPL_Status SPI_GetFifoLevels(SPI_TypeDef *spi, uint32_t *tx_level, uint32_t *rx_
 
 SPL_Status SPI_GetErrors(SPI_TypeDef *spi, uint32_t *errors)
 {
-    SPL_REQUIRE_SAFE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(errors != (uint32_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(errors != (uint32_t *)0, SPL_ERR_PARAM);
 
     *errors = spi->SR & SPI_ERRORS_ALL;
     return SPL_OK;
@@ -540,7 +541,7 @@ SPL_Status SPI_ClearModeFault(SPI_TypeDef *spi)
 {
     uint32_t cr1;
 
-    SPL_REQUIRE_SAFE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     /* Step 1: SR read while MODF=1. */
     if ((spi->SR & SPI_SR_MODF) == 0U)
     {
@@ -557,7 +558,7 @@ SPL_Status SPI_ClearModeFault(SPI_TypeDef *spi)
 
 SPL_Status SPI_ClearCrcError(SPI_TypeDef *spi)
 {
-    SPL_REQUIRE_SAFE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     if ((spi->SR & SPI_SR_CRCERR) == 0U)
     {
         return SPL_OK;
@@ -573,10 +574,10 @@ SPL_Status SPI_CrcNext(SPI_TypeDef *spi)
 {
     uint32_t cr1;
 
-    SPL_REQUIRE_SAFE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     cr1 = spi->CR1;
-    /* SAFE: CRCNEXT sessizce yok sayilir. */
-    SPL_REQUIRE_SAFE(((cr1 & SPI_CR1_CRCEN) != 0U) && ((cr1 & SPI_CR1_SPE) != 0U), SPL_ERR_STATE);
+    /* CRCNEXT silently ignored. */
+    SPL_REQUIRE(((cr1 & SPI_CR1_CRCEN) != 0U) && ((cr1 & SPI_CR1_SPE) != 0U), SPL_ERR_STATE);
     spi->CR1 = cr1 | SPI_CR1_CRCNEXT;
     return SPL_OK;
 }
@@ -596,26 +597,26 @@ SPL_Status I2S_Init(SPI_TypeDef *spi, const I2S_InitTypeDef *cfg)
     uint32_t i2scfgr;
     uint32_t i2spr;
 
-    SPL_REQUIRE_SAFE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(cfg != NULL, SPL_ERR_PARAM);
-    /* SAFE: kaydirilan I2SCFG / I2SSTD / DATLEN alanlari. */
-    SPL_REQUIRE_SAFE((cfg->mode <= 3U) && (cfg->standard <= 3U) && (cfg->data_length <= 2U),
-                     SPL_ERR_PARAM);
+    SPL_REQUIRE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(cfg != NULL, SPL_ERR_PARAM);
+    /* shifted I2SCFG / I2SSTD / DATLEN fields. */
+    SPL_REQUIRE((cfg->mode <= 3U) && (cfg->standard <= 3U) && (cfg->data_length <= 2U),
+                SPL_ERR_PARAM);
     SPL_REQUIRE((cfg->pcm_long <= 1U) && (cfg->channel_32 <= 1U) && (cfg->cpol <= 1U) &&
                     (cfg->mclk_out <= 1U) && (cfg->odd <= 1U) && (cfg->async_start <= 1U),
                 SPL_ERR_PARAM);
     /* DATLEN 24 / 32 bit fixes a 32-bit channel (RM0444 35.9.8 CHLEN); PCMSYNC means something
      * in PCM only; I2SDIV 0 and 1 are forbidden (35.9.9), the divider is used in master mode.
-     * SAFE: RM yasak deger / birlesim. */
-    SPL_REQUIRE_SAFE(((cfg->data_length == 0U) || (cfg->channel_32 != 0U)) &&
-                         ((cfg->pcm_long == 0U) || (cfg->standard == 3U)) &&
-                         ((cfg->mode < 2U) || (cfg->divider >= 2U)),
-                     SPL_ERR_PARAM);
-    /* SPI3; SPI2 outside group 0BX (SAFE). */
-    SPL_REQUIRE_SAFE(I2s_Valid(spi) != 0U, SPL_ERR_UNSUPPORTED);
-    /* I2SMOD with SPE = 0, the other fields with I2SE = 0 (RM0444 35.9.8); SAFE. */
-    SPL_REQUIRE_SAFE(((spi->I2SCFGR & SPI_I2SCFGR_I2SE) == 0U) && ((spi->CR1 & SPI_CR1_SPE) == 0U),
-                     SPL_ERR_STATE);
+     * value / combination forbidden by the RM. */
+    SPL_REQUIRE(((cfg->data_length == 0U) || (cfg->channel_32 != 0U)) &&
+                    ((cfg->pcm_long == 0U) || (cfg->standard == 3U)) &&
+                    ((cfg->mode < 2U) || (cfg->divider >= 2U)),
+                SPL_ERR_PARAM);
+    /* SPI3; SPI2 outside group 0BX. */
+    SPL_REQUIRE(I2s_Valid(spi) != 0U, SPL_ERR_UNSUPPORTED);
+    /* I2SMOD with SPE = 0, the other fields with I2SE = 0 (RM0444 35.9.8); */
+    SPL_REQUIRE(((spi->I2SCFGR & SPI_I2SCFGR_I2SE) == 0U) && ((spi->CR1 & SPI_CR1_SPE) == 0U),
+                SPL_ERR_STATE);
     i2spr = ((uint32_t)cfg->divider << SPI_I2SPR_I2SDIV_Pos) |
             ((cfg->odd != 0U) ? SPI_I2SPR_ODD : 0U) |
             ((cfg->mclk_out != 0U) ? SPI_I2SPR_MCKOE : 0U);
@@ -633,11 +634,11 @@ SPL_Status I2S_Init(SPI_TypeDef *spi, const I2S_InitTypeDef *cfg)
 
 SPL_Status I2S_Enable(SPI_TypeDef *spi, uint8_t enable)
 {
-    SPL_REQUIRE_SAFE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     SPL_REQUIRE(enable <= 1U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(I2s_Valid(spi) != 0U, SPL_ERR_UNSUPPORTED); /* SAFE: ornekte I2S yok */
-    /* not configured for I2S (I2S_Init first); SAFE: I2SE sessizce yok sayilir. */
-    SPL_REQUIRE_SAFE((spi->I2SCFGR & SPI_I2SCFGR_I2SMOD) != 0U, SPL_ERR_STATE);
+    SPL_REQUIRE(I2s_Valid(spi) != 0U, SPL_ERR_UNSUPPORTED); /* instance has no I2S */
+    /* not configured for I2S (I2S_Init first); I2SE silently ignored. */
+    SPL_REQUIRE((spi->I2SCFGR & SPI_I2SCFGR_I2SMOD) != 0U, SPL_ERR_STATE);
     spi->I2SCFGR = (spi->I2SCFGR & ~SPI_I2SCFGR_I2SE) | ((enable != 0U) ? SPI_I2SCFGR_I2SE : 0U);
     return SPL_OK;
 }
@@ -646,8 +647,8 @@ SPL_Status I2S_TryWrite(SPI_TypeDef *spi, uint16_t data)
 {
     uint32_t sr;
 
-    SPL_REQUIRE_SAFE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM);       /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(I2s_Valid(spi) != 0U, SPL_ERR_UNSUPPORTED); /* SAFE: ornekte I2S yok */
+    SPL_REQUIRE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM);       /* arbitrary address */
+    SPL_REQUIRE(I2s_Valid(spi) != 0U, SPL_ERR_UNSUPPORTED); /* instance has no I2S */
     sr = spi->SR;
     if ((sr & (SPI_SR_UDR | SPI_SR_FRE)) != 0U)
     {
@@ -665,9 +666,9 @@ SPL_Status I2S_TryRead(SPI_TypeDef *spi, uint16_t *data, uint8_t *right_channel)
 {
     uint32_t sr;
 
-    SPL_REQUIRE_SAFE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE((data != NULL) && (right_channel != NULL), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(I2s_Valid(spi) != 0U, SPL_ERR_UNSUPPORTED); /* SAFE: ornekte I2S yok */
+    SPL_REQUIRE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE((data != NULL) && (right_channel != NULL), SPL_ERR_PARAM);
+    SPL_REQUIRE(I2s_Valid(spi) != 0U, SPL_ERR_UNSUPPORTED); /* instance has no I2S */
     sr = spi->SR;
     if ((sr & (SPI_SR_OVR | SPI_SR_FRE)) != 0U)
     {
@@ -684,17 +685,17 @@ SPL_Status I2S_TryRead(SPI_TypeDef *spi, uint16_t *data, uint8_t *right_channel)
 
 SPL_Status I2S_GetErrors(SPI_TypeDef *spi, uint32_t *errors)
 {
-    SPL_REQUIRE_SAFE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(errors != NULL, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(I2s_Valid(spi) != 0U, SPL_ERR_UNSUPPORTED); /* SAFE: ornekte I2S yok */
+    SPL_REQUIRE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(errors != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(I2s_Valid(spi) != 0U, SPL_ERR_UNSUPPORTED); /* instance has no I2S */
     *errors = spi->SR & I2S_SR_ERRORS;
     return SPL_OK;
 }
 
 SPL_Status I2S_ClearErrors(SPI_TypeDef *spi)
 {
-    SPL_REQUIRE_SAFE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM);       /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(I2s_Valid(spi) != 0U, SPL_ERR_UNSUPPORTED); /* SAFE: ornekte I2S yok */
+    SPL_REQUIRE(Spi_Valid(spi) != 0U, SPL_ERR_PARAM);       /* arbitrary address */
+    SPL_REQUIRE(I2s_Valid(spi) != 0U, SPL_ERR_UNSUPPORTED); /* instance has no I2S */
     /* RM0444 35.7.8: OVR is cleared by a DR read followed by an SR read; UDR and FRE by an SR read.
      * The discarded DR word is the one received after the overrun. */
     if ((spi->SR & SPI_SR_OVR) != 0U)

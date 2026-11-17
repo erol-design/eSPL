@@ -8,7 +8,7 @@ extern "C"
 {
 #endif
     /* Enables and read-backs a GPIO port bus clock. Does not configure PLL/system clock. */
-    /* Seviye: PARAM[r] */
+    /* Level: PARAM[r] */
     SPL_Status RCC_GpioClockEnable(GPIO_TypeDef *port);
 
     typedef struct
@@ -26,14 +26,14 @@ extern "C"
      * Does not configure PLL, Flash latency or voltage scaling.
      * Returns SPL_ERR_UNSUPPORTED for unrecognized clock settings.
      */
-    /* Seviye: PARAM[S,r] UNSUPPORTED[r] */
+    /* Level: PARAM[F,r] UNSUPPORTED[r] */
     SPL_Status RCC_GetClocks(uint32_t hse_hz, RCC_ClocksTypeDef *clocks);
     /* Read selected USART/UART kernel clock from RCC_CCIPR.
      * LSE source is nominally 32768 Hz; caller must ensure it is running.
      * An instance that is not USART1/2/3 or UART4/5 present on this SKU returns
      * SPL_ERR_PARAM (an absent instance has no CMSIS macro and cannot be named).
      */
-    /* Seviye: PARAM[S,r] UNSUPPORTED[r] */
+    /* Level: PARAM[F,r] UNSUPPORTED[r] */
     SPL_Status RCC_GetUsartKernelClock(const USART_TypeDef *instance, uint32_t hse_hz,
                                        uint32_t *kernel_hz);
 
@@ -235,37 +235,37 @@ extern "C"
 
     /* --- Oscillators (non-blocking: start, then poll RCC_GetOscReady) --- */
     /* Sets the ON bit; idempotent. */
-    /* Seviye: PARAM[r] */
+    /* Level: PARAM[r] */
     SPL_Status RCC_StartOsc(RCC_OscTypeDef osc);
     /* Clears the ON bit. HSI16/HSE: STATE if selected (SW or SWS) as SYSCLK or the
      * PLL source while the PLL is on (PLLON or PLLRDY). LSI: OK means LSION=0 only;
      * IWDG, RTC or LSE CSS keep LSI running (LSIRDY stays 1, RM0440 7.4.28). */
-    /* Seviye: PARAM[r] STATE[r] */
+    /* Level: PARAM[r] STATE[r] */
     SPL_Status RCC_StopOsc(RCC_OscTypeDef osc);
     /* *ready = RDY bit (always written). STATE when the oscillator is off and not
      * ready (polling will not help); OK otherwise. */
-    /* Seviye: PARAM[S,r] STATE[r] */
+    /* Level: PARAM[F,r] STATE[r] */
     SPL_Status RCC_GetOscReady(RCC_OscTypeDef osc, uint8_t *ready);
     /* CR.HSEBYP = bypass (0 crystal, 1 external clock). Only while HSE is off:
      * HSEON=1 with a different value -> STATE; HSEON=0 but HSERDY=1 -> BUSY.
      * ERRATA ES0431 2.2.9 / ES0430 2.2.9 / ES0523 2.2.7: bypass HSE as SYSCLK blocks Standby entry:
      * select HSI16 as SYSCLK before entering Standby (caller). */
-    /* Seviye: PARAM[S] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status RCC_SetHseBypass(uint8_t bypass);
 
     /* --- PLL --- */
     /* Validates and writes the whole PLLCFGR while the PLL is off. hse_hz is used
      * only for the HSE source. PLLON=1 -> STATE; PLLON=0, PLLRDY=1 -> BUSY. */
-    /* Seviye: PARAM[S,r] STATE[r] BUSY[r] */
+    /* Level: PARAM[F,r] STATE[r] BUSY[r] */
     SPL_Status RCC_ConfigPll(const RCC_PllConfigTypeDef *config, uint32_t hse_hz);
     /* Sets PLLON; source oscillator must be ready (on, not ready -> BUSY; off -> STATE). */
-    /* Seviye: STATE[r] BUSY[r] */
+    /* Level: STATE[r] BUSY[r] */
     SPL_Status RCC_EnablePll(void);
     /* Clears PLLON; STATE while the PLL is SYSCLK (SW or SWS). */
-    /* Seviye: STATE[r] */
+    /* Level: STATE[r] */
     SPL_Status RCC_DisablePll(void);
     /* *ready = PLLRDY (always written). STATE when PLLON=0 and PLLRDY=0. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status RCC_GetPllReady(uint8_t *ready);
 
     /* --- SYSCLK and bus prescalers (sequence for > 80 MHz: contract section 3) ---
@@ -278,59 +278,59 @@ extern "C"
      * switch still pending (SW != SWS): its target on -> BUSY, off (PLL: PLLON=0
      * or PLLREN=0) -> STATE (it never completes; start that target). Confirm
      * with RCC_GetSysclkSource. */
-    /* Seviye: PARAM[r] STATE[r] BUSY[r] */
+    /* Level: PARAM[r] STATE[r] BUSY[r] */
     SPL_Status RCC_SetSysclkSource(RCC_SysclkTypeDef source);
     /* *source = CFGR.SWS. Reserved SWS=00 -> UNSUPPORTED. */
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status RCC_GetSysclkSource(RCC_SysclkTypeDef *source);
     /* HPRE: divider 1, 2, 4, 8, 16, 64, 128, 256 or 512; CFGR read back. */
-    /* Seviye: PARAM[r] */
+    /* Level: PARAM[r] */
     SPL_Status RCC_SetAhbPrescaler(uint32_t divider);
     /* PPRE1 / PPRE2: divider 1, 2, 4, 8 or 16 each; CFGR read back. */
-    /* Seviye: PARAM[r] */
+    /* Level: PARAM[r] */
     SPL_Status RCC_SetApbPrescalers(uint32_t apb1_divider, uint32_t apb2_divider);
 
     /* --- Peripheral bus clocks and resets --- */
     /* Sets the ENR bit and reads the register back (clock propagation). */
-    /* Seviye: PARAM[r] UNSUPPORTED[r] */
+    /* Level: PARAM[r] UNSUPPORTED[r] */
     SPL_Status RCC_EnablePeriphClock(RCC_PeriphTypeDef periph);
     /* Clears the ENR bit. RCC_PERIPH_FLASH -> PARAM (RM: flash power-down only). */
-    /* Seviye: PARAM[r] UNSUPPORTED[r] */
+    /* Level: PARAM[r] UNSUPPORTED[r] */
     SPL_Status RCC_DisablePeriphClock(RCC_PeriphTypeDef periph);
     /* *enabled = ENR bit. */
-    /* Seviye: PARAM[S,r] UNSUPPORTED[r] */
+    /* Level: PARAM[F,r] UNSUPPORTED[r] */
     SPL_Status RCC_GetPeriphClock(RCC_PeriphTypeDef periph, uint8_t *enabled);
     /* Sets / clears the RSTR bit. No reset bit (RTCAPB, WWDG) -> UNSUPPORTED;
      * RCC_PERIPH_FLASH -> PARAM. */
-    /* Seviye: PARAM[r] UNSUPPORTED[r] */
+    /* Level: PARAM[r] UNSUPPORTED[r] */
     SPL_Status RCC_AssertPeriphReset(RCC_PeriphTypeDef periph);
-    /* Seviye: PARAM[r] UNSUPPORTED[r] */
+    /* Level: PARAM[r] UNSUPPORTED[r] */
     SPL_Status RCC_ReleasePeriphReset(RCC_PeriphTypeDef periph);
 
     /* --- Kernel clocks --- */
     /* Selector absent on this SKU -> UNSUPPORTED; source not offered -> PARAM. */
-    /* Seviye: PARAM[r] UNSUPPORTED[r] */
+    /* Level: PARAM[r] UNSUPPORTED[r] */
     SPL_Status RCC_SetKernelClock(RCC_KernelTypeDef kernel, RCC_KernelSrcTypeDef source);
     /* Reserved encoding read back -> UNSUPPORTED. */
-    /* Seviye: PARAM[S,r] UNSUPPORTED[r] */
+    /* Level: PARAM[F,r] UNSUPPORTED[r] */
     SPL_Status RCC_GetKernelSource(RCC_KernelTypeDef kernel, RCC_KernelSrcTypeDef *source);
     /* Configuration-derived frequency (oscillator readiness is not checked).
      * NONE or a disabled PLL output -> STATE; I2S_CKIN -> UNSUPPORTED. */
-    /* Seviye: PARAM[S,r] STATE[r] UNSUPPORTED[r] */
+    /* Level: PARAM[F,r] STATE[r] UNSUPPORTED[r] */
     SPL_Status RCC_GetKernelClock(RCC_KernelTypeDef kernel, uint32_t hse_hz, uint32_t *hz);
 
     /* --- MCO, CSS, reset cause --- */
     /* MCOSEL / MCOPRE (divider 1, 2, 4, 8, 16). Pin AF setup is the caller's duty. */
-    /* Seviye: PARAM[r] */
+    /* Level: PARAM[r] */
     SPL_Status RCC_ConfigMco(RCC_McoSourceTypeDef source, uint32_t divider);
     /* Sets CR.CSSON (set-only; cleared by reset only). CSS failure raises NMI. */
-    /* Seviye: - */
+    /* Level: - */
     SPL_Status RCC_EnableCss(void);
     /* *set = CIFR.CSSF. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status RCC_GetCssFlag(uint8_t *set);
     /* Writes CICR.CSSC only (write-1-to-clear register). */
-    /* Seviye: - */
+    /* Level: - */
     SPL_Status RCC_ClearCssFlag(void);
     /* *flags = CSR & RCC_RESET_FLAGS (test with RCC_CSR_xxxRSTF).
      * ERRATA ES0431 2.2.5 / ES0430 2.2.5 / ES0523 2.2.3, ES0431 2.2.3 / ES0430 2.2.4 (LSI as
@@ -339,10 +339,10 @@ extern "C"
      * Docs/v0.10_RTC_CONTRACT.md.
      * Caller duty (CCL-2 WDG-06): the boot code reads these flags and branches on
      * IWDGRSTF/WWDGRSTF (count, log, keep state or safe mode) before RCC_ClearResetFlags. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status RCC_GetResetFlags(uint32_t *flags);
     /* Sets CSR.RMVF (LSION preserved). */
-    /* Seviye: - */
+    /* Level: - */
     SPL_Status RCC_ClearResetFlags(void);
 
 #endif /* RCC_CR_HSION */

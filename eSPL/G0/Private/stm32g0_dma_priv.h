@@ -25,12 +25,13 @@
 #define STM32G0_DMAMUX_REQUEST_MAX (DMAMUX_CxCR_DMAREQ_ID_Msk >> DMAMUX_CxCR_DMAREQ_ID_Pos)
 #endif
 
-/* A3 (Docs/CHECK_LEVEL.md 4.2, 5.4): degeri ureten ile dogrulayan ayri. SPL_REQUIRE* kosulu SAF
- * olmali. Eski STM32G0_DmaChannelLocation hem dogrulayip hem cikti yaziyordu; son kullanicisi
- * DMAMUX A4 dalga 2'de (2026-11-13) asagidakilere gecti ve kaldirildi. Asagidakiler cikti yazmaz,
- * MMIO'ya dokunmaz. */
+/* A3 (Docs/CHECK_LEVEL.md 4.2, 5.4): the producer of a value and its validator are separate. An
+ * SPL_REQUIRE* condition must be PURE. The old STM32G0_DmaChannelLocation both validated and wrote
+ * an output; its last user, DMAMUX, moved to the helpers below in A4 wave 2 (2026-11-13) and it
+ * was removed. The helpers below write no output and do not touch MMIO. */
 
-/* 1: channel bu SKU'nun bir DMA kanal tabani; 0: degil. Saf (Tools/pure_checks.txt izinli). */
+/* 1: channel is a DMA channel base of this SKU; 0: it is not. Pure (allowed by
+ * Tools/pure_checks.txt). */
 static inline uint32_t STM32G0_DmaIsChannel(const DMA_Channel_TypeDef *channel)
 {
     const uintptr_t address = (uintptr_t)channel;
@@ -56,12 +57,12 @@ static inline uint32_t STM32G0_DmaIsChannel(const DMA_Channel_TypeDef *channel)
         return 0U;
     }
     span = address - base;
-    /* k = span / 0x14 bolmesiz (span < 0x8C, 0x14'un katlarinda kesin); taban degilse k * 0x14 !=
-     * span. */
+    /* k = span / 0x14 without a division (span < 0x8C, exact at multiples of 0x14); if it is not a
+     * base, k * 0x14 != span. */
     return ((((span * 0xCCCDU) >> 20U) * STM32G0_DMA_CHANNEL_STRIDE) == span) ? 1U : 0U;
 }
 
-/* Kanalin denetleyicisi. Gecerli kanal varsayilir (dogrulama ayrica, seviyeye gore). */
+/* Controller of the channel. Assumes a valid channel (validated separately, per level). */
 static inline DMA_TypeDef *STM32G0_DmaController(const DMA_Channel_TypeDef *channel)
 {
 #if defined(DMA2)
@@ -75,8 +76,8 @@ static inline DMA_TypeDef *STM32G0_DmaController(const DMA_Channel_TypeDef *chan
     return DMA1;
 }
 
-/* Kanalin denetleyicideki 0 tabanli indeksi (ISR / IFCR 4 bitlik grup). Gecerli kanal varsayilir.
- */
+/* 0-based index of the channel in its controller (ISR / IFCR 4-bit group). Assumes a valid
+ * channel. */
 static inline uint32_t STM32G0_DmaLocalIndex(const DMA_Channel_TypeDef *channel)
 {
     uintptr_t base = (uintptr_t)DMA1_Channel1_BASE;
@@ -89,8 +90,8 @@ static inline uint32_t STM32G0_DmaLocalIndex(const DMA_Channel_TypeDef *channel)
     return (uint32_t)((((uintptr_t)channel - base) * 0xCCCDU) >> 20U);
 }
 
-/* Kanalin genel (= DMAMUX kanal) indeksi: DMA1 kanallari 0.., DMA2 kanallari DMA1'den sonra.
- * Gecerli kanal varsayilir (A4 dalga 2, DMAMUX). */
+/* Global (= DMAMUX channel) index of the channel: DMA1 channels 0.., DMA2 channels after DMA1.
+ * Assumes a valid channel (A4 wave 2, DMAMUX). */
 static inline uint32_t STM32G0_DmaGlobalIndex(const DMA_Channel_TypeDef *channel)
 {
 #if defined(DMA2)

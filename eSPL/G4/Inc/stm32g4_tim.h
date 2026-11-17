@@ -44,45 +44,45 @@ extern "C"
     } TIM_ICInitTypeDef;
     /* ARR/period zero is rejected; no registers are written on parameter error.
      * Issue #27 politikasi: yazilmis CCRx sinanmaz; ARR ile CCR bagimsiz, CCR > ARR gecerli. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status TIM_BaseInit(TIM_TypeDef *tim, const TIM_BaseInitTypeDef *cfg);
     /* CR1.CEN set/cleared. v0.13.3: one-pulse mode with a pulse running
      * (OPM=1, CEN=1) and enable=1 -> SPL_BUSY, no write (retry after the
      * pulse; hardware clears CEN at its end). */
-    /* Seviye: PARAM[S] BUSY[r] */
+    /* Level: PARAM[F] BUSY[r] */
     SPL_Status TIM_Enable(TIM_TypeDef *tim, uint8_t enable);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status TIM_GenerateUpdate(TIM_TypeDef *tim);
     /* Sets/clears DIER.UIE only. enable=1 with UIF=1 (stale event) -> STATE, no write (CCL-2
      * KSM-12): clear it with TIM_ClearUpdate (also after TIM_GenerateUpdate), then enable. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status TIM_UpdateInterrupt(TIM_TypeDef *tim, uint8_t enable);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status TIM_UpdatePending(TIM_TypeDef *tim, uint8_t *pending);
     /* SR = valid flags & ~UIF (rc_w0, reserved bits 0; v0.13.5). */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status TIM_ClearUpdate(TIM_TypeDef *tim);
     /* cfg->compare: register width only. Issue #27 politikasi: ARR'ye gore sinanmaz; CCR > ARR
      * gecerli (PWM: OCxREF sabit, OC: periyot icinde eslesme yok). */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status TIM_OutputCompareInit(TIM_TypeDef *tim, uint8_t channel,
                                      const TIM_OCInitTypeDef *cfg);
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status TIM_InputCaptureInit(TIM_TypeDef *tim, uint8_t channel,
                                     const TIM_ICInitTypeDef *cfg);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status TIM_ChannelEnable(TIM_TypeDef *tim, uint8_t channel, uint8_t enable);
     /* ERRATA ES0431 2.8.2 / ES0430 2.12.2 / ES0523 2.8.2: a CCR change giving matches on two
      * consecutive counter clocks (ARR->0, crest ARR-1->ARR, valley 1->0) loses the 2nd compare
      * event (toggle output, CCxIF); no workaround.
      * Issue #27 politikasi: yalniz genislik; CCR > ARR gecerli. ARR ve CCR ayri yazimlardir,
      * atomik degil: birlikte degistirmek icin OCxPE = ARPE = 1 ile ayni update araliginda yazin. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status TIM_SetCompare(TIM_TypeDef *tim, uint8_t channel, uint32_t compare);
     /* Caller duty (CCL-2 ZMN-06): returns one raw CCRx value; the difference of two captures
      * and counter overflows between them are the caller's (count update events, choose PSC/ARR
      * so the longest interval fits one period, or mark the measurement invalid). */
-    /* Seviye: PARAM[S] HW[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] HW[r] WOULD_BLOCK[r] */
     SPL_Status TIM_GetCapture(TIM_TypeDef *tim, uint8_t channel, uint32_t *capture);
     /* BDTR.MOE set/clear. TIM1/8/15/16/17/20 only (TIM8/TIM20 where the SKU
      * has them), else PARAM. enable=1 returns BUSY (no write) while BKDSRM or
@@ -100,7 +100,7 @@ extern "C"
      * (TIM_BreakDeadTimeInit auto_output_enable = 1): hardware sets MOE again at the next update
      * event after the break input is released, without this function; choose it only when an
      * automatic restart after a break is intended. */
-    /* Seviye: PARAM[S] HW[r] BUSY[r] */
+    /* Level: PARAM[F] HW[r] BUSY[r] */
     SPL_Status TIM_MainOutputEnable(TIM_TypeDef *tim, uint8_t enable);
 
 /* v0.10 extension (counter mode, encoder, complementary outputs, break/dead time, flags,
@@ -199,25 +199,25 @@ extern "C"
 #define TIM_FLAG_INDEX_ERROR TIM_SR_IERRF
 #define TIM_FLAG_TRANSITION_ERROR TIM_SR_TERRF
 
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status TIM_CounterInit(TIM_TypeDef *tim, const TIM_CounterInitTypeDef *cfg);
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status TIM_SetRepetition(TIM_TypeDef *tim, uint32_t repetition);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status TIM_GetCounter(TIM_TypeDef *tim, uint32_t *count, uint8_t *uif_copy);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status TIM_SetCounter(TIM_TypeDef *tim, uint32_t count);
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status TIM_EncoderInit(TIM_TypeDef *tim, const TIM_EncoderInitTypeDef *cfg);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status TIM_GetDirection(TIM_TypeDef *tim, uint8_t *down);
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status TIM_ComplementaryOutputInit(TIM_TypeDef *tim, uint8_t channel, uint8_t inverted);
     /* v0.13.5: enable=1 with BDTR.DTG = 0 -> SPL_ERR_STATE (no dead time: shoot-through in
      * a bridge); call TIM_BreakDeadTimeInit first. enable=0 always allowed. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status TIM_ComplementaryEnable(TIM_TypeDef *tim, uint8_t channel, uint8_t enable);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status TIM_DeadTimeToDtg(uint32_t dts_hz, uint32_t dead_time_ns, uint8_t *dtg);
     /* ERRATA ES0431 2.8.5 / ES0430 2.12.5 / ES0523 2.8.5: BKBID/BK2BID always written 0
      * (bidirectional break fails with short pulses); keep it so if the API is extended.
@@ -230,15 +230,15 @@ extern "C"
      * "no write on error", kept visible instead of silently returning OK. Only a timer/system
      * reset restores the write-once LOCK. dead_time = 0 while any CCxNE is set -> STATE, no
      * write (CCL-2 ZMN-09: no dead time on an enabled complementary pair). */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status TIM_BreakDeadTimeInit(TIM_TypeDef *tim, const TIM_BreakDeadTimeInitTypeDef *cfg);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status TIM_GetLockLevel(TIM_TypeDef *tim, uint8_t *level);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status TIM_GetFlags(TIM_TypeDef *tim, uint32_t *flags);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status TIM_ClearFlags(TIM_TypeDef *tim, uint32_t flags);
-    /* Seviye: PARAM[S,r] STATE[r] */
+    /* Level: PARAM[F,r] STATE[r] */
     SPL_Status TIM_SetMasterTrigger(TIM_TypeDef *tim, uint32_t source);
 #endif /* TIM_SPL_EXTENDED */
 

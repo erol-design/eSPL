@@ -41,12 +41,11 @@ device does not have returns `SPL_ERR_PARAM` or `SPL_ERR_UNSUPPORTED`.
 
 ```c
 -DSPL_CHECK_LEVEL=0   /* SPL_CHECK_FULL */
--DSPL_CHECK_LEVEL=1   /* SPL_CHECK_MIX  */
 -DSPL_CHECK_LEVEL=2   /* SPL_CHECK_FAST */
 ```
 
-All translation units must use the same level. The `/* Seviye: ... */` line above each public API
-shows which checks remain at which level: `S` FULL and MIX, `n` FULL only, `r` every level.
+All translation units must use the same level. The `/* Level: ... */` line above each public API
+shows which checks remain at which level: `F` FULL only, `r` every level (FAST keeps only `r`).
 
 ## Toolchains
 

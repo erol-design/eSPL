@@ -9,8 +9,8 @@ SPL_Status VREFBUF_SetScale(uint32_t scale)
 {
     uint32_t csr;
 
-    /* SAFE: invalid VRS coding changes analog reference voltage. */
-    SPL_REQUIRE_SAFE(scale <= VREFBUF_SCALE_2V9, SPL_ERR_PARAM);
+    /* Invalid VRS coding changes analog reference voltage. */
+    SPL_REQUIRE(scale <= VREFBUF_SCALE_2V9, SPL_ERR_PARAM);
     csr = VREFBUF->CSR;
     /* RM0440 23.4.1: VRS may be programmed only while ENVR=0. */
     if ((csr & VREFBUF_CSR_ENVR) != 0U)
@@ -68,8 +68,8 @@ SPL_Status VREFBUF_ReadyStatus(void)
 
 SPL_Status VREFBUF_GetTrim(uint32_t *trim)
 {
-    /* SAFE: NULL result pointer cannot receive the trim value. */
-    SPL_REQUIRE_SAFE(trim != (uint32_t *)0, SPL_ERR_PARAM);
+    /* NULL result pointer cannot receive the trim value. */
+    SPL_REQUIRE(trim != (uint32_t *)0, SPL_ERR_PARAM);
     *trim = (VREFBUF->CCR & VREFBUF_CCR_TRIM) >> VREFBUF_CCR_TRIM_Pos;
     return SPL_OK;
 }

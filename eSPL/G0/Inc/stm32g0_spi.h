@@ -8,12 +8,26 @@
 extern "C"
 {
 #endif
-/* Instances: SPI1, SPI2, SPI3 on G0B1 (SPI3 guarded for G0 SKUs without it).
- * GPIO alternate functions and RCC clock/reset are external.
- * Contract: Docs/v0.3_SPI_CONTRACT.md. I2S mode is out of scope.
- * Any read of SPIx_SR clears FRE by hardware (RM0444 35.9.3); every
- * service that checks a flag reads SR. In TI slave mode capture FRE with
- * SPI_GetErrors before calling other services. */
+/* SPI driver for STM32G0 (RM0444 Rev 6 section 35), with the I2S mode of SPI1 / SPI2 (v0.10).
+ * Scope: SPI1, SPI2, SPI3 on G0B1 (SPI3 guarded for G0 SKUs without it); legacy API (v0.8 ..
+ * v0.10), extended configuration (v0.11) and I2S (last section).
+ * Usage: SPI_Init (or the legacy SPI_MasterInit) with SPE = 0, optional SPI_ITConfig /
+ * SPI_DmaConfig / SPI_DmaPackingConfig, SPI_Enable(spi, 1), then the Try* transfers;
+ * SPI_Enable(spi, 0) to stop.
+ * Common rules: no dynamic memory, no static state; no function waits (BUSY / WOULD_BLOCK are
+ * returned instead); not reentrant per instance (see the serialization duty below); output
+ * parameters are unchanged unless SPL_OK (METHOD 1.8). Any read of SPIx_SR clears FRE by hardware
+ * (RM0444 35.9.3); every service that checks a flag reads SR. In TI slave mode capture FRE with
+ * SPI_GetErrors before calling other services.
+ * Caller duties (all APIs; not done by the driver):
+ *  - Clock: RCC bus clock and reset of the instance; prescaler values divide PCLK (I2S: kernel
+ *    clock RCC_KERNEL_I2S1 / RCC_KERNEL_I2S2 selected before I2S_Init).
+ *  - Pins: SCK / MISO / MOSI / NSS (I2S: CK / WS / SD / MCK) in their GPIO alternate function;
+ *    with software NSS the chip select is a GPIO driven by the caller.
+ *  - Interrupts / DMA: NVIC line, priority and handler; DMA channel / DMAMUX setup.
+ *  - Serialize all calls per instance (ISR included); CR1 / CR2 are read-modify-written.
+ * Contract: Docs/v0.3_SPI_CONTRACT.md (SPI; I2S mode is out of its scope); I2S:
+ * Docs/v0.10_COMM_MODES.md. */
 
 /* ---- Legacy API (v0.8 .. v0.10), behaviour kept ---- */
 
@@ -26,7 +40,9 @@ typedef struct
 } SPI_InitTypeDef;
 /* 8-bit, 2-wire full duplex, software NSS, master, no CRC; GPIO AF/RCC external.
  * SPE=1: ERR_STATE. v0.11.1: MODF=1 -> ERR_HW without a write (as SPI_Init). */
-/* Seviye: PARAM[S,n] STATE[S] HW[r] */
+/* Caller: software NSS: drive the slave chip select GPIO (inactive before SPI_Enable, active
+ * only around a transfer). */
+/* Level: PARAM[F] STATE[F] HW[r] */
 SPL_Status SPI_MasterInit(SPI_TypeDef *spi, const SPI_InitTypeDef *cfg);
 /* Disabling returns SPL_BUSY while BSY=1 (slave: only with TX FIFO not empty, see
  * ERRATA below), or while TX FIFO is not empty in master mode.
@@ -44,19 +60,28 @@ SPL_Status SPI_MasterInit(SPI_TypeDef *spi, const SPI_InitTypeDef *cfg);
  * ERRATA ES0548 2.14.1: master disables only with FTLVL=0
  * (TXE=1) and BSY=0; master RX-only is refused by SPI_Init; slave: do not
  * remove NSS during a frame. */
-/* Seviye: PARAM[S,n] STATE[r] HW[r] BUSY[r] */
+/* Caller: enable = 0: wait for the end of the transfer (slave: NSS high or the expected RXNE
+ * count, ES0548 2.14.2); bound BUSY retries; after slave ERR_STATE use RCC reset and init again;
+ * drain the RX FIFO before the next enable. With DMA follow the SPI_DmaConfig order. */
+/* Level: PARAM[F] STATE[r] HW[r] BUSY[r] */
 SPL_Status SPI_Enable(SPI_TypeDef *spi, uint8_t enable);
 /* 8-bit DR access. v0.11: SPL_ERR_STATE when the data size is > 8 bits. */
-/* Seviye: PARAM[S] STATE[S] WOULD_BLOCK[r] */
+/* Caller: in full duplex read one RX frame per written frame, else OVR (SPI_TryRead8). */
+/* Level: PARAM[F] STATE[F] WOULD_BLOCK[r] */
 SPL_Status SPI_TryWrite8(SPI_TypeDef *spi, uint8_t data);
-/* Seviye: PARAM[S] STATE[S] HW[r] WOULD_BLOCK[r] */
+/* Caller: after ERR_HW (OVR) data is already lost: SPI_ClearOverrun and resynchronise with
+ * the peer. */
+/* Level: PARAM[F] STATE[F] HW[r] WOULD_BLOCK[r] */
 SPL_Status SPI_TryRead8(SPI_TypeDef *spi, uint8_t *data);
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties (this SR read clears FRE, see above). */
+/* Level: PARAM[F] */
 SPL_Status SPI_Status(SPI_TypeDef *spi, uint32_t *status);
 /* Clear OVR by the DR-then-SR read sequence; consumes unread RX data.
  * This does not recover data already lost due to overrun.
  * v0.11: the DR read is 16-bit wide when the data size is > 8 bits. */
-/* Seviye: PARAM[S] */
+/* Caller: resynchronise the frame stream with the peer; frames lost by the overrun and the
+ * unread RX data consumed here are not recovered. */
+/* Level: PARAM[F] */
 SPL_Status SPI_ClearOverrun(SPI_TypeDef *spi);
 
 /* ---- v0.11: extended configuration ---- */
@@ -65,7 +90,9 @@ SPL_Status SPI_ClearOverrun(SPI_TypeDef *spi);
 #define SPI_MODE_MASTER 1U
 
 /* NSS management (RM0444 35.5.5). */
-#define SPI_NSS_SOFT 0U        /* SSM=1; SSI=1 in master, SSI=0 (selected) in slave. */
+#define SPI_NSS_SOFT 0U /* SSM=1; SSI=1 in master, SSI=0 (selected) in slave. */
+/* SPI_NSS_SOFT in slave mode: the slave is always selected and drives MISO while SPE=1; do not use
+ * it on a MISO line shared with other slaves (line contention). */
 #define SPI_NSS_HARD_INPUT 1U  /* SSM=0, SSOE=0: slave chip select / multimaster input. */
 #define SPI_NSS_HARD_OUTPUT 2U /* SSM=0, SSOE=1: master drives NSS while SPE=1. */
 
@@ -108,14 +135,19 @@ typedef struct
  * and CR2 completely (interrupt, DMA and LDMA bits cleared), then CRCPR
  * when CRC is enabled. With CRC, CR1 is written twice (CRCEN=0, then the
  * final value) so the CRC is reset (RM0444 35.5.14). */
-/* Seviye: PARAM[S,n] STATE[S] HW[r] */
+/* Caller: chip select per cfg->nss (SPI_NSS_SOFT master: caller GPIO); interrupt and DMA enables
+ * are cleared here, set them again (SPI_ITConfig / SPI_DmaConfig) after each init. */
+/* Level: PARAM[F] STATE[F] HW[r] */
 SPL_Status SPI_Init(SPI_TypeDef *spi, const SPI_ConfigTypeDef *cfg);
 
 /* 16-bit DR access; requires data size > 8 bits (else STATE). Write also
  * requires SPE=1. Read returns ERR_HW while OVR is set. */
-/* Seviye: PARAM[S] STATE[S] WOULD_BLOCK[r] */
+/* Caller: in full duplex read one RX frame per written frame, else OVR (SPI_TryRead16). */
+/* Level: PARAM[F] STATE[F] WOULD_BLOCK[r] */
 SPL_Status SPI_TryWrite16(SPI_TypeDef *spi, uint16_t data);
-/* Seviye: PARAM[S] STATE[S] HW[r] WOULD_BLOCK[r] */
+/* Caller: after ERR_HW (OVR) data is already lost: SPI_ClearOverrun and resynchronise with
+ * the peer. */
+/* Level: PARAM[F] STATE[F] HW[r] WOULD_BLOCK[r] */
 SPL_Status SPI_TryRead16(SPI_TypeDef *spi, uint16_t *data);
 
 /* Interrupt enable bits (SPIx_CR2). */
@@ -125,7 +157,9 @@ SPL_Status SPI_TryRead16(SPI_TypeDef *spi, uint16_t *data);
 #define SPI_IT_ALL (SPI_IT_TXE | SPI_IT_RXNE | SPI_IT_ERR)
 /* Sets or clears the given CR2 interrupt enables (read-modify-write of
  * CR2; serialize with other CR2 writers). Allowed with SPE=0 or 1. */
-/* Seviye: PARAM[S,n] */
+/* Caller: clear stale error flags (SPI_ClearOverrun / SPI_ClearModeFault / SPI_ClearCrcError)
+ * before enabling SPI_IT_ERR; the handler services TXE / RXNE (DR access) and the errors. */
+/* Level: PARAM[F] */
 SPL_Status SPI_ITConfig(SPI_TypeDef *spi, uint32_t it_mask, uint8_t enable);
 
 /* DMA request enable bits (SPIx_CR2). */
@@ -135,7 +169,9 @@ SPL_Status SPI_ITConfig(SPI_TypeDef *spi, uint32_t it_mask, uint8_t enable);
  * SPI_DmaConfig(TX,1); SPI_Enable(1). Stop order: disable DMA channels;
  * SPI_Enable(0) (retry while BUSY); SPI_DmaConfig(TX|RX,0).
  * Enabling is allowed with SPE=0 or 1; disabling requires SPE=0 (STATE). */
-/* Seviye: PARAM[S,n] STATE[S] */
+/* Caller: follow the start / stop order above; DMA buffers stay valid until the DMA channel is
+ * disabled. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status SPI_DmaConfig(SPI_TypeDef *spi, uint32_t dma_mask, uint8_t enable);
 
 /* DMA packing options (data size <= 8 bits, DMA PSIZE = 16 bit). */
@@ -145,11 +181,14 @@ SPL_Status SPI_DmaConfig(SPI_TypeDef *spi, uint32_t dma_mask, uint8_t enable);
 /* Requires SPE=0 (STATE). Non-zero options require data size <= 8 bits
  * (STATE). options=0 restores FRXTH for the data size and clears LDMA_*.
  * While SPI_PACK_RX16 is active, do not use SPI_TryRead8. */
-/* Seviye: PARAM[S,n] STATE[S] */
+/* Caller: DMA PSIZE = 16 bit with packing; LDMA_TX / LDMA_RX must match the parity of the DMA
+ * frame count. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status SPI_DmaPackingConfig(SPI_TypeDef *spi, uint32_t options);
 
 /* FTLVL / FRLVL as 0..3 (empty, 1/4, 1/2, full). */
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status SPI_GetFifoLevels(SPI_TypeDef *spi, uint32_t *tx_level, uint32_t *rx_level);
 
 /* Error flags in SPIx_SR reported by SPI_GetErrors. */
@@ -157,21 +196,26 @@ SPL_Status SPI_GetFifoLevels(SPI_TypeDef *spi, uint32_t *tx_level, uint32_t *rx_
 /* One SR read; *errors = SR & SPI_ERRORS_ALL. This read clears FRE in
  * hardware (TI slave frame error): disable the SPI and restart the
  * exchange after FRE (RM0444 35.5.11). No register write. */
-/* Seviye: PARAM[S] */
+/* Caller: after FRE disable the SPI and restart the exchange (RM0444 35.5.11). */
+/* Level: PARAM[F] */
 SPL_Status SPI_GetErrors(SPI_TypeDef *spi, uint32_t *errors);
 /* MODF clear (RM0444 35.5.11): SR read while MODF=1, then a CR1 write.
  * The written CR1 keeps SPE=0 and MSTR=0 (hardware already cleared them);
  * restore the role with SPI_Init/SPI_MasterInit and SPI_Enable. Keep NSS
  * high during the sequence. No write when MODF=0. */
-/* Seviye: PARAM[S] */
+/* Caller: keep NSS high during the sequence; then SPI_Init / SPI_MasterInit and SPI_Enable. */
+/* Level: PARAM[F] */
 SPL_Status SPI_ClearModeFault(SPI_TypeDef *spi);
 /* CRCERR is rc_w0: writes 0 to CRCERR only (other written bits are
  * read-only ones). No write when CRCERR=0. */
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status SPI_ClearCrcError(SPI_TypeDef *spi);
 /* Sets CRCNEXT after the last data frame was written (CPU-managed CRC).
  * Requires CRCEN=1 and SPE=1 (else STATE). */
-/* Seviye: PARAM[S] STATE[S] */
+/* Caller: call right after the last data frame is written; read the received CRC frame and check
+ * CRCERR (SPI_GetErrors) afterwards. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status SPI_CrcNext(SPI_TypeDef *spi);
 
 /* ---- v0.10 (G0): I2S mode, Docs/v0.10_COMM_MODES.md, RM0444 35.7 / 35.9.8 / 35.9.9 ----
@@ -193,22 +237,31 @@ typedef struct
     uint8_t async_start; /* ASTRTEN (slave) */
 } I2S_InitTypeDef;
 /* Writes I2SPR and I2SCFGR (I2SMOD = 1, I2SE = 0). I2SE = 1 or SPE = 1 -> STATE. */
-/* Seviye: PARAM[S,n] STATE[S] UNSUPPORTED[S] */
+/* Caller: divider / odd assume the selected I2S kernel clock frequency (file header). */
+/* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
 SPL_Status I2S_Init(SPI_TypeDef *spi, const I2S_InitTypeDef *cfg);
 /* I2SE = enable; I2SMOD = 0 (not initialised for I2S) -> STATE. */
-/* Seviye: PARAM[S,n] STATE[S] UNSUPPORTED[S] */
+/* Caller: enable = 0 is not gated on TXE / BSY: finish the current frame (RM0444 35.7 disable
+ * procedure) before calling, else the frame is cut. */
+/* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
 SPL_Status I2S_Enable(SPI_TypeDef *spi, uint8_t enable);
 /* UDR / FRE -> ERR_HW; TXE = 0 -> WOULD_BLOCK; else 16-bit DR write. */
-/* Seviye: PARAM[S] UNSUPPORTED[S] HW[r] WOULD_BLOCK[r] */
+/* Caller: 24 / 32-bit samples take two calls, most significant half first; keep TXE serviced in
+ * time, else UDR (slave). After ERR_HW: I2S_ClearErrors. */
+/* Level: PARAM[F] UNSUPPORTED[F] HW[r] WOULD_BLOCK[r] */
 SPL_Status I2S_TryWrite(SPI_TypeDef *spi, uint16_t data);
 /* OVR / FRE -> ERR_HW; RXNE = 0 -> WOULD_BLOCK; else *data = DR, *right_channel = CHSIDE. */
-/* Seviye: PARAM[S] UNSUPPORTED[S] HW[r] WOULD_BLOCK[r] */
+/* Caller: 24 / 32-bit samples take two calls; after ERR_HW I2S_ClearErrors and resynchronise the
+ * channel with right_channel (CHSIDE). */
+/* Level: PARAM[F] UNSUPPORTED[F] HW[r] WOULD_BLOCK[r] */
 SPL_Status I2S_TryRead(SPI_TypeDef *spi, uint16_t *data, uint8_t *right_channel);
 /* *errors = SR & (UDR | OVR | FRE). */
-/* Seviye: PARAM[S] UNSUPPORTED[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] UNSUPPORTED[F] */
 SPL_Status I2S_GetErrors(SPI_TypeDef *spi, uint32_t *errors);
 /* Clears OVR (DR read, then SR read; the word read is discarded), UDR and FRE (SR read). */
-/* Seviye: PARAM[S] UNSUPPORTED[S] */
+/* Caller: the OVR clear discards one word: resynchronise the channel (CHSIDE) afterwards. */
+/* Level: PARAM[F] UNSUPPORTED[F] */
 SPL_Status I2S_ClearErrors(SPI_TypeDef *spi);
 
 #ifdef __cplusplus

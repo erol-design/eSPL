@@ -29,12 +29,12 @@ void GPIO_StructInit(GPIO_InitTypeDef *cfg);
  * 4-wire JTAG debugger; PB4 is not protected: use SWD, or leave PB4 as NJTRST.
  * ERRATA ES0431 2.2.8 / ES0430 2.2.8 / ES0523 2.2.6: LQFP/UFQFPN: toggling PC13 (input or
  * output) disturbs the LSE crystal; no workaround: keep PC13 static while LSE runs. */
-/* Seviye: PARAM[S,n] STATE[S] */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status GPIO_Init(GPIO_TypeDef *port, const GPIO_InitTypeDef *cfg);
 /* Atomic set/reset using BSRR; clock must be enabled. */
-/* Seviye: PARAM[S,n] */
+/* Level: PARAM[F] */
 SPL_Status GPIO_Write(GPIO_TypeDef *port, uint16_t pins, uint8_t high);
-/* Seviye: PARAM[S,n] */
+/* Level: PARAM[F] */
 SPL_Status GPIO_Read(GPIO_TypeDef *port, uint16_t pins, uint16_t *value);
 
 #ifdef __cplusplus

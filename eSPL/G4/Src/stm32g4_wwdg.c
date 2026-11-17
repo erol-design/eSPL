@@ -13,10 +13,10 @@ SPL_Status WWDG_Config(uint32_t timebase, uint32_t window, uint8_t ewi)
 {
     uint32_t cfr;
 
-    /* SAFE: bitfield overflow or invalid window can silently change reset behavior. */
-    SPL_REQUIRE_SAFE(timebase <= (WWDG_CFR_WDGTB_Msk >> WWDG_CFR_WDGTB_Pos), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(Wwdg_ValidCounter(window) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(ewi <= 1U, SPL_ERR_PARAM);
+    /* Bitfield overflow or invalid window can silently change reset behavior. */
+    SPL_REQUIRE(timebase <= (WWDG_CFR_WDGTB_Msk >> WWDG_CFR_WDGTB_Pos), SPL_ERR_PARAM);
+    SPL_REQUIRE(Wwdg_ValidCounter(window) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(ewi <= 1U, SPL_ERR_PARAM);
     /* EWI is set-only and cleared by reset (RM0440 36.5.2). */
     if ((ewi == 0U) && ((WWDG->CFR & WWDG_CFR_EWI) != 0U))
     {
@@ -34,8 +34,8 @@ SPL_Status WWDG_Config(uint32_t timebase, uint32_t window, uint8_t ewi)
 
 SPL_Status WWDG_Enable(uint32_t counter)
 {
-    /* SAFE: T6 must be set to prevent an unintended watchdog reset. */
-    SPL_REQUIRE_SAFE(Wwdg_ValidCounter(counter) != 0U, SPL_ERR_PARAM);
+    /* T6 must be set to prevent an unintended watchdog reset. */
+    SPL_REQUIRE(Wwdg_ValidCounter(counter) != 0U, SPL_ERR_PARAM);
     if ((WWDG->CR & WWDG_CR_WDGA) != 0U)
     {
         return SPL_ERR_STATE;
@@ -51,8 +51,8 @@ SPL_Status WWDG_Refresh(uint32_t counter)
     uint32_t current;
     uint32_t window;
 
-    /* SAFE: T6 must be set to prevent an unintended watchdog reset. */
-    SPL_REQUIRE_SAFE(Wwdg_ValidCounter(counter) != 0U, SPL_ERR_PARAM);
+    /* T6 must be set to prevent an unintended watchdog reset. */
+    SPL_REQUIRE(Wwdg_ValidCounter(counter) != 0U, SPL_ERR_PARAM);
     current = WWDG->CR;
     if ((current & WWDG_CR_WDGA) == 0U)
     {
@@ -73,14 +73,14 @@ SPL_Status WWDG_Refresh(uint32_t counter)
 
 SPL_Status WWDG_GetCounter(uint32_t *counter)
 {
-    SPL_REQUIRE_SAFE(counter != NULL, SPL_ERR_PARAM); /* SAFE: output pointer. */
+    SPL_REQUIRE(counter != NULL, SPL_ERR_PARAM); /* Output pointer. */
     *counter = (WWDG->CR & WWDG_CR_T) >> WWDG_CR_T_Pos;
     return SPL_OK;
 }
 
 SPL_Status WWDG_GetEarlyWakeupFlag(uint8_t *flag)
 {
-    SPL_REQUIRE_SAFE(flag != NULL, SPL_ERR_PARAM); /* SAFE: output pointer. */
+    SPL_REQUIRE(flag != NULL, SPL_ERR_PARAM); /* Output pointer. */
     *flag = ((WWDG->SR & WWDG_SR_EWIF) != 0U) ? 1U : 0U;
     return SPL_OK;
 }
@@ -99,11 +99,11 @@ SPL_Status WWDG_CalcTimeoutUs(uint32_t pclk_hz, uint32_t timebase, uint32_t coun
 {
     uint64_t us;
 
-    /* SAFE: arithmetic range, division and output preconditions. */
-    SPL_REQUIRE_SAFE(timeout_us != NULL, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(pclk_hz != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(timebase <= (WWDG_CFR_WDGTB_Msk >> WWDG_CFR_WDGTB_Pos), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(Wwdg_ValidCounter(counter) != 0U, SPL_ERR_PARAM);
+    /* Arithmetic range, division and output preconditions. */
+    SPL_REQUIRE(timeout_us != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(pclk_hz != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(timebase <= (WWDG_CFR_WDGTB_Msk >> WWDG_CFR_WDGTB_Pos), SPL_ERR_PARAM);
+    SPL_REQUIRE(Wwdg_ValidCounter(counter) != 0U, SPL_ERR_PARAM);
 
     /* RM0440 36.3.4: t = tPCLK * 4096 * 2^WDGTB * (T[5:0] + 1). */
     us = ((uint64_t)4096U << timebase) * (((uint64_t)counter & 0x3FU) + 1U) * 1000000ULL;

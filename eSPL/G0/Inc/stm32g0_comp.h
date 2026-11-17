@@ -12,13 +12,18 @@ extern "C"
 /* v0.8 SKU profile: this API exists only where the device has the peripheral (SPL_G0_HAS_COMP);
  * absent on G030 / G031 / G041 / G050 / G070 / G0B0. */
 #if SPL_G0_HAS_COMP
-/* Analog comparators COMP1..COMP3 of STM32G0B1 (RM0444 Rev 6 section 18;
- * Docs/v0.5_COMP_CONTRACT.md). Ported from the G4 SPL v0.13.5 COMP driver. G0 differences:
- * no SCALEN/BRGEN bits (the VREFINT scaler is internal), 4-entry INPSEL, 9-entry INMSEL, 2-bit
- * hysteresis, PWRMODE, window mode (WINMODE/WINOUT), 5-bit blanking mask, and VALUE reflects the
- * output after polarity and blanking (G4: before).
+/* Analog comparators COMP1..COMP3 of STM32G0B1 (RM0444 Rev 6 section 18).
+ * Usage: COMP_Config (comparator disabled), COMP_Enable, start-up wait, COMP_GetOutput;
+ * optionally COMP_Lock last.
+ * Ported from the G4 SPL v0.13.5 COMP driver. G0 differences: no SCALEN/BRGEN bits (the VREFINT
+ * scaler is internal), 4-entry INPSEL, 9-entry INMSEL, 2-bit hysteresis, PWRMODE, window mode
+ * (WINMODE/WINOUT), 5-bit blanking mask, and VALUE reflects the output after polarity and
+ * blanking (G4: before).
+ * No static state; no function waits (the start-up wait is the caller's). Output parameters are
+ * written only on OK.
+ * Contract: Docs/v0.5_COMP_CONTRACT.md.
  *
- * Caller duties (not done by the driver):
+ * Caller duties (all APIs, not done by the driver):
  * - Clock: SYSCFG clock in RCC (COMP has no own enable bit, RM0444 18.3.3).
  * - GPIO inputs in analog mode, output pin alternate function (RM0444 18.3.2).
  * - Wait the comparator start-up time and, when a VREFINT input (1/4 .. 1 VREFINT) is selected,
@@ -65,21 +70,29 @@ typedef struct
     uint8_t window_out;  /* WINOUT: output = own VALUE XOR paired VALUE */
 } COMP_ConfigTypeDef;
 /* LOCK=1: STATE. EN=1: STATE. Writes the whole CSR with EN=0, LOCK=0. */
-/* Seviye: PARAM[S] STATE[S] */
+/* Caller: configure the selected DAC channel, the blanking timer output and, with
+ * window_mode, the paired comparator input pin (DAC / TIM / GPIO drivers). */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status COMP_Config(COMP_TypeDef *comp, const COMP_ConfigTypeDef *config);
 /* LOCK=1: STATE. Sets EN; other bits unchanged. */
-/* Seviye: PARAM[S] STATE[S] */
+/* Caller: wait the start-up time(s) in the file header before using the output. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status COMP_Enable(COMP_TypeDef *comp);
 /* LOCK=1: STATE. Clears EN; other bits unchanged. */
-/* Seviye: PARAM[S] STATE[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status COMP_Disable(COMP_TypeDef *comp);
 /* VALUE: comparator output after polarity and blanking (RM0444 18.6.1). EN=0: STATE. */
-/* Seviye: PARAM[S] STATE[S] */
+/* Caller: trust the level only after the start-up wait that follows COMP_Enable. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status COMP_GetOutput(const COMP_TypeDef *comp, uint8_t *level);
 /* Sets LOCK (irreversible until system reset). Already locked: STATE. */
-/* Seviye: PARAM[S] STATE[S] */
+/* Caller: Irreversible until system reset: finish COMP_Config and COMP_Enable first; after
+ * this the comparator cannot be reconfigured or disabled. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status COMP_Lock(COMP_TypeDef *comp);
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status COMP_GetLockState(const COMP_TypeDef *comp, uint8_t *locked);
 #endif /* SPL_G0_HAS_COMP */
 

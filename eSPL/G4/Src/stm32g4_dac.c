@@ -64,18 +64,20 @@ static const Dac_ChannelBits dac_bits[] = {
 
 /* Compile-time check (CCL-2 YAP-03): channel - 1 is a valid dac_bits index for both
  * channel codes accepted by Dac_Check. */
-typedef char Dac_ChannelTableCheck
-    [((DAC_CHANNEL_1 >= 1U) && (DAC_CHANNEL_2 >= 1U) &&
-      ((DAC_CHANNEL_1 - 1U) < (sizeof(dac_bits) / sizeof(dac_bits[0]))) &&
-      ((DAC_CHANNEL_2 - 1U) < (sizeof(dac_bits) / sizeof(dac_bits[0]))))
-         ? 1
-         : -1];
+typedef char
+    Dac_ChannelTableCheck[((DAC_CHANNEL_1 >= 1U) && (DAC_CHANNEL_2 >= 1U) &&
+                           ((DAC_CHANNEL_1 - 1U) < (sizeof(dac_bits) / sizeof(dac_bits[0]))) &&
+                           ((DAC_CHANNEL_2 - 1U) < (sizeof(dac_bits) / sizeof(dac_bits[0]))))
+                              ? 1
+                              : -1];
 
 /* Validates instance and channel; on success *bits points to the channel masks. */
 static SPL_Status Dac_Check(const DAC_TypeDef *dac, uint32_t channel, const Dac_ChannelBits **bits)
 {
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((Dac_Valid(dac) == 0U) || ((channel != DAC_CHANNEL_1) && (channel != DAC_CHANNEL_2))), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(
+        !((Dac_Valid(dac) == 0U) || ((channel != DAC_CHANNEL_1) && (channel != DAC_CHANNEL_2))),
+        SPL_ERR_PARAM);
 #if defined(DAC2)
     /* DAC2 is single-channel (RM0440 22.3). */
     if ((dac == DAC2) && (channel == DAC_CHANNEL_2))
@@ -105,13 +107,16 @@ SPL_Status DAC_ChannelConfig(DAC_TypeDef *dac, uint32_t channel,
     {
         return status;
     }
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((config == NULL) || (config->trigger_enable > 1U) || (config->trigger_sel > DAC_TSEL_MAX) ||
-        ((config->trigger_enable == 0U) && (config->trigger_sel != 0U)) ||
-        (config->mode > DAC_MODE_INT_UNBUFFERED) || (config->dma_enable > 1U) ||
-        (config->dma_underrun_irq > 1U)), SPL_ERR_PARAM);
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((Dac_InternalOnly(dac) != 0U) && (config->mode != DAC_MODE_INT_UNBUFFERED)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((config == NULL) || (config->trigger_enable > 1U) ||
+                  (config->trigger_sel > DAC_TSEL_MAX) ||
+                  ((config->trigger_enable == 0U) && (config->trigger_sel != 0U)) ||
+                  (config->mode > DAC_MODE_INT_UNBUFFERED) || (config->dma_enable > 1U) ||
+                  (config->dma_underrun_irq > 1U)),
+                SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((Dac_InternalOnly(dac) != 0U) && (config->mode != DAC_MODE_INT_UNBUFFERED)),
+                SPL_ERR_PARAM);
     /* RM0440 22.7.16: MODEx writes are ignored while ENx = 1 or CENx = 1. */
     if ((dac->CR & (bits->en | bits->cen)) != 0U)
     {
@@ -144,8 +149,8 @@ SPL_Status DAC_SetHighFrequencyMode(DAC_TypeDef *dac, uint32_t hclk_hz)
 {
     uint32_t hfsel = 0U;
 
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!((Dac_Valid(dac) == 0U) || (hclk_hz == 0U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!((Dac_Valid(dac) == 0U) || (hclk_hz == 0U)), SPL_ERR_PARAM);
     /* Conservative: change MCR only with both channels disabled and not calibrating. */
     if ((dac->CR & (DAC_CR_EN1 | DAC_CR_CEN1 | DAC_CR_EN2 | DAC_CR_CEN2)) != 0U)
     {
@@ -206,8 +211,8 @@ SPL_Status DAC_Ready(DAC_TypeDef *dac, uint32_t channel, uint8_t *ready)
     {
         return status;
     }
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!(ready == NULL), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!(ready == NULL), SPL_ERR_PARAM);
     if ((dac->CR & bits->en) == 0U)
     {
         return SPL_ERR_STATE;
@@ -228,20 +233,21 @@ SPL_Status DAC_WriteData(DAC_TypeDef *dac, uint32_t channel, uint32_t align, uin
     }
     if (align == DAC_ALIGN_12R)
     {
-        /* SAFE: reject invalid parameters before peripheral register access. */
-        SPL_REQUIRE_SAFE(!(value > DAC_DHR12R1_DACC1DHR_Msk), SPL_ERR_PARAM);
+        /* Reject invalid parameters before peripheral register access. */
+        SPL_REQUIRE(!(value > DAC_DHR12R1_DACC1DHR_Msk), SPL_ERR_PARAM);
         reg = (channel == DAC_CHANNEL_1) ? &dac->DHR12R1 : &dac->DHR12R2;
     }
     else if (align == DAC_ALIGN_12L)
     {
-        /* SAFE: reject invalid parameters before peripheral register access. */
-        SPL_REQUIRE_SAFE(!((value > DAC_DHR12L_MAX) || ((value & DAC_DHR12L_LOW_BITS) != 0U)), SPL_ERR_PARAM);
+        /* Reject invalid parameters before peripheral register access. */
+        SPL_REQUIRE(!((value > DAC_DHR12L_MAX) || ((value & DAC_DHR12L_LOW_BITS) != 0U)),
+                    SPL_ERR_PARAM);
         reg = (channel == DAC_CHANNEL_1) ? &dac->DHR12L1 : &dac->DHR12L2;
     }
     else if (align == DAC_ALIGN_8R)
     {
-        /* SAFE: reject invalid parameters before peripheral register access. */
-        SPL_REQUIRE_SAFE(!(value > DAC_DHR8R1_DACC1DHR_Msk), SPL_ERR_PARAM);
+        /* Reject invalid parameters before peripheral register access. */
+        SPL_REQUIRE(!(value > DAC_DHR8R1_DACC1DHR_Msk), SPL_ERR_PARAM);
         reg = (channel == DAC_CHANNEL_1) ? &dac->DHR8R1 : &dac->DHR8R2;
     }
     else
@@ -291,8 +297,8 @@ SPL_Status DAC_ReadOutput(DAC_TypeDef *dac, uint32_t channel, uint32_t *value)
     {
         return status;
     }
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!(value == NULL), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!(value == NULL), SPL_ERR_PARAM);
     if (channel == DAC_CHANNEL_1)
     {
         *value = dac->DOR1 & DAC_DOR1_DACC1DOR_Msk;
@@ -313,8 +319,8 @@ SPL_Status DAC_UnderrunFlag(DAC_TypeDef *dac, uint32_t channel, uint8_t *set)
     {
         return status;
     }
-    /* SAFE: reject invalid parameters before peripheral register access. */
-    SPL_REQUIRE_SAFE(!(set == NULL), SPL_ERR_PARAM);
+    /* Reject invalid parameters before peripheral register access. */
+    SPL_REQUIRE(!(set == NULL), SPL_ERR_PARAM);
     *set = ((dac->SR & bits->dmaudr) != 0U) ? 1U : 0U;
     return SPL_OK;
 }

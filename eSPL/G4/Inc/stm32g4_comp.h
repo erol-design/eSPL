@@ -68,21 +68,21 @@ extern "C"
     /* ERRATA ES0431 2.6.1 / ES0430 2.9.1 (Rev Z, Y; not Rev X; not in ES0523, G491/G4A1 free):
      * Voffset -20..+3 mV (typ -15/+2) replaces the datasheet value; no workaround, budget it in
      * thresholds. */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status COMP_Config(COMP_TypeDef *comp, const COMP_ConfigTypeDef *config);
     /* LOCK=1: STATE. Sets EN; other bits unchanged. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status COMP_Enable(COMP_TypeDef *comp);
     /* LOCK=1: STATE. Clears EN; other bits unchanged. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status COMP_Disable(COMP_TypeDef *comp);
     /* VALUE: comparator output before polarity and blanking (RM0440 24.6.1). EN=0: STATE. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status COMP_GetOutput(const COMP_TypeDef *comp, uint8_t *level);
     /* Sets LOCK (irreversible until system reset). Already locked: STATE. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status COMP_Lock(COMP_TypeDef *comp);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status COMP_GetLockState(const COMP_TypeDef *comp, uint8_t *locked);
 
 #ifdef __cplusplus

@@ -1,18 +1,18 @@
-/* AES driver for STM32G0 (RM0444 Rev 6 section 20), new in v0.9. Docs/v0.9_AES_CONTRACT.md. */
-/* Kutuphane birimi: spl_check.h karisma korumasi referansini bu birim de uretir; uretmeyen tek
- * birim stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
+/* AES driver implementation for STM32G0 (RM0444 Rev 6 section 20), new in v0.9; compiled only
+ * when SPL_G0_HAS_AES. Public contract in stm32g0_aes.h and Docs/v0.9_AES_CONTRACT.md. */
+/* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit
+ * that does not is stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
 #define SPL_LIBRARY_BUILD 1
 #include <stddef.h>
 #include "stm32g0_aes.h"
 
 #if SPL_G0_HAS_AES
 
+/* Check level (A4 wave 5, Docs/CHECK_LEVEL.md 5.4 AES table): SPL_REQUIRE = checked at FULL only
+ * (not compiled at FAST). Error flags, no CCF and BUSY result: at every level. */
+
 /* Write-1 command bits: never copied back by a read-modify-write of CR (they read as 0 on
  * hardware, but a stale 1 would clear CCF / the error flags unintentionally). */
-/* Denetim seviyesi (A4 dalga 5, Docs/CHECK_LEVEL.md 5.4 AES tablosu): SPL_REQUIRE = normal sinif
- * (yalniz FULL), SPL_REQUIRE_SAFE = SAFE sinif (FULL ve MIX). Hata bayraklari, CCF yok ve BUSY
- * result: her seviyede. */
-
 #define AES_CR_COMMANDS (AES_CR_CCFC | AES_CR_ERRC)
 #define AES_CR_DMA (AES_CR_DMAINEN | AES_CR_DMAOUTEN)
 #define AES_CR_CONFIG                                                                              \
@@ -51,25 +51,25 @@ SPL_Status AES_Config(const AES_ConfigTypeDef *cfg)
     uint32_t chain;
     uint32_t mode;
 
-    SPL_REQUIRE_SAFE(cfg != NULL, SPL_ERR_PARAM);
-    /* SAFE: CHMOD / MODE / DATATYPE ayrilmis kodu, tasma. */
-    SPL_REQUIRE_SAFE((cfg->chaining <= (uint8_t)AES_CHAIN_CCM) &&
-                         (cfg->mode <= (uint8_t)AES_MODE_KEY_DERIVATION_DECRYPT) &&
-                         (cfg->data_type <= (uint8_t)AES_DATATYPE_1BIT),
-                     SPL_ERR_PARAM);
+    SPL_REQUIRE(cfg != NULL, SPL_ERR_PARAM);
+    /* reserved CHMOD / MODE / DATATYPE code, overflow. */
+    SPL_REQUIRE((cfg->chaining <= (uint8_t)AES_CHAIN_CCM) &&
+                    (cfg->mode <= (uint8_t)AES_MODE_KEY_DERIVATION_DECRYPT) &&
+                    (cfg->data_type <= (uint8_t)AES_DATATYPE_1BIT),
+                SPL_ERR_PARAM);
     SPL_REQUIRE(cfg->key_256 <= 1U, SPL_ERR_PARAM);
     chain = cfg->chaining;
     mode = cfg->mode;
     cr = Aes_Cr();
     /* Mode 4 outside ECB / CBC silently becomes Mode 3 in hardware (RM0444 20.7.1). GCM / CCM:
      * MODE 01 and 11 are forbidden (RM0444 Table 109 note, 20.4.12). DMA has no effect in Mode 2
-     * and is not recommended in Mode 4 (RM0444 20.7.1). SAFE. */
-    SPL_REQUIRE_SAFE(((mode != (uint32_t)AES_MODE_KEY_DERIVATION_DECRYPT) ||
-                      (chain <= (uint32_t)AES_CHAIN_CBC)) &&
-                         ((Aes_IsGcmCcm(chain) == 0U) || ((mode & 1U) == 0U)) &&
-                         (((mode & 1U) == 0U) || ((cr & AES_CR_DMA) == 0U)),
-                     SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((cr & AES_CR_EN) == 0U, SPL_ERR_STATE); /* SAFE: suren islem ezilir */
+     * and is not recommended in Mode 4 (RM0444 20.7.1). */
+    SPL_REQUIRE(((mode != (uint32_t)AES_MODE_KEY_DERIVATION_DECRYPT) ||
+                 (chain <= (uint32_t)AES_CHAIN_CBC)) &&
+                    ((Aes_IsGcmCcm(chain) == 0U) || ((mode & 1U) == 0U)) &&
+                    (((mode & 1U) == 0U) || ((cr & AES_CR_DMA) == 0U)),
+                SPL_ERR_PARAM);
+    SPL_REQUIRE((cr & AES_CR_EN) == 0U, SPL_ERR_STATE); /* running job overwritten */
     cr &= ~AES_CR_CONFIG;
     cr |= ((uint32_t)cfg->data_type << AES_CR_DATATYPE_Pos) | (mode << AES_CR_MODE_Pos) |
           Aes_ChainBits(chain);
@@ -86,9 +86,9 @@ SPL_Status AES_SetKey(const uint32_t *key, uint32_t words)
     const uint32_t cr = Aes_Cr();
     const uint32_t need = ((cr & AES_CR_KEYSIZE) != 0U) ? 8U : 4U;
 
-    SPL_REQUIRE_SAFE(key != NULL, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(words == need, SPL_ERR_PARAM);          /* SAFE: dizi disi okuma */
-    SPL_REQUIRE_SAFE((cr & AES_CR_EN) == 0U, SPL_ERR_STATE); /* SAFE: anahtar ezilir */
+    SPL_REQUIRE(key != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(words == need, SPL_ERR_PARAM);          /* read outside the array */
+    SPL_REQUIRE((cr & AES_CR_EN) == 0U, SPL_ERR_STATE); /* the key is overwritten */
     AES->KEYR0 = key[0];
     AES->KEYR1 = key[1];
     AES->KEYR2 = key[2];
@@ -105,8 +105,8 @@ SPL_Status AES_SetKey(const uint32_t *key, uint32_t words)
 
 SPL_Status AES_SetIv(const uint32_t iv[4])
 {
-    SPL_REQUIRE_SAFE(iv != NULL, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((AES->CR & AES_CR_EN) == 0U, SPL_ERR_STATE); /* SAFE: IV ezilir */
+    SPL_REQUIRE(iv != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE((AES->CR & AES_CR_EN) == 0U, SPL_ERR_STATE); /* the IV is overwritten */
     AES->IVR0 = iv[0];
     AES->IVR1 = iv[1];
     AES->IVR2 = iv[2];
@@ -116,7 +116,7 @@ SPL_Status AES_SetIv(const uint32_t iv[4])
 
 SPL_Status AES_GetIv(uint32_t iv[4])
 {
-    SPL_REQUIRE_SAFE(iv != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(iv != NULL, SPL_ERR_PARAM);
     iv[0] = AES->IVR0;
     iv[1] = AES->IVR1;
     iv[2] = AES->IVR2;
@@ -138,7 +138,7 @@ SPL_Status AES_Disable(void)
 
 SPL_Status AES_GetEnabled(uint8_t *enabled)
 {
-    SPL_REQUIRE_SAFE(enabled != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(enabled != NULL, SPL_ERR_PARAM);
     *enabled = ((AES->CR & AES_CR_EN) != 0U) ? 1U : 0U;
     return SPL_OK;
 }
@@ -147,17 +147,17 @@ SPL_Status AES_SetPhase(AES_PhaseTypeDef phase)
 {
     const uint32_t cr = Aes_Cr();
 
-    /* SAFE: GCMPH tasmasi / evre sessizce kullanilmaz. */
-    SPL_REQUIRE_SAFE(((uint32_t)phase <= (uint32_t)AES_PHASE_FINAL) &&
-                         (Aes_IsGcmCcm(Aes_Chain(cr)) != 0U),
-                     SPL_ERR_PARAM);
+    /* GCMPH overflow / the phase is silently not used. */
+    SPL_REQUIRE(((uint32_t)phase <= (uint32_t)AES_PHASE_FINAL) &&
+                    (Aes_IsGcmCcm(Aes_Chain(cr)) != 0U),
+                SPL_ERR_PARAM);
     AES->CR = (cr & ~AES_CR_GCMPH_Msk) | ((uint32_t)phase << AES_CR_GCMPH_Pos);
     return SPL_OK;
 }
 
 SPL_Status AES_SetPadding(uint32_t bytes)
 {
-    SPL_REQUIRE_SAFE(bytes <= 15U, SPL_ERR_PARAM); /* SAFE: NPBLB tasmasi */
+    SPL_REQUIRE(bytes <= 15U, SPL_ERR_PARAM); /* NPBLB overflow */
     AES->CR = (Aes_Cr() & ~AES_CR_NPBLB_Msk) | (bytes << AES_CR_NPBLB_Pos);
     return SPL_OK;
 }
@@ -166,11 +166,11 @@ SPL_Status AES_WriteBlock(const uint32_t in[4])
 {
     const uint32_t cr = AES->CR;
 
-    SPL_REQUIRE_SAFE(in != NULL, SPL_ERR_PARAM);
-    /* SAFE: blok kaybolur / DMA akisina girer / okunmamis sonuc ezilir. */
-    SPL_REQUIRE_SAFE(((cr & AES_CR_EN) != 0U) && ((cr & AES_CR_DMAINEN) == 0U) &&
-                         ((AES->SR & AES_SR_CCF) == 0U),
-                     SPL_ERR_STATE);
+    SPL_REQUIRE(in != NULL, SPL_ERR_PARAM);
+    /* the block is lost / enters the DMA stream / an unread result is overwritten. */
+    SPL_REQUIRE(((cr & AES_CR_EN) != 0U) && ((cr & AES_CR_DMAINEN) == 0U) &&
+                    ((AES->SR & AES_SR_CCF) == 0U),
+                SPL_ERR_STATE);
     /* RM0444 20.4.13: most significant word first. */
     AES->DINR = in[0];
     AES->DINR = in[1];
@@ -206,7 +206,7 @@ SPL_Status AES_TryReadBlock(uint32_t out[4])
     uint32_t w2;
     uint32_t w3;
 
-    SPL_REQUIRE_SAFE(out != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(out != NULL, SPL_ERR_PARAM);
     st = Aes_ResultReady();
     if (st != SPL_OK)
     {
@@ -237,7 +237,7 @@ SPL_Status AES_TryComplete(void)
 
 SPL_Status AES_GetErrors(uint32_t *errors)
 {
-    SPL_REQUIRE_SAFE(errors != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(errors != NULL, SPL_ERR_PARAM);
     *errors = AES->SR & AES_ERRORS_ALL;
     return SPL_OK;
 }
@@ -274,9 +274,9 @@ SPL_Status AES_DmaConfig(uint8_t input, uint8_t output)
 
     SPL_REQUIRE((input <= 1U) && (output <= 1U), SPL_ERR_PARAM);
     cr = Aes_Cr();
-    /* Mode 2: no effect; Mode 4: not recommended (RM0444 20.7.1); SAFE. */
-    SPL_REQUIRE_SAFE((((uint32_t)input | (uint32_t)output) == 0U) || ((Aes_Mode(cr) & 1U) == 0U),
-                     SPL_ERR_PARAM);
+    /* Mode 2: no effect; Mode 4: not recommended (RM0444 20.7.1); */
+    SPL_REQUIRE((((uint32_t)input | (uint32_t)output) == 0U) || ((Aes_Mode(cr) & 1U) == 0U),
+                SPL_ERR_PARAM);
     cr &= ~AES_CR_DMA;
     if (input != 0U)
     {
@@ -292,7 +292,7 @@ SPL_Status AES_DmaConfig(uint8_t input, uint8_t output)
 
 SPL_Status AES_IsBusy(uint8_t *busy)
 {
-    SPL_REQUIRE_SAFE(busy != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(busy != NULL, SPL_ERR_PARAM);
     *busy = ((AES->SR & AES_SR_BUSY) != 0U) ? 1U : 0U;
     return SPL_OK;
 }
@@ -335,18 +335,16 @@ SPL_Status AES_Suspend(AES_ContextTypeDef *ctx)
 
     (void)chain;
     (void)mode;
-    SPL_REQUIRE_SAFE(ctx != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(ctx != NULL, SPL_ERR_PARAM);
     /* Mode 2 (key derivation) is not a message; ECB / CBC Mode 3 would need a new key derivation
-     * on resume: use Mode 4 for a suspendable decryption (it derives the key on enable). SAFE. */
-    SPL_REQUIRE_SAFE(
-        (mode != (uint32_t)AES_MODE_KEY_DERIVATION) &&
-            ((mode != (uint32_t)AES_MODE_DECRYPT) || (chain > (uint32_t)AES_CHAIN_CBC)),
-        SPL_ERR_UNSUPPORTED);
+     * on resume: use Mode 4 for a suspendable decryption (it derives the key on enable). */
+    SPL_REQUIRE((mode != (uint32_t)AES_MODE_KEY_DERIVATION) &&
+                    ((mode != (uint32_t)AES_MODE_DECRYPT) || (chain > (uint32_t)AES_CHAIN_CBC)),
+                SPL_ERR_UNSUPPORTED);
     /* Step 1 / 2: DMA stopped by the caller (AES_DmaConfig(0, 0) after the last CCF), the last
-     * result collected (CCF = 0) and no computation running. SAFE: baglam yanlis kaydedilir. */
-    SPL_REQUIRE_SAFE(((cr & AES_CR_EN) != 0U) && ((cr & AES_CR_DMA) == 0U) &&
-                         ((sr & AES_SR_CCF) == 0U),
-                     SPL_ERR_STATE);
+     * result collected (CCF = 0) and no computation running. the context is saved wrongly. */
+    SPL_REQUIRE(((cr & AES_CR_EN) != 0U) && ((cr & AES_CR_DMA) == 0U) && ((sr & AES_SR_CCF) == 0U),
+                SPL_ERR_STATE);
     if ((sr & AES_SR_BUSY) != 0U)
     {
         return SPL_BUSY;
@@ -370,15 +368,15 @@ SPL_Status AES_Resume(const AES_ContextTypeDef *ctx, const uint32_t *key, uint32
 {
     uint32_t cr;
 
-    SPL_REQUIRE_SAFE((ctx != NULL) && (key != NULL), SPL_ERR_PARAM);
-    /* SAFE: CR'ye komut / EN bitleri yazilir; anahtar dizisinin disindan okuma. */
-    SPL_REQUIRE_SAFE(((ctx->cr & ~AES_CR_CONTEXT) == 0U) &&
-                         (words == (((ctx->cr & AES_CR_KEYSIZE) != 0U) ? 8U : 4U)),
-                     SPL_ERR_PARAM);
+    SPL_REQUIRE((ctx != NULL) && (key != NULL), SPL_ERR_PARAM);
+    /* command / EN bits written to CR; read outside the key array. */
+    SPL_REQUIRE(((ctx->cr & ~AES_CR_CONTEXT) == 0U) &&
+                    (words == (((ctx->cr & AES_CR_KEYSIZE) != 0U) ? 8U : 4U)),
+                SPL_ERR_PARAM);
     cr = Aes_Cr();
     (void)cr;
-    /* the interrupting message is still running (SAFE). */
-    SPL_REQUIRE_SAFE((cr & AES_CR_EN) == 0U, SPL_ERR_STATE);
+    /* the interrupting message is still running. */
+    SPL_REQUIRE((cr & AES_CR_EN) == 0U, SPL_ERR_STATE);
     /* Resume steps 3 .. 6: CR (EN = 0, DMA off), key, IV, SUSPxR, then EN = 1. */
     AES->CR = ctx->cr;
     AES->KEYR0 = key[0];

@@ -64,7 +64,7 @@ extern "C"
      *                       bolen 16..65535 disinda.
      * @retval SPL_ERR_STATE UE zaten acik.
      */
-    /* Seviye: PARAM[S] STATE[S] */
+    /* Level: PARAM[F] STATE[F] */
     SPL_Status USART_Init(USART_TypeDef *instance, const USART_InitTypeDef *cfg);
 
     /**
@@ -80,7 +80,7 @@ extern "C"
      * @retval SPL_ERR_STATE   UE ya da TE kapali, ya da veri alani 8 bitten genis.
      * @retval SPL_ERR_PARAM   Gecersiz ornek.
      */
-    /* Seviye: PARAM[S] STATE[S] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[F] WOULD_BLOCK[r] */
     SPL_Status USART_TryWrite(USART_TypeDef *instance, uint8_t byte);
 
     /**
@@ -100,7 +100,7 @@ extern "C"
      * @note Data only: with parity (PCE=1) or a 7-bit frame the parity bit is masked off (CCL-2
      *       YAP-09). USART_TryWrite: bits above the frame's data width are not sent.
      */
-    /* Seviye: PARAM[S] STATE[S] HW[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[F] HW[r] WOULD_BLOCK[r] */
     SPL_Status USART_TryRead(USART_TypeDef *instance, uint8_t *byte);
 
     /**
@@ -114,7 +114,7 @@ extern "C"
      * @retval SPL_OK        ICR yazildi ve ISR geri okundu.
      * @retval SPL_ERR_PARAM Gecersiz ornek.
      */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status USART_ClearErrors(USART_TypeDef *instance);
 
     /**
@@ -127,7 +127,7 @@ extern "C"
      * @retval SPL_ERR_STATE UE kapali.
      * @retval SPL_ERR_PARAM Gecersiz ornek ya da NULL cikti.
      */
-    /* Seviye: PARAM[S] STATE[S] */
+    /* Level: PARAM[F] STATE[F] */
     SPL_Status USART_Ready(USART_TypeDef *instance, uint8_t *tx_ready, uint8_t *rx_ready);
 
     /**
@@ -138,7 +138,7 @@ extern "C"
      * @retval SPL_OK        Goruntu yazildi.
      * @retval SPL_ERR_PARAM Gecersiz ornek ya da NULL cikti.
      */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status USART_ErrorFlags(USART_TypeDef *instance, uint32_t *errors);
 
     /**
@@ -149,7 +149,7 @@ extern "C"
      * @retval SPL_OK        Durum yazildi.
      * @retval SPL_ERR_PARAM Gecersiz ornek ya da NULL cikti.
      */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status USART_TxComplete(USART_TypeDef *instance, uint8_t *complete);
 
 /* ---- v0.11: extended configuration, LPUART1, FIFO, RS485, IRQ/DMA ---- */
@@ -253,7 +253,7 @@ extern "C"
      * @retval SPL_ERR_UNSUPPORTED Ornekte olmayan ozellik (0.5/1.5 durma biti, LPUART x8).
      * @retval SPL_ERR_STATE       UE acik.
      */
-    /* Seviye: PARAM[S,r] STATE[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F,r] STATE[F] UNSUPPORTED[r] */
     SPL_Status USART_InitEx(USART_TypeDef *instance, const USART_InitExTypeDef *cfg);
 
     /**
@@ -268,7 +268,7 @@ extern "C"
      *                       LPUART < 0x300); USART_InitEx ile duzeltin.
      * @retval SPL_ERR_PARAM Gecersiz ornek.
      */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status USART_Enable(USART_TypeDef *instance);
 
     /**
@@ -283,7 +283,7 @@ extern "C"
      *                       vericiyi tutuyorsa USART_Abort).
      * @retval SPL_ERR_PARAM Gecersiz ornek.
      */
-    /* Seviye: PARAM[S] BUSY[r] */
+    /* Level: PARAM[F] BUSY[r] */
     SPL_Status USART_Disable(USART_TypeDef *instance);
 
     /**
@@ -296,7 +296,7 @@ extern "C"
      * @retval SPL_OK        UE kapatildi.
      * @retval SPL_ERR_PARAM Gecersiz ornek.
      */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status USART_Abort(USART_TypeDef *instance);
 
 /* FIFO thresholds (CR3 TXFTCFG/RXFTCFG). EMPTY_FULL = TXFIFO empty / RXFIFO full. */
@@ -319,7 +319,7 @@ extern "C"
      * @retval SPL_ERR_STATE UE acik.
      * @retval SPL_ERR_PARAM Gecersiz ornek, enable ya da esik.
      */
-    /* Seviye: PARAM[S,n] STATE[S] */
+    /* Level: PARAM[F] STATE[F] */
     SPL_Status USART_FifoConfig(USART_TypeDef *instance, uint8_t enable, uint8_t tx_threshold,
                                 uint8_t rx_threshold);
 
@@ -337,7 +337,7 @@ extern "C"
      * @retval SPL_ERR_STATE UE acik ya da RTS akis kontrolu DE ile cakisiyor.
      * @retval SPL_ERR_PARAM Gecersiz ornek, mantiksal deger ya da zaman.
      */
-    /* Seviye: PARAM[S,n] STATE[S] */
+    /* Level: PARAM[F] STATE[F] */
     SPL_Status USART_DriverEnableConfig(USART_TypeDef *instance, uint8_t enable, uint8_t active_low,
                                         uint8_t assert_time, uint8_t deassert_time);
 
@@ -354,7 +354,7 @@ extern "C"
      * @retval SPL_ERR_STATE   UE ya da TE kapali.
      * @retval SPL_ERR_PARAM   Gecersiz ornek ya da data veri alanindan genis.
      */
-    /* Seviye: PARAM[S] STATE[S] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[F] WOULD_BLOCK[r] */
     SPL_Status USART_TryWrite9(USART_TypeDef *instance, uint16_t data);
 
     /**
@@ -371,7 +371,7 @@ extern "C"
      * @retval SPL_ERR_STATE   UE ya da RE kapali.
      * @retval SPL_ERR_PARAM   Gecersiz ornek ya da NULL cikti.
      */
-    /* Seviye: PARAM[S] STATE[S] HW[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[F] HW[r] WOULD_BLOCK[r] */
     SPL_Status USART_TryRead9(USART_TypeDef *instance, uint16_t *data);
 
 /* Interrupt sources for USART_ITConfig. */
@@ -394,7 +394,7 @@ extern "C"
      * @retval SPL_OK        Secili izinler guncellendi.
      * @retval SPL_ERR_PARAM Gecersiz ornek, maske ya da enable.
      */
-    /* Seviye: PARAM[S,n] */
+    /* Level: PARAM[F] */
     SPL_Status USART_ITConfig(USART_TypeDef *instance, uint32_t it_mask, uint8_t enable);
 
 /* DMA request flags for USART_DmaConfig. */
@@ -412,7 +412,7 @@ extern "C"
      * @retval SPL_ERR_STATE UE acikken DDRE degisecekti.
      * @retval SPL_ERR_PARAM Gecersiz ornek ya da maske.
      */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status USART_DmaConfig(USART_TypeDef *instance, uint32_t dma_flags);
 
     /**
@@ -423,7 +423,7 @@ extern "C"
      * @retval SPL_OK        Durum yazildi.
      * @retval SPL_ERR_PARAM Gecersiz ornek ya da NULL cikti.
      */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status USART_IdleDetected(USART_TypeDef *instance, uint8_t *idle);
 
     /**
@@ -435,7 +435,7 @@ extern "C"
      * @retval SPL_OK        Temizleme yazildi ve geri okundu.
      * @retval SPL_ERR_PARAM Gecersiz ornek.
      */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status USART_ClearIdle(USART_TypeDef *instance);
 
     /**
@@ -447,7 +447,7 @@ extern "C"
      * @retval SPL_OK        Temizleme yazildi ve geri okundu.
      * @retval SPL_ERR_PARAM Gecersiz ornek.
      */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status USART_ClearTxComplete(USART_TypeDef *instance);
 /* Error flags (ISR bit positions) reported by USART_ErrorFlags. */
 #define USART_ERRORS_ALL 0x0FU /* PE | FE | NE | ORE */
@@ -463,7 +463,7 @@ extern "C"
      * @retval SPL_OK        Secili bayraklar temizlendi, ISR geri okundu.
      * @retval SPL_ERR_PARAM Gecersiz ornek, bos maske ya da desteklenmeyen bit.
      */
-    /* Seviye: PARAM[S,n] */
+    /* Level: PARAM[F] */
     SPL_Status USART_ClearErrorFlags(USART_TypeDef *instance, uint32_t errors);
 
     /* ---- v0.16 (G4): communication modes; @see ../Docs/v0.16_USART_MODES_CONTRACT.md ----
@@ -501,7 +501,7 @@ extern "C"
      * @retval SPL_ERR_STATE       UE acik ya da baska mod cakisiyor.
      * @retval SPL_ERR_UNSUPPORTED Ornekte senkron mod yok.
      */
-    /* Seviye: PARAM[S,n] STATE[S] UNSUPPORTED[S] */
+    /* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
     SPL_Status USART_SyncConfig(USART_TypeDef *instance, const USART_SyncTypeDef *cfg);
 
     typedef struct
@@ -528,7 +528,7 @@ extern "C"
      * @retval SPL_ERR_STATE       UE acik ya da cerceve/mod on kosullari saglanmiyor.
      * @retval SPL_ERR_UNSUPPORTED Ornekte smartcard modu yok.
      */
-    /* Seviye: PARAM[S,n] STATE[S] UNSUPPORTED[S] */
+    /* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
     SPL_Status USART_SmartcardConfig(USART_TypeDef *instance, const USART_SmartcardTypeDef *cfg);
 
     /**
@@ -546,7 +546,7 @@ extern "C"
      * @retval SPL_ERR_STATE       UE acik ya da baska mod / cerceve ayari cakisiyor.
      * @retval SPL_ERR_UNSUPPORTED Ornekte IrDA modu yok.
      */
-    /* Seviye: PARAM[S,n] STATE[S] UNSUPPORTED[S] */
+    /* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
     SPL_Status USART_IrdaConfig(USART_TypeDef *instance, uint8_t enable, uint8_t low_power,
                                 uint8_t prescaler);
 
@@ -565,7 +565,7 @@ extern "C"
      * @retval SPL_ERR_STATE       UE acik ya da baska mod / cerceve ayari cakisiyor.
      * @retval SPL_ERR_UNSUPPORTED Ornekte LIN modu yok.
      */
-    /* Seviye: PARAM[S,n] STATE[S] UNSUPPORTED[S] */
+    /* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
     SPL_Status USART_LinConfig(USART_TypeDef *instance, uint8_t enable, uint8_t break_11bit,
                                uint8_t break_irq);
 
@@ -581,7 +581,7 @@ extern "C"
      * @retval SPL_ERR_STATE UE ya da TE kapali.
      * @retval SPL_ERR_PARAM Gecersiz ornek.
      */
-    /* Seviye: PARAM[S] STATE[S] BUSY[r] */
+    /* Level: PARAM[F] STATE[F] BUSY[r] */
     SPL_Status USART_SendBreak(USART_TypeDef *instance);
 
     /**
@@ -602,7 +602,7 @@ extern "C"
      * @retval SPL_ERR_STATE       UE acik.
      * @retval SPL_ERR_UNSUPPORTED Ornekte otomatik hiz algilama yok.
      */
-    /* Seviye: PARAM[S,n] STATE[S] UNSUPPORTED[S] */
+    /* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
     SPL_Status USART_AutoBaudConfig(USART_TypeDef *instance, uint8_t enable, uint8_t mode);
 
     /**
@@ -614,7 +614,7 @@ extern "C"
      * @retval SPL_ERR_UNSUPPORTED Ornekte otomatik hiz algilama yok.
      * @retval SPL_ERR_PARAM       Gecersiz ornek.
      */
-    /* Seviye: PARAM[S] STATE[S] UNSUPPORTED[S] */
+    /* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
     SPL_Status USART_AutoBaudRequest(USART_TypeDef *instance);
 
     /**
@@ -627,7 +627,7 @@ extern "C"
      * @retval SPL_ERR_UNSUPPORTED Ornekte otomatik hiz algilama yok.
      * @retval SPL_ERR_PARAM       Gecersiz ornek ya da NULL cikti.
      */
-    /* Seviye: PARAM[S] UNSUPPORTED[S] */
+    /* Level: PARAM[F] UNSUPPORTED[F] */
     SPL_Status USART_AutoBaudStatus(USART_TypeDef *instance, uint8_t *done, uint8_t *error);
 
     /**
@@ -644,7 +644,7 @@ extern "C"
      * @retval SPL_ERR_STATE       UE acik.
      * @retval SPL_ERR_UNSUPPORTED Ornekte Stop modundan uyandirma yok.
      */
-    /* Seviye: PARAM[S,n] STATE[S] UNSUPPORTED[S] */
+    /* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
     SPL_Status USART_WakeupConfig(USART_TypeDef *instance, uint8_t enable, uint8_t source,
                                   uint8_t irq);
 
@@ -662,7 +662,7 @@ extern "C"
      * @retval SPL_ERR_STATE       UE acik.
      * @retval SPL_ERR_UNSUPPORTED Ornekte alici zaman asimi yok (LPUART1).
      */
-    /* Seviye: PARAM[S,n] STATE[S] UNSUPPORTED[S] */
+    /* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
     SPL_Status USART_RxTimeoutConfig(USART_TypeDef *instance, uint8_t enable, uint32_t timeout,
                                      uint8_t block_length);
 
@@ -678,7 +678,7 @@ extern "C"
      * @retval SPL_ERR_PARAM Gecersiz ornek, mantiksal deger ya da adres.
      * @retval SPL_ERR_STATE UE acik.
      */
-    /* Seviye: PARAM[S,n] STATE[S] */
+    /* Level: PARAM[F] STATE[F] */
     SPL_Status USART_MuteConfig(USART_TypeDef *instance, uint8_t enable, uint8_t address_mark,
                                 uint8_t address, uint8_t addr7);
 
@@ -692,7 +692,7 @@ extern "C"
      * @retval SPL_ERR_STATE Cok islemcili sessiz mod kapali.
      * @retval SPL_ERR_PARAM Gecersiz ornek.
      */
-    /* Seviye: PARAM[S] STATE[S] */
+    /* Level: PARAM[F] STATE[F] */
     SPL_Status USART_EnterMute(USART_TypeDef *instance);
 
 /* ISR flags of the modes above, and the subset with a same-position ICR clear bit. */
@@ -710,7 +710,7 @@ extern "C"
      * @retval SPL_OK        Goruntu yazildi.
      * @retval SPL_ERR_PARAM Gecersiz ornek ya da NULL cikti.
      */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status USART_ModeFlags(USART_TypeDef *instance, uint32_t *flags);
 
     /**
@@ -726,7 +726,7 @@ extern "C"
      * @retval SPL_ERR_PARAM       Gecersiz ornek, bos maske ya da temizlenemeyen bit.
      * @retval SPL_ERR_UNSUPPORTED Istenen bayrak ornekte yok.
      */
-    /* Seviye: PARAM[S,n] UNSUPPORTED[S] */
+    /* Level: PARAM[F] UNSUPPORTED[F] */
     SPL_Status USART_ClearModeFlags(USART_TypeDef *instance, uint32_t flags);
 
 #ifdef __cplusplus

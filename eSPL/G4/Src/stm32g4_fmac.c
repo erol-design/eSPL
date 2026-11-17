@@ -156,10 +156,10 @@ SPL_Status FMAC_ConfigBuffers(const FMAC_LayoutTypeDef *layout)
 {
     SPL_Status status;
 
-    /* SAFE: NULL layout pointer. */
-    SPL_REQUIRE_SAFE(layout != NULL, SPL_ERR_PARAM);
-    /* SAFE: Invalid buffer layout silently corrupts FMAC memory. */
-    SPL_REQUIRE_SAFE(FMAC_LayoutCheck(layout) == SPL_OK, SPL_ERR_PARAM);
+    /* NULL layout pointer. */
+    SPL_REQUIRE(layout != NULL, SPL_ERR_PARAM);
+    /* Invalid buffer layout silently corrupts FMAC memory. */
+    SPL_REQUIRE(FMAC_LayoutCheck(layout) == SPL_OK, SPL_ERR_PARAM);
     status = Fmac_IdleGate(Fmac_StateOf(FMAC->CR, FMAC->PARAM));
     if (status != SPL_OK)
     {
@@ -181,14 +181,16 @@ SPL_Status FMAC_ControlConfig(uint32_t flags)
 {
     uint32_t cr;
 
-    /* SAFE: CR reserved/command bits must not be set. */
-    SPL_REQUIRE_SAFE((flags & ~FMAC_CR_CONFIG_ALL) == 0U, SPL_ERR_PARAM);
+    /* CR reserved/command bits must not be set. */
+    SPL_REQUIRE((flags & ~FMAC_CR_CONFIG_ALL) == 0U, SPL_ERR_PARAM);
     /* RM0440 18.3.8 Table 120 note (a): not both interrupt and DMA for the
      * same direction. */
-    /* SAFE: CPU interrupt and DMA write request must not be enabled together. */
-    SPL_REQUIRE_SAFE(!(((flags & FMAC_CR_WIEN) != 0U) && ((flags & FMAC_CR_DMAWEN) != 0U)), SPL_ERR_PARAM);
-    /* SAFE: CPU interrupt and DMA read request must not be enabled together. */
-    SPL_REQUIRE_SAFE(!(((flags & FMAC_CR_RIEN) != 0U) && ((flags & FMAC_CR_DMAREN) != 0U)), SPL_ERR_PARAM);
+    /* CPU interrupt and DMA write request must not be enabled together. */
+    SPL_REQUIRE(!(((flags & FMAC_CR_WIEN) != 0U) && ((flags & FMAC_CR_DMAWEN) != 0U)),
+                SPL_ERR_PARAM);
+    /* CPU interrupt and DMA read request must not be enabled together. */
+    SPL_REQUIRE(!(((flags & FMAC_CR_RIEN) != 0U) && ((flags & FMAC_CR_DMAREN) != 0U)),
+                SPL_ERR_PARAM);
     cr = FMAC->CR;
     if ((cr & FMAC_CR_RESET) != 0U)
     {
@@ -222,12 +224,12 @@ static SPL_Status Fmac_Load(uint32_t func, const int16_t *first, uint8_t n, cons
     uint32_t i;
     SPL_Status status;
 
-    /* SAFE: NULL input array. */
-    SPL_REQUIRE_SAFE(first != NULL, SPL_ERR_PARAM);
-    /* SAFE: Zero-length load does not define a preload transfer. */
-    SPL_REQUIRE_SAFE(n != 0U, SPL_ERR_PARAM);
-    /* SAFE: Secondary buffer must exist if m is nonzero. */
-    SPL_REQUIRE_SAFE((m == 0U) || (second != NULL), SPL_ERR_PARAM);
+    /* NULL input array. */
+    SPL_REQUIRE(first != NULL, SPL_ERR_PARAM);
+    /* Zero-length load does not define a preload transfer. */
+    SPL_REQUIRE(n != 0U, SPL_ERR_PARAM);
+    /* Secondary buffer must exist if m is nonzero. */
+    SPL_REQUIRE((m == 0U) || (second != NULL), SPL_ERR_PARAM);
     cr = FMAC->CR;
     status = Fmac_IdleGate(Fmac_StateOf(cr, FMAC->PARAM));
     if (status != SPL_OK)
@@ -353,8 +355,8 @@ SPL_Status FMAC_FilterStart(uint32_t func, uint8_t p, uint8_t q, uint8_t r)
     uint32_t cr;
     SPL_Status status;
 
-    /* SAFE: Invalid FIR/IIR function, tap or gain coding. */
-    SPL_REQUIRE_SAFE(Fmac_FilterArgsValid(func, p, q, r) != 0U, SPL_ERR_PARAM);
+    /* Invalid FIR/IIR function, tap or gain coding. */
+    SPL_REQUIRE(Fmac_FilterArgsValid(func, p, q, r) != 0U, SPL_ERR_PARAM);
     cr = FMAC->CR;
     status = Fmac_IdleGate(Fmac_StateOf(cr, FMAC->PARAM));
     if (status != SPL_OK)
@@ -418,8 +420,8 @@ SPL_Status FMAC_TryRead(int16_t *sample)
     uint32_t state;
     uint32_t sr;
 
-    /* SAFE: NULL output pointer. */
-    SPL_REQUIRE_SAFE(sample != NULL, SPL_ERR_PARAM);
+    /* NULL output pointer. */
+    SPL_REQUIRE(sample != NULL, SPL_ERR_PARAM);
     /* PARAM before SR: START = 0 seen first means no new output can appear
      * after the SR snapshot. */
     state = Fmac_StateOf(FMAC->CR, FMAC->PARAM);
@@ -444,16 +446,16 @@ SPL_Status FMAC_TryRead(int16_t *sample)
 
 SPL_Status FMAC_GetFlags(uint32_t *flags)
 {
-    /* SAFE: NULL output pointer. */
-    SPL_REQUIRE_SAFE(flags != NULL, SPL_ERR_PARAM);
+    /* NULL output pointer. */
+    SPL_REQUIRE(flags != NULL, SPL_ERR_PARAM);
     *flags = FMAC->SR & FMAC_FLAGS_ALL;
     return SPL_OK;
 }
 
 SPL_Status FMAC_GetState(uint32_t *state)
 {
-    /* SAFE: NULL output pointer. */
-    SPL_REQUIRE_SAFE(state != NULL, SPL_ERR_PARAM);
+    /* NULL output pointer. */
+    SPL_REQUIRE(state != NULL, SPL_ERR_PARAM);
     *state = Fmac_StateOf(FMAC->CR, FMAC->PARAM);
     return SPL_OK;
 }

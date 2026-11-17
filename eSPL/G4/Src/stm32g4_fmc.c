@@ -127,7 +127,8 @@ static FMC_CHECK_UNUSED uint8_t Fmc_InitValid(uint32_t bank, const FMC_NORSRAM_I
 }
 
 /* Field ranges common to FMC_BTRx and FMC_BWTRx (RM0440 19.6.6). */
-static FMC_CHECK_UNUSED uint8_t Fmc_TimingValid(const FMC_NORSRAM_TimingTypeDef *t, uint8_t addset_min)
+static FMC_CHECK_UNUSED uint8_t Fmc_TimingValid(const FMC_NORSRAM_TimingTypeDef *t,
+                                                uint8_t addset_min)
 {
     uint8_t ok = 1U;
 
@@ -150,7 +151,8 @@ static FMC_CHECK_UNUSED uint8_t Fmc_TimingValid(const FMC_NORSRAM_TimingTypeDef 
 }
 
 /* ADDSET minimum 1: muxed mode, mode D, mode 1 with PSRAM (ADDSET notes). */
-static FMC_CHECK_UNUSED uint8_t Fmc_AddsetMin(const FMC_NORSRAM_InitTypeDef *init, uint8_t access_mode)
+static FMC_CHECK_UNUSED uint8_t Fmc_AddsetMin(const FMC_NORSRAM_InitTypeDef *init,
+                                              uint8_t access_mode)
 {
     uint8_t min = 0U;
 
@@ -170,8 +172,8 @@ static FMC_CHECK_UNUSED uint8_t Fmc_AddsetMin(const FMC_NORSRAM_InitTypeDef *ini
 }
 
 static FMC_CHECK_UNUSED uint8_t Fmc_TimingsValid(const FMC_NORSRAM_InitTypeDef *init,
-                                const FMC_NORSRAM_TimingTypeDef *timing,
-                                const FMC_NORSRAM_TimingTypeDef *write_timing)
+                                                 const FMC_NORSRAM_TimingTypeDef *timing,
+                                                 const FMC_NORSRAM_TimingTypeDef *write_timing)
 {
     uint8_t ok = Fmc_TimingValid(timing, Fmc_AddsetMin(init, timing->access_mode));
     uint8_t sync = 0U;
@@ -283,16 +285,16 @@ SPL_Status FMC_NORSRAM_Init(uint32_t bank, const FMC_NORSRAM_InitTypeDef *init,
     uint32_t value;
     uint32_t bwtr;
 
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((Fmc_BankValid(bank) == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((init == NULL)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((timing == NULL)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((Fmc_InitValid(bank, init) == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((Fmc_TimingsValid(init, timing, write_timing) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((Fmc_BankValid(bank) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((init == NULL)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((timing == NULL)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((Fmc_InitValid(bank, init) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((Fmc_TimingsValid(init, timing, write_timing) == 0U)), SPL_ERR_PARAM);
     idx = Fmc_BcrIndex(bank);
     bcr = FMC_Bank1_R->BTCR[idx];
     /* Driver rule: configure a sub-bank only while it is disabled. */
@@ -351,8 +353,8 @@ SPL_Status FMC_NORSRAM_Enable(uint32_t bank)
 {
     uint32_t idx;
 
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!(Fmc_BankValid(bank) == 0U), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!(Fmc_BankValid(bank) == 0U), SPL_ERR_PARAM);
     idx = Fmc_BcrIndex(bank);
     /* FMC_BCRx has no W1C or self-clearing bits: RMW is safe. */
     FMC_Bank1_R->BTCR[idx] = FMC_Bank1_R->BTCR[idx] | FMC_BCRx_MBKEN;
@@ -363,8 +365,8 @@ SPL_Status FMC_NORSRAM_Disable(uint32_t bank)
 {
     uint32_t idx;
 
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!(Fmc_BankValid(bank) == 0U), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!(Fmc_BankValid(bank) == 0U), SPL_ERR_PARAM);
     idx = Fmc_BcrIndex(bank);
     FMC_Bank1_R->BTCR[idx] = FMC_Bank1_R->BTCR[idx] & ~FMC_BCRx_MBKEN;
     return SPL_OK;
@@ -374,8 +376,8 @@ SPL_Status FMC_PSRAM_SetCounter(uint16_t count, uint32_t bank_mask)
 {
     uint32_t value;
 
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((bank_mask & ~FMC_PSRAM_CNT_ALL) != 0U), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((bank_mask & ~FMC_PSRAM_CNT_ALL) != 0U), SPL_ERR_PARAM);
     /* The counter is common to all sub-banks: no sub-bank may be active. */
     if (Fmc_AnyNorEnabled(0U) != 0U)
     {
@@ -406,7 +408,7 @@ static FMC_CHECK_UNUSED uint8_t Fmc_NandTimingValid(const FMC_NAND_TimingTypeDef
 /* ERRATA ES0430 2.5.2: MEMSET = 0 with ATTHOLD <= 1 can read wrong data from a busy NAND.
  * Literal workaround: MEMSET > 0 or ATTHOLD > 1. */
 static FMC_CHECK_UNUSED uint8_t Fmc_NandBusyReadSafe(const FMC_NAND_TimingTypeDef *common,
-                                    const FMC_NAND_TimingTypeDef *attribute)
+                                                     const FMC_NAND_TimingTypeDef *attribute)
 {
     return (uint8_t)(((common->setup > 0U) || (attribute->hold > 1U)) ? 1U : 0U);
 }
@@ -428,29 +430,29 @@ SPL_Status FMC_NAND_Init(const FMC_NAND_InitTypeDef *init, const FMC_NAND_Timing
     uint32_t pcr;
     uint32_t value;
 
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((init == NULL)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((common == NULL)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((attribute == NULL)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((Fmc_Bool(init->wait_feature) == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((init->data_width > FMC_WIDTH_16)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((init->ecc_page_size > FMC_ECC_PAGE_8192)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((init->tclr > FMC_FIELD4_MAX)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((init->tar > FMC_FIELD4_MAX)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((init == NULL)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((common == NULL)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((attribute == NULL)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((Fmc_Bool(init->wait_feature) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((init->data_width > FMC_WIDTH_16)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((init->ecc_page_size > FMC_ECC_PAGE_8192)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((init->tclr > FMC_FIELD4_MAX)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((init->tar > FMC_FIELD4_MAX)), SPL_ERR_PARAM);
     /* ERRATA ES0430 2.5.2: refuse MEMSET = 0 together with ATTHOLD <= 1. */
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((Fmc_NandTimingValid(common) == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((Fmc_NandTimingValid(attribute) == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((Fmc_NandBusyReadSafe(common, attribute) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((Fmc_NandTimingValid(common) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((Fmc_NandTimingValid(attribute) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((Fmc_NandBusyReadSafe(common, attribute) == 0U)), SPL_ERR_PARAM);
     pcr = FMC_Bank3_R->PCR;
     if ((pcr & FMC_PCR_PBKEN) != 0U)
     {
@@ -508,8 +510,8 @@ SPL_Status FMC_NAND_GetECC(uint32_t *ecc)
     uint32_t bits;
     uint32_t value;
 
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!(ecc == NULL), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!(ecc == NULL), SPL_ERR_PARAM);
     pcr = FMC_Bank3_R->PCR;
     if ((pcr & FMC_PCR_ECCEN) == 0U)
     {
@@ -534,18 +536,18 @@ SPL_Status FMC_NAND_GetECC(uint32_t *ecc)
 
 SPL_Status FMC_NAND_GetFlags(uint32_t *flags)
 {
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!(flags == NULL), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!(flags == NULL), SPL_ERR_PARAM);
     *flags = FMC_Bank3_R->SR & (FMC_NAND_FLAGS_ALL | FMC_NAND_FLAG_FEMPT);
     return SPL_OK;
 }
 
 SPL_Status FMC_NAND_ClearFlags(uint32_t flags)
 {
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((flags == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!(((flags & ~FMC_NAND_FLAGS_ALL) != 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((flags == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!(((flags & ~FMC_NAND_FLAGS_ALL) != 0U)), SPL_ERR_PARAM);
     /* IRS/IFS: writing 1 sets the flag, so only the read value is written
      * back for the other flags; the cleared ones are written 0. */
     FMC_Bank3_R->SR = FMC_Bank3_R->SR & FMC_SR_RW & ~flags;
@@ -556,12 +558,12 @@ SPL_Status FMC_NAND_ITConfig(uint32_t its, uint8_t enable)
 {
     uint32_t sr;
 
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((its == 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!(((its & ~FMC_NAND_IT_ALL) != 0U)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((Fmc_Bool(enable) == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((its == 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!(((its & ~FMC_NAND_IT_ALL) != 0U)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((Fmc_Bool(enable) == 0U)), SPL_ERR_PARAM);
     sr = FMC_Bank3_R->SR & FMC_SR_RW;
     if (enable != 0U)
     {
@@ -580,17 +582,18 @@ static const uint32_t fmc_region_base[] = {FMC_BANK1_1, FMC_BANK1_2, FMC_BANK1_3
                                            FMC_BANK1_4, FMC_BANK3,   FMC_NAND_ATTRIBUTE_BASE};
 
 /* Compile-time check (CCL-2 YAP-03): one entry per region code 0..FMC_REGION_NAND_ATTRIBUTE, the
- * bound used by the SAFE check in FMC_GetBankAddress. */
-typedef char Fmc_RegionTableCheck
-    [((sizeof(fmc_region_base) / sizeof(fmc_region_base[0])) == (FMC_REGION_NAND_ATTRIBUTE + 1U)) ? 1
-                                                                                                  : -1];
+ * bound used by the check in FMC_GetBankAddress. */
+typedef char Fmc_RegionTableCheck[((sizeof(fmc_region_base) / sizeof(fmc_region_base[0])) ==
+                                   (FMC_REGION_NAND_ATTRIBUTE + 1U))
+                                      ? 1
+                                      : -1];
 
 SPL_Status FMC_GetBankAddress(uint32_t region, uint32_t *address)
 {
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((region > FMC_REGION_NAND_ATTRIBUTE)), SPL_ERR_PARAM);
-    /* SAFE: gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
-    SPL_REQUIRE_SAFE(!((address == NULL)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((region > FMC_REGION_NAND_ATTRIBUTE)), SPL_ERR_PARAM);
+    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    SPL_REQUIRE(!((address == NULL)), SPL_ERR_PARAM);
     *address = fmc_region_base[region];
     return SPL_OK;
 }

@@ -48,8 +48,8 @@ static uint32_t Opamp_ClearBits(uint32_t value, uint32_t bits)
 /* Instance valid and CSR writable. */
 static SPL_Status Opamp_CheckWritable(const OPAMP_TypeDef *opamp)
 {
-    /* SAFE: reject an invalid peripheral address before reading CSR. */
-    SPL_REQUIRE_SAFE(Opamp_Valid(opamp) != 0U, SPL_ERR_PARAM);
+    /* Reject an invalid peripheral address before reading CSR. */
+    SPL_REQUIRE(Opamp_Valid(opamp) != 0U, SPL_ERR_PARAM);
     if ((opamp->CSR & OPAMP_CSR_LOCK) != 0U)
     {
         return SPL_ERR_STATE;
@@ -115,14 +115,14 @@ SPL_Status OPAMP_Config(OPAMP_TypeDef *opamp, const OPAMP_ConfigTypeDef *config)
     uint32_t vm_sel;
     uint32_t pga_code = 0U;
 
-    /* SAFE: check pointer validity before using the configuration structure. */
-    SPL_REQUIRE_SAFE(Opamp_Valid(opamp) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(config != NULL, SPL_ERR_PARAM);
-    /* SAFE: invalid field encodings can modify unrelated CSR bits. */
-    SPL_REQUIRE_SAFE(config->vp_sel <= OPAMP_VP_SEL_MAX, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(config->internal_output <= 1U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(config->high_speed <= 1U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(Opamp_ModeFieldsValid(config) != 0U, SPL_ERR_PARAM);
+    /* Check pointer validity before using the configuration structure. */
+    SPL_REQUIRE(Opamp_Valid(opamp) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(config != NULL, SPL_ERR_PARAM);
+    /* Invalid field encodings can modify unrelated CSR bits. */
+    SPL_REQUIRE(config->vp_sel <= OPAMP_VP_SEL_MAX, SPL_ERR_PARAM);
+    SPL_REQUIRE(config->internal_output <= 1U, SPL_ERR_PARAM);
+    SPL_REQUIRE(config->high_speed <= 1U, SPL_ERR_PARAM);
+    SPL_REQUIRE(Opamp_ModeFieldsValid(config) != 0U, SPL_ERR_PARAM);
     status = Opamp_CheckWritable(opamp);
     if (status != SPL_OK)
     {
@@ -198,10 +198,10 @@ SPL_Status OPAMP_SetUserTrim(OPAMP_TypeDef *opamp, uint32_t trim_p, uint32_t tri
     SPL_Status status;
     uint32_t csr;
 
-    SPL_REQUIRE_SAFE(Opamp_Valid(opamp) != 0U, SPL_ERR_PARAM);
-    /* SAFE: an oversized trim spills into adjacent CSR fields. */
-    SPL_REQUIRE_SAFE(trim_p <= OPAMP_TRIM_MAX, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(trim_n <= OPAMP_TRIM_MAX, SPL_ERR_PARAM);
+    SPL_REQUIRE(Opamp_Valid(opamp) != 0U, SPL_ERR_PARAM);
+    /* An oversized trim spills into adjacent CSR fields. */
+    SPL_REQUIRE(trim_p <= OPAMP_TRIM_MAX, SPL_ERR_PARAM);
+    SPL_REQUIRE(trim_n <= OPAMP_TRIM_MAX, SPL_ERR_PARAM);
     status = Opamp_CheckWritable(opamp);
     if (status != SPL_OK)
     {
@@ -224,9 +224,9 @@ SPL_Status OPAMP_GetTrim(const OPAMP_TypeDef *opamp, uint32_t *trim_p, uint32_t 
 {
     uint32_t csr;
 
-    SPL_REQUIRE_SAFE(Opamp_Valid(opamp) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(trim_p != NULL, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(trim_n != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(Opamp_Valid(opamp) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(trim_p != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(trim_n != NULL, SPL_ERR_PARAM);
     csr = opamp->CSR;
     *trim_p = (csr & OPAMP_CSR_TRIMOFFSETP_Msk) >> OPAMP_CSR_TRIMOFFSETP_Pos;
     *trim_n = (csr & OPAMP_CSR_TRIMOFFSETN_Msk) >> OPAMP_CSR_TRIMOFFSETN_Pos;
@@ -254,8 +254,8 @@ SPL_Status OPAMP_CalibrationEnter(OPAMP_TypeDef *opamp, uint32_t pair)
     SPL_Status status;
     uint32_t csr;
 
-    SPL_REQUIRE_SAFE(Opamp_Valid(opamp) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(pair <= OPAMP_CAL_PAIR_N, SPL_ERR_PARAM);
+    SPL_REQUIRE(Opamp_Valid(opamp) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(pair <= OPAMP_CAL_PAIR_N, SPL_ERR_PARAM);
     status = Opamp_CheckWritable(opamp);
     if (status != SPL_OK)
     {
@@ -278,8 +278,8 @@ SPL_Status OPAMP_CalibrationSelect(OPAMP_TypeDef *opamp, uint32_t pair)
 {
     SPL_Status status;
 
-    SPL_REQUIRE_SAFE(Opamp_Valid(opamp) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(pair <= OPAMP_CAL_PAIR_N, SPL_ERR_PARAM);
+    SPL_REQUIRE(Opamp_Valid(opamp) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(pair <= OPAMP_CAL_PAIR_N, SPL_ERR_PARAM);
     status = Opamp_CheckWritable(opamp);
     if (status != SPL_OK)
     {
@@ -297,8 +297,8 @@ SPL_Status OPAMP_CalibrationOutput(const OPAMP_TypeDef *opamp, uint8_t *calout)
 {
     uint32_t csr;
 
-    SPL_REQUIRE_SAFE(Opamp_Valid(opamp) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(calout != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(Opamp_Valid(opamp) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(calout != NULL, SPL_ERR_PARAM);
     csr = opamp->CSR;
     if ((csr & OPAMP_CSR_CALON) == 0U)
     {
@@ -343,8 +343,8 @@ SPL_Status OPAMP_Lock(OPAMP_TypeDef *opamp)
 
 SPL_Status OPAMP_GetLockState(const OPAMP_TypeDef *opamp, uint8_t *locked)
 {
-    SPL_REQUIRE_SAFE(Opamp_Valid(opamp) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(locked != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(Opamp_Valid(opamp) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(locked != NULL, SPL_ERR_PARAM);
     *locked = ((opamp->CSR & OPAMP_CSR_LOCK) != 0U) ? 1U : 0U;
     return SPL_OK;
 }

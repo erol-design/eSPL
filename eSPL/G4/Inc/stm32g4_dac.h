@@ -50,32 +50,32 @@ extern "C"
 
     /* EN=0 and CEN=0 required (STATE). Wave generation is forced off (WAVEx=0, MAMPx=0);
      * MCR DMADOUBLEx=0, SINFORMATx=0 (unsigned). */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status DAC_ChannelConfig(DAC_TypeDef *dac, uint32_t channel,
                                  const DAC_ChannelConfigTypeDef *config);
     /* MCR.HFSEL from the AHB clock: >160 MHz -> 10, >80 MHz -> 01, else 00 (RM0440 22.7.16).
      * Both channels must be disabled (EN=0, CEN=0). */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status DAC_SetHighFrequencyMode(DAC_TypeDef *dac, uint32_t hclk_hz);
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status DAC_Enable(DAC_TypeDef *dac, uint32_t channel);
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status DAC_Disable(DAC_TypeDef *dac, uint32_t channel);
     /* DACxRDY after tWAKEUP; STATE if the channel is disabled. */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status DAC_Ready(DAC_TypeDef *dac, uint32_t channel, uint8_t *ready);
     /* WOULD_BLOCK while EN=1 and DACxRDY=0; STATE if DMAENx=1. */
-    /* Seviye: PARAM[S,r] STATE[r] UNSUPPORTED[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F,r] STATE[r] UNSUPPORTED[r] WOULD_BLOCK[r] */
     SPL_Status DAC_WriteData(DAC_TypeDef *dac, uint32_t channel, uint32_t align, uint32_t value);
     /* Requires TENx=1 and TSELx=0 (SWTRIG), else STATE. */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] WOULD_BLOCK[r] */
     SPL_Status DAC_SoftwareTrigger(DAC_TypeDef *dac, uint32_t channel);
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status DAC_ReadOutput(DAC_TypeDef *dac, uint32_t channel, uint32_t *value);
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status DAC_UnderrunFlag(DAC_TypeDef *dac, uint32_t channel, uint8_t *set);
     /* SR.DMAUDRx is rc_w1: writes only that bit. */
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status DAC_ClearUnderrun(DAC_TypeDef *dac, uint32_t channel);
 
 #ifdef __cplusplus

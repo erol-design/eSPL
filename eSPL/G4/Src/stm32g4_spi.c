@@ -21,7 +21,6 @@ static __attribute__((unused)) uint8_t Spi_Valid(const SPI_TypeDef *spi)
     return valid;
 }
 
-
 /* Nonzero when the configured frame is wider than 8 bits (16-bit DR access). */
 static uint8_t Spi_IsWide(const SPI_TypeDef *spi)
 {
@@ -33,12 +32,18 @@ SPL_Status SPI_MasterInit(SPI_TypeDef *spi, const SPI_InitTypeDef *cfg)
 {
     uint32_t cr1;
 
-    SPL_REQUIRE_SAFE(!((Spi_Valid(spi) == 0U)), SPL_ERR_PARAM); /* SAFE: invalid peripheral address could access unrelated MMIO */
-    SPL_REQUIRE_SAFE(!((cfg == (const SPI_InitTypeDef *)0)), SPL_ERR_PARAM); /* SAFE: NULL access does not provide a recoverable API error */
-    SPL_REQUIRE_SAFE(!((cfg->prescaler > 7U)), SPL_ERR_PARAM); /* SAFE: invalid baud-rate field or configuration encoding */
-    SPL_REQUIRE_SAFE(!((cfg->cpol > 1U)), SPL_ERR_PARAM); /* SAFE: invalid mode field must not be silently coerced */
-    SPL_REQUIRE_SAFE(!((cfg->cpha > 1U)), SPL_ERR_PARAM); /* SAFE: invalid mode field must not be silently coerced */
-    SPL_REQUIRE_SAFE(!((cfg->lsb_first > 1U)), SPL_ERR_PARAM); /* SAFE: invalid mode field must not be silently coerced */
+    SPL_REQUIRE(!((Spi_Valid(spi) == 0U)),
+                SPL_ERR_PARAM); /* Invalid peripheral address could access unrelated MMIO */
+    SPL_REQUIRE(!((cfg == (const SPI_InitTypeDef *)0)),
+                SPL_ERR_PARAM); /* NULL access does not provide a recoverable API error */
+    SPL_REQUIRE(!((cfg->prescaler > 7U)),
+                SPL_ERR_PARAM); /* Invalid baud-rate field or configuration encoding */
+    SPL_REQUIRE(!((cfg->cpol > 1U)),
+                SPL_ERR_PARAM); /* Invalid mode field must not be silently coerced */
+    SPL_REQUIRE(!((cfg->cpha > 1U)),
+                SPL_ERR_PARAM); /* Invalid mode field must not be silently coerced */
+    SPL_REQUIRE(!((cfg->lsb_first > 1U)),
+                SPL_ERR_PARAM); /* Invalid mode field must not be silently coerced */
     if ((spi->CR1 & SPI_CR1_SPE) != 0U)
     {
         return SPL_ERR_STATE;
@@ -72,8 +77,9 @@ SPL_Status SPI_MasterInit(SPI_TypeDef *spi, const SPI_InitTypeDef *cfg)
 
 SPL_Status SPI_Enable(SPI_TypeDef *spi, uint8_t enable)
 {
-    SPL_REQUIRE_SAFE(!((Spi_Valid(spi) == 0U)), SPL_ERR_PARAM); /* SAFE: invalid peripheral address could access unrelated MMIO */
-    SPL_REQUIRE(!((enable > 1U)), SPL_ERR_PARAM); /* normal: nonzero boolean acts as enable */
+    SPL_REQUIRE(!((Spi_Valid(spi) == 0U)),
+                SPL_ERR_PARAM); /* Invalid peripheral address could access unrelated MMIO */
+    SPL_REQUIRE(!((enable > 1U)), SPL_ERR_PARAM); /* Nonzero boolean acts as enable */
 
     if (enable != 0U)
     {
@@ -122,7 +128,8 @@ SPL_Status SPI_Enable(SPI_TypeDef *spi, uint8_t enable)
 
 SPL_Status SPI_TryWrite8(SPI_TypeDef *spi, uint8_t data)
 {
-    SPL_REQUIRE_SAFE(!(Spi_Valid(spi) == 0U), SPL_ERR_PARAM); /* SAFE: invalid peripheral address could access unrelated MMIO */
+    SPL_REQUIRE(!(Spi_Valid(spi) == 0U),
+                SPL_ERR_PARAM); /* Invalid peripheral address could access unrelated MMIO */
     if (((spi->CR1 & SPI_CR1_SPE) == 0U) || (Spi_IsWide(spi) != 0U))
     {
         return SPL_ERR_STATE;
@@ -139,8 +146,10 @@ SPL_Status SPI_TryWrite8(SPI_TypeDef *spi, uint8_t data)
 
 SPL_Status SPI_TryRead8(SPI_TypeDef *spi, uint8_t *data)
 {
-    SPL_REQUIRE_SAFE(!((Spi_Valid(spi) == 0U)), SPL_ERR_PARAM); /* SAFE: invalid peripheral address could access unrelated MMIO */
-    SPL_REQUIRE_SAFE(!((data == (uint8_t *)0)), SPL_ERR_PARAM); /* SAFE: NULL access does not provide a recoverable API error */
+    SPL_REQUIRE(!((Spi_Valid(spi) == 0U)),
+                SPL_ERR_PARAM); /* Invalid peripheral address could access unrelated MMIO */
+    SPL_REQUIRE(!((data == (uint8_t *)0)),
+                SPL_ERR_PARAM); /* NULL access does not provide a recoverable API error */
     /* An 8-bit read of a 9..16-bit frame breaks FIFO alignment. */
     if (Spi_IsWide(spi) != 0U)
     {
@@ -172,8 +181,10 @@ SPL_Status SPI_TryRead8(SPI_TypeDef *spi, uint8_t *data)
 
 SPL_Status SPI_Status(SPI_TypeDef *spi, uint32_t *status)
 {
-    SPL_REQUIRE_SAFE(!((Spi_Valid(spi) == 0U)), SPL_ERR_PARAM); /* SAFE: invalid peripheral address could access unrelated MMIO */
-    SPL_REQUIRE_SAFE(!((status == (uint32_t *)0)), SPL_ERR_PARAM); /* SAFE: NULL access does not provide a recoverable API error */
+    SPL_REQUIRE(!((Spi_Valid(spi) == 0U)),
+                SPL_ERR_PARAM); /* Invalid peripheral address could access unrelated MMIO */
+    SPL_REQUIRE(!((status == (uint32_t *)0)),
+                SPL_ERR_PARAM); /* NULL access does not provide a recoverable API error */
 
     *status = spi->SR;
     return SPL_OK;
@@ -189,7 +200,8 @@ SPL_Status SPI_ClearOverrun(SPI_TypeDef *spi)
     volatile uint16_t discarded;
     volatile uint32_t status_snapshot;
 
-    SPL_REQUIRE_SAFE(!(Spi_Valid(spi) == 0U), SPL_ERR_PARAM); /* SAFE: invalid peripheral address could access unrelated MMIO */
+    SPL_REQUIRE(!(Spi_Valid(spi) == 0U),
+                SPL_ERR_PARAM); /* Invalid peripheral address could access unrelated MMIO */
 
     if ((spi->SR & SPI_SR_OVR) == 0U)
     {
@@ -287,7 +299,6 @@ static __attribute__((unused)) uint8_t Spi_ConfigValid(const SPI_ConfigTypeDef *
     return 1U;
 }
 
-
 static uint32_t Spi_BuildCr1(const SPI_ConfigTypeDef *cfg)
 {
     uint32_t cr1 = cfg->prescaler << SPI_CR1_BR_Pos;
@@ -372,9 +383,13 @@ SPL_Status SPI_Init(SPI_TypeDef *spi, const SPI_ConfigTypeDef *cfg)
 {
     uint32_t cr1;
 
-    SPL_REQUIRE_SAFE(!((Spi_Valid(spi) == 0U)), SPL_ERR_PARAM); /* SAFE: invalid peripheral address could access unrelated MMIO */
-    SPL_REQUIRE_SAFE(!((cfg == (const SPI_ConfigTypeDef *)0)), SPL_ERR_PARAM); /* SAFE: NULL access does not provide a recoverable API error */
-    SPL_REQUIRE_SAFE(!((Spi_ConfigValid(cfg) == 0U)), SPL_ERR_PARAM); /* SAFE: invalid cross-field configuration can program unsupported modes */
+    SPL_REQUIRE(!((Spi_Valid(spi) == 0U)),
+                SPL_ERR_PARAM); /* Invalid peripheral address could access unrelated MMIO */
+    SPL_REQUIRE(!((cfg == (const SPI_ConfigTypeDef *)0)),
+                SPL_ERR_PARAM); /* NULL access does not provide a recoverable API error */
+    SPL_REQUIRE(
+        !((Spi_ConfigValid(cfg) == 0U)),
+        SPL_ERR_PARAM); /* Invalid cross-field configuration can program unsupported modes */
     if ((spi->CR1 & SPI_CR1_SPE) != 0U)
     {
         return SPL_ERR_STATE;
@@ -405,7 +420,8 @@ SPL_Status SPI_Init(SPI_TypeDef *spi, const SPI_ConfigTypeDef *cfg)
 
 SPL_Status SPI_TryWrite16(SPI_TypeDef *spi, uint16_t data)
 {
-    SPL_REQUIRE_SAFE(!(Spi_Valid(spi) == 0U), SPL_ERR_PARAM); /* SAFE: invalid peripheral address could access unrelated MMIO */
+    SPL_REQUIRE(!(Spi_Valid(spi) == 0U),
+                SPL_ERR_PARAM); /* Invalid peripheral address could access unrelated MMIO */
     if (((spi->CR1 & SPI_CR1_SPE) == 0U) || (Spi_IsWide(spi) == 0U))
     {
         return SPL_ERR_STATE;
@@ -422,8 +438,10 @@ SPL_Status SPI_TryWrite16(SPI_TypeDef *spi, uint16_t data)
 
 SPL_Status SPI_TryRead16(SPI_TypeDef *spi, uint16_t *data)
 {
-    SPL_REQUIRE_SAFE(!((Spi_Valid(spi) == 0U)), SPL_ERR_PARAM); /* SAFE: invalid peripheral address could access unrelated MMIO */
-    SPL_REQUIRE_SAFE(!((data == (uint16_t *)0)), SPL_ERR_PARAM); /* SAFE: NULL access does not provide a recoverable API error */
+    SPL_REQUIRE(!((Spi_Valid(spi) == 0U)),
+                SPL_ERR_PARAM); /* Invalid peripheral address could access unrelated MMIO */
+    SPL_REQUIRE(!((data == (uint16_t *)0)),
+                SPL_ERR_PARAM); /* NULL access does not provide a recoverable API error */
     /* 16-bit reads need a 9..16-bit frame and FRXTH=0 (RM0440 42.9.2). */
     if ((Spi_IsWide(spi) == 0U) || ((spi->CR2 & SPI_CR2_FRXTH) != 0U))
     {
@@ -448,10 +466,12 @@ SPL_Status SPI_TryRead16(SPI_TypeDef *spi, uint16_t *data)
 
 SPL_Status SPI_ITConfig(SPI_TypeDef *spi, uint32_t it_mask, uint8_t enable)
 {
-    SPL_REQUIRE_SAFE(!((Spi_Valid(spi) == 0U)), SPL_ERR_PARAM); /* SAFE: invalid peripheral address could access unrelated MMIO */
-    SPL_REQUIRE(!((it_mask == 0U)), SPL_ERR_PARAM); /* normal: empty mask has no hardware effect */
-    SPL_REQUIRE_SAFE(!(((it_mask & ~SPI_IT_ALL) != 0U)), SPL_ERR_PARAM); /* SAFE: invalid mask can affect reserved or unrelated bits */
-    SPL_REQUIRE(!((enable > 1U)), SPL_ERR_PARAM); /* normal: nonzero boolean acts as enable */
+    SPL_REQUIRE(!((Spi_Valid(spi) == 0U)),
+                SPL_ERR_PARAM); /* Invalid peripheral address could access unrelated MMIO */
+    SPL_REQUIRE(!((it_mask == 0U)), SPL_ERR_PARAM); /* Empty mask has no hardware effect */
+    SPL_REQUIRE(!(((it_mask & ~SPI_IT_ALL) != 0U)),
+                SPL_ERR_PARAM); /* Invalid mask can affect reserved or unrelated bits */
+    SPL_REQUIRE(!((enable > 1U)), SPL_ERR_PARAM); /* Nonzero boolean acts as enable */
 
     /* CR2 has no write-1-to-clear or self-clearing bits. */
     if (enable != 0U)
@@ -469,10 +489,12 @@ SPL_Status SPI_DmaConfig(SPI_TypeDef *spi, uint32_t dma_mask, uint8_t enable)
 {
     const uint32_t valid_mask = SPI_DMA_TX | SPI_DMA_RX;
 
-    SPL_REQUIRE_SAFE(!((Spi_Valid(spi) == 0U)), SPL_ERR_PARAM); /* SAFE: invalid peripheral address could access unrelated MMIO */
-    SPL_REQUIRE(!((dma_mask == 0U)), SPL_ERR_PARAM); /* normal: empty mask has no hardware effect */
-    SPL_REQUIRE_SAFE(!(((dma_mask & ~valid_mask) != 0U)), SPL_ERR_PARAM); /* SAFE: invalid mask can affect reserved or unrelated bits */
-    SPL_REQUIRE(!((enable > 1U)), SPL_ERR_PARAM); /* normal: nonzero boolean acts as enable */
+    SPL_REQUIRE(!((Spi_Valid(spi) == 0U)),
+                SPL_ERR_PARAM); /* Invalid peripheral address could access unrelated MMIO */
+    SPL_REQUIRE(!((dma_mask == 0U)), SPL_ERR_PARAM); /* Empty mask has no hardware effect */
+    SPL_REQUIRE(!(((dma_mask & ~valid_mask) != 0U)),
+                SPL_ERR_PARAM); /* Invalid mask can affect reserved or unrelated bits */
+    SPL_REQUIRE(!((enable > 1U)), SPL_ERR_PARAM); /* Nonzero boolean acts as enable */
 
     if (enable != 0U)
     {
@@ -503,9 +525,12 @@ SPL_Status SPI_DmaPackingConfig(SPI_TypeDef *spi, uint32_t options)
     const uint32_t valid_mask = SPI_PACK_RX16 | SPI_PACK_TX_ODD | SPI_PACK_RX_ODD;
     uint32_t cr2;
 
-    SPL_REQUIRE_SAFE(!((Spi_Valid(spi) == 0U)), SPL_ERR_PARAM); /* SAFE: invalid peripheral address could access unrelated MMIO */
-    SPL_REQUIRE_SAFE(!(((options & ~valid_mask) != 0U)), SPL_ERR_PARAM); /* SAFE: invalid mask can affect reserved or unrelated bits */
-    SPL_REQUIRE_SAFE(!((((options & SPI_PACK_RX_ODD) != 0U) && ((options & SPI_PACK_RX16) == 0U))), SPL_ERR_PARAM); /* SAFE: invalid FIFO packing combination */
+    SPL_REQUIRE(!((Spi_Valid(spi) == 0U)),
+                SPL_ERR_PARAM); /* Invalid peripheral address could access unrelated MMIO */
+    SPL_REQUIRE(!(((options & ~valid_mask) != 0U)),
+                SPL_ERR_PARAM); /* Invalid mask can affect reserved or unrelated bits */
+    SPL_REQUIRE(!((((options & SPI_PACK_RX_ODD) != 0U) && ((options & SPI_PACK_RX16) == 0U))),
+                SPL_ERR_PARAM); /* Invalid FIFO packing combination */
     /* LDMA_TX/LDMA_RX must be written with SPE=0 (RM0440 42.9.2). */
     if ((spi->CR1 & SPI_CR1_SPE) != 0U)
     {
@@ -538,9 +563,12 @@ SPL_Status SPI_GetFifoLevels(SPI_TypeDef *spi, uint32_t *tx_level, uint32_t *rx_
 {
     uint32_t sr;
 
-    SPL_REQUIRE_SAFE(!((Spi_Valid(spi) == 0U)), SPL_ERR_PARAM); /* SAFE: invalid peripheral address could access unrelated MMIO */
-    SPL_REQUIRE_SAFE(!((tx_level == (uint32_t *)0)), SPL_ERR_PARAM); /* SAFE: NULL access does not provide a recoverable API error */
-    SPL_REQUIRE_SAFE(!((rx_level == (uint32_t *)0)), SPL_ERR_PARAM); /* SAFE: NULL access does not provide a recoverable API error */
+    SPL_REQUIRE(!((Spi_Valid(spi) == 0U)),
+                SPL_ERR_PARAM); /* Invalid peripheral address could access unrelated MMIO */
+    SPL_REQUIRE(!((tx_level == (uint32_t *)0)),
+                SPL_ERR_PARAM); /* NULL access does not provide a recoverable API error */
+    SPL_REQUIRE(!((rx_level == (uint32_t *)0)),
+                SPL_ERR_PARAM); /* NULL access does not provide a recoverable API error */
 
     sr = spi->SR;
     *tx_level = (sr & SPI_SR_FTLVL) >> SPI_SR_FTLVL_Pos;
@@ -550,8 +578,10 @@ SPL_Status SPI_GetFifoLevels(SPI_TypeDef *spi, uint32_t *tx_level, uint32_t *rx_
 
 SPL_Status SPI_GetErrors(SPI_TypeDef *spi, uint32_t *errors)
 {
-    SPL_REQUIRE_SAFE(!((Spi_Valid(spi) == 0U)), SPL_ERR_PARAM); /* SAFE: invalid peripheral address could access unrelated MMIO */
-    SPL_REQUIRE_SAFE(!((errors == (uint32_t *)0)), SPL_ERR_PARAM); /* SAFE: NULL access does not provide a recoverable API error */
+    SPL_REQUIRE(!((Spi_Valid(spi) == 0U)),
+                SPL_ERR_PARAM); /* Invalid peripheral address could access unrelated MMIO */
+    SPL_REQUIRE(!((errors == (uint32_t *)0)),
+                SPL_ERR_PARAM); /* NULL access does not provide a recoverable API error */
 
     *errors = spi->SR & SPI_ERRORS_ALL;
     return SPL_OK;
@@ -561,7 +591,8 @@ SPL_Status SPI_ClearModeFault(SPI_TypeDef *spi)
 {
     uint32_t cr1;
 
-    SPL_REQUIRE_SAFE(!(Spi_Valid(spi) == 0U), SPL_ERR_PARAM); /* SAFE: invalid peripheral address could access unrelated MMIO */
+    SPL_REQUIRE(!(Spi_Valid(spi) == 0U),
+                SPL_ERR_PARAM); /* Invalid peripheral address could access unrelated MMIO */
     /* Step 1: SR read while MODF=1. */
     if ((spi->SR & SPI_SR_MODF) == 0U)
     {
@@ -578,7 +609,8 @@ SPL_Status SPI_ClearModeFault(SPI_TypeDef *spi)
 
 SPL_Status SPI_ClearCrcError(SPI_TypeDef *spi)
 {
-    SPL_REQUIRE_SAFE(!(Spi_Valid(spi) == 0U), SPL_ERR_PARAM); /* SAFE: invalid peripheral address could access unrelated MMIO */
+    SPL_REQUIRE(!(Spi_Valid(spi) == 0U),
+                SPL_ERR_PARAM); /* Invalid peripheral address could access unrelated MMIO */
     if ((spi->SR & SPI_SR_CRCERR) == 0U)
     {
         return SPL_OK;
@@ -594,7 +626,8 @@ SPL_Status SPI_CrcNext(SPI_TypeDef *spi)
 {
     uint32_t cr1;
 
-    SPL_REQUIRE_SAFE(!(Spi_Valid(spi) == 0U), SPL_ERR_PARAM); /* SAFE: invalid peripheral address could access unrelated MMIO */
+    SPL_REQUIRE(!(Spi_Valid(spi) == 0U),
+                SPL_ERR_PARAM); /* Invalid peripheral address could access unrelated MMIO */
     cr1 = spi->CR1;
     if (((cr1 & SPI_CR1_CRCEN) == 0U) || ((cr1 & SPI_CR1_SPE) == 0U))
     {

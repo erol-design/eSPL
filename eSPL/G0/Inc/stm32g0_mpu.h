@@ -18,7 +18,9 @@ extern "C"
  * until PM0223 is reviewed. Rules: regions change only while the MPU is disabled (STATE otherwise);
  * the higher region number wins on overlap; peripherals (0x40000000 - 0x5FFFFFFF, IOPORT included)
  * are never made Normal. Fault handling: no MemManage on Armv6-M, MPU faults are HardFaults. Not
- * reentrant. */
+ * reentrant.
+ * Caller duties (all APIs): single owner: serialise MPU calls; the HardFault handler that
+ * receives MPU faults is the application's. */
 
 typedef enum
 {
@@ -54,24 +56,32 @@ typedef struct
 } MPU_RegionTypeDef;
 
 /* *count = MPU_TYPE.DREGION; 0 -> UNSUPPORTED. */
-/* Seviye: PARAM[S] UNSUPPORTED[r] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] UNSUPPORTED[r] */
 SPL_Status MPU_GetRegionCount(uint32_t *count);
 /* PARAM: number >= DREGION, size out of range or base not aligned, srd = 0xFF or > 0xFF, type /
  * access unknown, execute with Strongly-ordered / Device, Normal overlapping the peripheral area.
  * MPU enabled -> STATE. Writes RNR, RBAR (VALID = 0), RASR. Nothing written on refusal. */
-/* Seviye: PARAM[S,n] STATE[S] UNSUPPORTED[r] */
+/* Caller: MPU_Disable first; overlap with other regions is not checked (the higher region number
+ * wins). */
+/* Level: PARAM[F] STATE[F] UNSUPPORTED[r] */
 SPL_Status MPU_ConfigRegion(const MPU_RegionTypeDef *cfg);
 /* RASR = 0 for the region (ENABLE = 0). number >= DREGION -> PARAM; MPU enabled -> STATE. */
-/* Seviye: PARAM[S] STATE[S] UNSUPPORTED[r] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] STATE[F] UNSUPPORTED[r] */
 SPL_Status MPU_DisableRegion(uint32_t number);
 /* CTRL = ENABLE | PRIVDEFENA (privileged accesses outside every region use the default map) |
  * HFNMIENA (MPU stays active in HardFault / NMI). Already enabled -> STATE. Barriers DSB + ISB. */
-/* Seviye: PARAM[n] STATE[n] UNSUPPORTED[r] */
+/* Caller: with privileged_default = 0 the regions must cover code, stack, vector table and used
+ * peripherals, else the next access faults; unprivileged code always needs a region. */
+/* Level: PARAM[F] STATE[F] UNSUPPORTED[r] */
 SPL_Status MPU_Enable(uint8_t privileged_default, uint8_t in_fault_handlers);
 /* CTRL = 0. Already disabled: SPL_OK without a write. */
-/* Seviye: - */
+/* Caller: none beyond the file-header duties. */
+/* Level: - */
 SPL_Status MPU_Disable(void);
-/* Seviye: PARAM[S] UNSUPPORTED[r] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] UNSUPPORTED[r] */
 SPL_Status MPU_IsEnabled(uint32_t *enabled);
 
 #ifdef __cplusplus

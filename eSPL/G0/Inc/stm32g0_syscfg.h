@@ -5,7 +5,8 @@
 #include "stm32g0_status.h"
 
 /* System configuration controller (RM0444 Rev 6 section 8, Docs/v0.2_SYSCFG_CONTRACT.md).
- * The SYSCFG bus clock (RCC_PERIPH_SYSCFG) must be enabled by the caller.
+ * Caller duties (all APIs): the SYSCFG bus clock (RCC_PERIPH_SYSCFG) must be enabled by the
+ * caller; CFGR1 / CFGR2 writes are read-modify-write: serialise the setters.
  * G4 difference: EXTI line routing is in EXTI (EXTICR), not in SYSCFG; G0 adds the interrupt-line
  * status registers (ITLINE0..31). Not in v0.2: IR modulation (IRTIM), UCPD strobes (UCPD out of
  * scope), clamping diodes (CDEN). */
@@ -45,33 +46,45 @@ typedef enum
 #define SYSCFG_LOCK_ALL (SYSCFG_CFGR2_CLL | SYSCFG_CFGR2_SPL | SYSCFG_LOCK_PVD | SYSCFG_CFGR2_ECCL)
 
 /* MEM_MODE remap of address 0. The caller relocates VTOR / code consistently. */
-/* Seviye: PARAM[S] */
+/* Caller: relocate VTOR and code consistently before remapping address 0 (not checked). */
+/* Level: PARAM[F] */
 SPL_Status SYSCFG_SetMemoryMode(SYSCFG_MemoryModeTypeDef mode);
 /* Raw MEM_MODE (0..3; 2 also means main flash). */
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status SYSCFG_GetMemoryMode(uint32_t *mode);
 /* Sets (enable = 1) or clears the FM+ bits in mask (non-empty subset of SYSCFG_FMP_ALL). */
-/* Seviye: PARAM[S,n] */
+/* Caller: the pins are I2C open-drain AF pins (GPIO_Init); the I2C timing for Fast-mode Plus is
+ * the caller's. */
+/* Level: PARAM[F] */
 SPL_Status SYSCFG_SetFastModePlus(uint32_t mask, uint8_t enable);
 /* Sets or clears PA11_RMP / PA12_RMP (mask: non-empty subset of SYSCFG_REMAP_ALL). */
-/* Seviye: PARAM[S,n] */
+/* Caller: the original PA9 / PA10 is forced analog: nothing else may use them. */
+/* Level: PARAM[F] */
 SPL_Status SYSCFG_SetPinRemap(uint32_t mask, uint8_t enable);
 /* BOOSTEN: I/O analog switch booster (recommended for VDD < 2.4 V, RM0444 8.1.1). */
-/* Seviye: PARAM[S,n] */
+/* Caller: enable it when VDD < 2.4 V and analog switches are used (RM0444 8.1.1). */
+/* Level: PARAM[F] */
 SPL_Status SYSCFG_SetAnalogBooster(uint8_t enable);
 /* Sets the locks in mask (non-empty subset of SYSCFG_LOCK_ALL); cleared only by a system reset.
  * The SPF parity flag (write-1-to-clear) is never written back by this read-modify-write. */
-/* Seviye: PARAM[S,n] */
+/* Caller: locks hold until a system reset; the timer break input they feed is configured by the
+ * caller. */
+/* Level: PARAM[F] */
 SPL_Status SYSCFG_Lock(uint32_t locks);
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status SYSCFG_GetLocks(uint32_t *locks);
 /* SRAM parity error flag SPF and its write-1 clear. */
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status SYSCFG_GetParityError(uint8_t *flag);
-/* Seviye: - */
+/* Caller: none beyond the file-header duties. */
+/* Level: - */
 SPL_Status SYSCFG_ClearParityError(void);
 /* Raw ITLINEx (line 0..31): pending sources of the shared interrupt vector x. */
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status SYSCFG_GetInterruptLineStatus(uint32_t line, uint32_t *status);
 
 #ifdef __cplusplus

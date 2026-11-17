@@ -11,7 +11,11 @@
  * v0.11 adds mass erase, fast programming, option bytes, WRP / PCROP / securable area and OTP
  * (irreversible ones behind SPL_ENABLE_IRREVERSIBLE + key, see below).
  * Out of scope: ECC interrupt handling (ECCD raises an NMI: application handler; diagnosis via
- * FLASH_GetEcc). */
+ * FLASH_GetEcc).
+ * Caller duties (all APIs): single owner, not reentrant: serialise FLASH calls with ISRs and other
+ * contexts (FLASH_PollOperation and FLASH_GetFlags may be read from an ISR); program, erase and
+ * option operations are start + poll: the wait (FLASH_PollOperation) and its timeout belong to
+ * the caller; FLASH_Unlock before and FLASH_Lock after a write sequence. */
 
 #ifdef __cplusplus
 extern "C"
@@ -65,39 +69,53 @@ typedef struct
 } FLASH_GeometryTypeDef;
 
 /* Wait states for hclk_hz in the range (RM0444 Table 13). Above the range maximum -> PARAM. */
-/* Seviye: PARAM[S,n,r] */
+/* Caller: pass the voltage range actually set in PWR_CR1.VOS. */
+/* Level: PARAM[F,r] */
 SPL_Status FLASH_CalcLatency(uint32_t hclk_hz, FLASH_RangeTypeDef range, uint32_t *latency);
 /* ACR.LATENCY (0..2) with read-back check (mismatch -> ERR_HW). */
-/* Seviye: PARAM[S] HW[r] */
+/* Caller: raise the latency before HCLK increases and lower it only after HCLK has decreased
+ * (RM0444 3.3.4); the value is not compared with the current HCLK. */
+/* Level: PARAM[F] HW[r] */
 SPL_Status FLASH_SetLatency(uint32_t latency);
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status FLASH_GetLatency(uint32_t *latency);
 /* Prefetch and instruction cache enables (0 or 1).
  * ERRATA ES0548 2.2.10: in dual-bank mode (512 KB parts always, 256 KB with DUAL_BANK = 1) the
  * prefetch can fetch wrong code on a branch or call across banks; no workaround. prefetch = 1 in
  * dual-bank mode -> SPL_ERR_STATE, nothing written, unless code_in_one_bank = 1 (the caller
  * guarantees no execution transfer between the banks). Single-bank: code_in_one_bank ignored. */
-/* Seviye: PARAM[n] STATE[S] UNSUPPORTED[r] */
+/* Caller: code_in_one_bank = 1 is the caller's guarantee that no branch or call crosses the
+ * banks (not checkable). */
+/* Level: PARAM[F] STATE[F] UNSUPPORTED[r] */
 SPL_Status FLASH_ConfigAccelerator(uint8_t prefetch, uint8_t icache, uint8_t code_in_one_bank);
 /* Instruction cache reset; ICEN must be 0 (RM0444 3.7.1) else STATE. */
-/* Seviye: STATE[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: STATE[F] */
 SPL_Status FLASH_ResetICache(void);
-/* Seviye: PARAM[S] UNSUPPORTED[r] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] UNSUPPORTED[r] */
 SPL_Status FLASH_GetGeometry(FLASH_GeometryTypeDef *geometry);
 /* Raw FLASH_OPTR (read-only access). */
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status FLASH_GetOptionRegister(uint32_t *optr);
 
 /* KEY1/KEY2. Already unlocked -> OK, nothing written. A wrong sequence locks FLASH_CR until reset
  * and raises a HardFault (RM0444 3.3.6). Busy -> BUSY (no KEYR write during an operation). */
-/* Seviye: HW[r] BUSY[r] */
+/* Caller: none beyond the file-header duties. */
+/* Level: HW[r] BUSY[r] */
 SPL_Status FLASH_Unlock(void);
 /* Clears PG/PER/MER/FSTPG/PNB/BKER and sets LOCK; busy -> BUSY. */
-/* Seviye: BUSY[r] */
+/* Caller: none beyond the file-header duties. */
+/* Level: BUSY[r] */
 SPL_Status FLASH_Lock(void);
 /* Page erase on a physical bank. Locked -> STATE; busy -> BUSY; pending error flags -> ERR_HW
  * (diagnose, then FLASH_ClearFlags). The CPU stalls on reads of the bank being erased. */
-/* Seviye: PARAM[S] STATE[S,r] UNSUPPORTED[r] HW[r] BUSY[r] */
+/* Caller: the page holds no code, vector table or data still needed; FLASH_PollOperation until
+ * OK, then FLASH_EndOperation; code fetched from the busy bank stalls (interrupt latency,
+ * watchdog). */
+/* Level: PARAM[F] STATE[F,r] UNSUPPORTED[r] HW[r] BUSY[r] */
 SPL_Status FLASH_ErasePageStart(uint32_t bank, uint32_t page);
 /* One 64-bit standard program at an 8-byte aligned logical main-memory address. The double word
  * must be erased, or data must be 0 (RM0444 3.3.8). v0.3 (backport of G4 v0.13.3 FL-21): data != 0
@@ -107,14 +125,18 @@ SPL_Status FLASH_ErasePageStart(uint32_t bank, uint32_t page);
  * ERRATA ES0548 2.2.3: overwriting a double word programmed with all ones by all zeros fails
  * (PROGERR). data = 0xFFFF FFFF FFFF FFFF is therefore rejected with SPL_ERR_PARAM: it would
  * leave a location that looks erased but can no longer be zeroed. */
-/* Seviye: PARAM[S] STATE[S,n] UNSUPPORTED[r] HW[r] BUSY[r] */
+/* Caller: FLASH_PollOperation until OK, then FLASH_EndOperation; device layer (record layout,
+ * read-back verify): caller. */
+/* Level: PARAM[F] STATE[F] UNSUPPORTED[r] HW[r] BUSY[r] */
 SPL_Status FLASH_ProgramDoubleWordStart(uint32_t address, uint64_t data);
 /* BUSY while any busy flag is set, ERR_HW when error flags are pending, else OK. eop (optional)
  * receives SR.EOP (set only with EOPIE = 1). */
-/* Seviye: HW[r] BUSY[r] */
+/* Caller: on ERR_HW read FLASH_GetFlags, then FLASH_ClearFlags before a new operation. */
+/* Level: HW[r] BUSY[r] */
 SPL_Status FLASH_PollOperation(uint8_t *eop);
 /* Clears PG/PER/MER/FSTPG/PNB/BKER after the last operation; locked -> STATE, busy -> BUSY. */
-/* Seviye: STATE[n] BUSY[r] */
+/* Caller: none beyond the file-header duties. */
+/* Level: STATE[F] BUSY[r] */
 SPL_Status FLASH_EndOperation(void);
 /* v0.4 (G4 v0.13.4 #12): ECC diagnosis for the application's NMI_Handler (the CMSIS startup
  * NMI_Handler is a weak endless loop). G0 difference: bank 1 reports in FLASH_ECCR, bank 2 in
@@ -130,14 +152,19 @@ typedef struct
     uint8_t system_flash; /* SYSF_ECC: error in system flash */
     uint8_t bank;         /* FLASH_BANK_1 (ECCR) or FLASH_BANK_2 (ECC2R) */
 } FLASH_EccTypeDef;
-/* Seviye: PARAM[S] */
+/* Caller: call it from the application NMI_Handler (the startup default loops), then
+ * FLASH_ClearEcc. */
+/* Level: PARAM[F] */
 SPL_Status FLASH_GetEcc(FLASH_EccTypeDef *ecc);
-/* Seviye: - */
+/* Caller: read FLASH_GetEcc first: the clear loses the latched address. */
+/* Level: - */
 SPL_Status FLASH_ClearEcc(void);
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status FLASH_GetFlags(uint32_t *flags);
 /* Write-1-to-clear of a non-empty subset of FLASH_SR_CLEARABLE. */
-/* Seviye: PARAM[S,n] */
+/* Caller: diagnose the error flags (FLASH_GetFlags) before clearing them. */
+/* Level: PARAM[F] */
 SPL_Status FLASH_ClearFlags(uint32_t mask);
 
 /* ---- v0.11: mass erase, fast programming, option bytes, protections, OTP
@@ -209,7 +236,9 @@ SPL_Status FLASH_ClearFlags(uint32_t mask);
  * Wrong key / mask -> PARAM; bank 2 without bank 2 -> STATE (256 KB, DUAL_BANK = 0) or
  * UNSUPPORTED; then the FLASH_ErasePageStart preconditions. An active WRP or PCROP area makes the
  * hardware abort with WRPERR (FLASH_PollOperation -> ERR_HW). Code must not run from the bank. */
-/* Seviye: PARAM[n,r] STATE[S,r] UNSUPPORTED[r] HW[r] BUSY[r] */
+/* Caller: no code, vector table or constant used during the erase may live in an erased bank
+ * (not checked); FLASH_PollOperation until OK, then FLASH_EndOperation. */
+/* Level: PARAM[F,r] STATE[F,r] UNSUPPORTED[r] HW[r] BUSY[r] */
 SPL_Status FLASH_MassEraseStart(uint32_t bank_mask, uint32_t key);
 /* Fast programming of one 256-byte row (64 words, 32 double words) at a 256-byte aligned
  * main-memory address (RM0444 3.3.8). Not erased row -> STATE before FSTPG is set; an all-ones
@@ -217,7 +246,9 @@ SPL_Status FLASH_MassEraseStart(uint32_t bank_mask, uint32_t key);
  * HCLK >= 8 MHz; no flash read during the row (code and constants from RAM or the other bank, a
  * read silently aborts the row); interrupts masked (more than ~20 us between two double words
  * sets MISSERR); FLASH_PollOperation, then FLASH_EndOperation clears FSTPG. */
-/* Seviye: PARAM[S] STATE[S,n] UNSUPPORTED[r] HW[r] BUSY[r] */
+/* Caller: HCLK >= 8 MHz; no flash read during the row (code and data in RAM or the other bank);
+ * interrupts masked; then FLASH_PollOperation and FLASH_EndOperation. */
+/* Level: PARAM[F] STATE[F] UNSUPPORTED[r] HW[r] BUSY[r] */
 SPL_Status FLASH_FastProgramRowStart(uint32_t address, const uint32_t *words);
 
 /* Option bytes (RM0444 3.4.2). Sequence: FLASH_Unlock, FLASH_OptionUnlock, one or more setters,
@@ -230,9 +261,12 @@ SPL_Status FLASH_FastProgramRowStart(uint32_t address, const uint32_t *words);
  * obligation: stable supply, no watchdog or other reset pending during the sequence. */
 /* FLASH_CR must be unlocked (else STATE); already unlocked -> OK; busy -> BUSY; OPTLOCK still
  * set after the keys -> ERR_HW (a wrong sequence locks until reset, RM0444 3.4.2). */
-/* Seviye: STATE[S] HW[r] BUSY[r] */
+/* Caller: follow the option byte sequence above; FLASH_OptionLock when the sequence is
+ * abandoned. */
+/* Level: STATE[F] HW[r] BUSY[r] */
 SPL_Status FLASH_OptionUnlock(void);
-/* Seviye: BUSY[r] */
+/* Caller: none beyond the file-header duties. */
+/* Level: BUSY[r] */
 SPL_Status FLASH_OptionLock(void);
 /* OPTR fields in mask (subset of FLASH_OPTR_USER_BITS, never RDP) set to value (value within
  * mask). NRST_MODE = 00 (reserved) -> PARAM.
@@ -240,45 +274,61 @@ SPL_Status FLASH_OptionLock(void);
  * ES0468 / ES0418 / ES0412): RDP level 1 with nBOOT_SEL = 0 (boot from the PA14-BOOT0 pin) cannot
  * boot the user code. The resulting OPTR image with both -> STATE, in FLASH_OptionSetUser and in
  * FLASH_OptionSetRdp: set nBOOT_SEL = 1 (boot by nBOOT0 option bit) first. */
-/* Seviye: PARAM[S,n] STATE[S] BUSY[r] */
+/* Caller: effective only after FLASH_OptionStart + FLASH_OptionLaunch; boot, NRST and watchdog
+ * fields change board behaviour: board review is the caller's. */
+/* Level: PARAM[F] STATE[F] BUSY[r] */
 SPL_Status FLASH_OptionSetUser(uint32_t mask, uint32_t value);
 /* RDP level 0 / 1 / 2. Level 0 while OPTR holds level 1 is a regression (mass erase, PCROP area
  * erased when PCROP_RDP = 1) and needs FLASH_KEY_RDP_REGRESSION. Level 2 is permanent: only with
  * SPL_ENABLE_IRREVERSIBLE and FLASH_KEY_RDP2, else UNSUPPORTED. */
-/* Seviye: PARAM[r] STATE[S] UNSUPPORTED[r] BUSY[r] */
+/* Caller: effective after FLASH_OptionStart + FLASH_OptionLaunch; level 1 blocks debugger access
+ * to flash, the 1 -> 0 regression erases the flash. */
+/* Level: PARAM[r] STATE[F] UNSUPPORTED[r] BUSY[r] */
 SPL_Status FLASH_OptionSetRdp(uint32_t level, uint32_t key);
 /* WRP area (FLASH_AREA_xx): pages start_page .. end_page of that bank; start_page > end_page
  * disables the area. Page numbers above the field width -> PARAM. */
-/* Seviye: PARAM[S] STATE[S,r] UNSUPPORTED[r] BUSY[r] */
+/* Caller: effective after FLASH_OptionStart + FLASH_OptionLaunch; erase / program of a protected
+ * page then fails with WRPERR. */
+/* Level: PARAM[F] STATE[F,r] UNSUPPORTED[r] BUSY[r] */
 SPL_Status FLASH_OptionSetWrp(uint32_t area, uint32_t start_page, uint32_t end_page);
 /* PCROP area in 512-byte subpages (irreversible: removed only by an RDP 1 -> 0 regression).
  * Flag + FLASH_KEY_PCROP; start == end (whole bank, RM0444 3.5.2) -> PARAM.
  * ERRATA ES0548 2.2.5: PCROP-protected reads return the previous bus value; RDP level 0 in OPTR
  * -> STATE (set level 1 first), PCROP_RDP is always set. No PCROP on G030 / G050 / G070 / G0B0:
  * UNSUPPORTED. */
-/* Seviye: PARAM[S,r] STATE[S,r] UNSUPPORTED[r] BUSY[r] */
+/* Caller: irreversible except by an RDP 1 -> 0 regression (full erase): verify the subpages
+ * first; PCROP code must not read its own area as data. */
+/* Level: PARAM[F,r] STATE[F,r] UNSUPPORTED[r] BUSY[r] */
 SPL_Status FLASH_OptionSetPcrop(uint32_t area, uint32_t start_subpage, uint32_t end_subpage,
                                 uint32_t key);
 /* Securable area size in pages from the bank start (sec_size2: bank 2, dual-bank SKUs only) and
  * BOOT_LOCK. Flag + FLASH_KEY_SECURABLE. Caller notes: on G071 / G081 only in RDP level 0; on
  * G0B1 / G0C1 only with SEC_PROT = SEC_PROT2 = 0; move the vector table out of page 0 first. */
-/* Seviye: PARAM[S,r] STATE[S,r] UNSUPPORTED[r] BUSY[r] */
+/* Caller: G071 / G081: RDP level 0 only; G0B1 / G0C1: SEC_PROT = SEC_PROT2 = 0 only; move the
+ * vector table out of page 0 first. */
+/* Level: PARAM[F,r] STATE[F,r] UNSUPPORTED[r] BUSY[r] */
 SPL_Status FLASH_OptionSetSecurable(uint32_t sec_size, uint32_t sec_size2, uint8_t boot_lock,
                                     uint32_t key);
 /* Closes the securable area of the banks in bank_mask until the next system reset (SEC_PROT /
  * SEC_PROT2). No securable area on the SKU -> UNSUPPORTED; busy -> BUSY. */
-/* Seviye: PARAM[n] UNSUPPORTED[r] BUSY[r] */
+/* Caller: the securable area stays inaccessible until the next system reset. */
+/* Level: PARAM[F] UNSUPPORTED[r] BUSY[r] */
 SPL_Status FLASH_SecureAreaProtect(uint32_t bank_mask);
 /* OPTSTRT. OPTLOCK or LOCK set -> STATE; busy -> BUSY; pending error flags -> ERR_HW. */
-/* Seviye: STATE[S] HW[r] BUSY[r] */
+/* Caller: stable supply, no watchdog or other reset during the sequence (ERRATA ES0548 2.2.9);
+ * FLASH_PollOperation until OK, then FLASH_OptionLaunch. */
+/* Level: STATE[F] HW[r] BUSY[r] */
 SPL_Status FLASH_OptionStart(void);
 /* OBL_LAUNCH with FLASH_KEY_OBL_LAUNCH: reloads the option bytes and resets the device; on
  * hardware the call does not return. */
-/* Seviye: PARAM[r] STATE[S] BUSY[r] */
+/* Caller: save all state first: the device resets. */
+/* Level: PARAM[r] STATE[F] BUSY[r] */
 SPL_Status FLASH_OptionLaunch(uint32_t key);
 /* One OTP double word (FLASH_OTP_BASE .. + 0x3F8, 8-byte aligned). Flag + FLASH_KEY_OTP; written
  * double word -> STATE; all-ones -> PARAM; then the FLASH_ProgramDoubleWordStart preconditions. */
-/* Seviye: PARAM[S,r] STATE[S] UNSUPPORTED[r] HW[r] BUSY[r] */
+/* Caller: irreversible (OTP is never erased): verify address and data first; FLASH_PollOperation
+ * until OK, then FLASH_EndOperation. */
+/* Level: PARAM[F,r] STATE[F] UNSUPPORTED[r] HW[r] BUSY[r] */
 SPL_Status FLASH_OtpProgramStart(uint32_t address, uint64_t data, uint32_t key);
 
 #ifdef __cplusplus

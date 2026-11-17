@@ -63,7 +63,7 @@ extern "C"
     } SPI_InitTypeDef;
     /* 8-bit, 2-wire full duplex, software NSS, master, no CRC; GPIO AF/RCC external.
      * SPE=1: ERR_STATE. v0.11.1: MODF=1 -> ERR_HW without a write (as SPI_Init). */
-    /* Seviye: PARAM[S] STATE[r] HW[r] */
+    /* Level: PARAM[F] STATE[r] HW[r] */
     SPL_Status SPI_MasterInit(SPI_TypeDef *spi, const SPI_InitTypeDef *cfg);
     /* Disabling returns SPL_BUSY while BSY=1 (slave: only with TX FIFO not empty, see
      * ERRATA below), or while TX FIFO is not empty in master mode.
@@ -81,20 +81,20 @@ extern "C"
      * ERRATA ES0431 2.14.1 / ES0430 2.18.1 / ES0523 2.14.1: master disables only with FTLVL=0
      * (TXE=1) and BSY=0; master RX-only is refused by SPI_Init; slave: do not
      * remove NSS during a frame. */
-    /* Seviye: PARAM[S,n] STATE[r] HW[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] HW[r] BUSY[r] */
     SPL_Status SPI_Enable(SPI_TypeDef *spi, uint8_t enable);
     /* 8-bit DR access. v0.11: SPL_ERR_STATE when the data size is > 8 bits. Read: ERR_HW while OVR
      * or CRCERR is set (flags kept; see SPI_TryRead16). */
-    /* Seviye: PARAM[S] STATE[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] WOULD_BLOCK[r] */
     SPL_Status SPI_TryWrite8(SPI_TypeDef *spi, uint8_t data);
-    /* Seviye: PARAM[S] STATE[r] HW[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] HW[r] WOULD_BLOCK[r] */
     SPL_Status SPI_TryRead8(SPI_TypeDef *spi, uint8_t *data);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status SPI_Status(SPI_TypeDef *spi, uint32_t *status);
     /* Clear OVR by the DR-then-SR read sequence; consumes unread RX data.
      * This does not recover data already lost due to overrun.
      * v0.11: the DR read is 16-bit wide when the data size is > 8 bits. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status SPI_ClearOverrun(SPI_TypeDef *spi);
 
     /* ---- v0.11: extended configuration ---- */
@@ -146,15 +146,15 @@ extern "C"
      * and CR2 completely (interrupt, DMA and LDMA bits cleared), then CRCPR
      * when CRC is enabled. With CRC, CR1 is written twice (CRCEN=0, then the
      * final value) so the CRC is reset (RM0440 42.5.14). */
-    /* Seviye: PARAM[S] STATE[r] HW[r] */
+    /* Level: PARAM[F] STATE[r] HW[r] */
     SPL_Status SPI_Init(SPI_TypeDef *spi, const SPI_ConfigTypeDef *cfg);
 
     /* 16-bit DR access; requires data size > 8 bits (else STATE). Write also
      * requires SPE=1. Read returns ERR_HW while OVR or CRCERR is set (flags kept: read them with
      * SPI_GetErrors, clear with SPI_ClearOverrun / SPI_ClearCrcError, then drain). */
-    /* Seviye: PARAM[S] STATE[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] WOULD_BLOCK[r] */
     SPL_Status SPI_TryWrite16(SPI_TypeDef *spi, uint16_t data);
-    /* Seviye: PARAM[S] STATE[r] HW[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] HW[r] WOULD_BLOCK[r] */
     SPL_Status SPI_TryRead16(SPI_TypeDef *spi, uint16_t *data);
 
 /* Interrupt enable bits (SPIx_CR2). */
@@ -164,7 +164,7 @@ extern "C"
 #define SPI_IT_ALL (SPI_IT_TXE | SPI_IT_RXNE | SPI_IT_ERR)
     /* Sets or clears the given CR2 interrupt enables (read-modify-write of
      * CR2; serialize with other CR2 writers). Allowed with SPE=0 or 1. */
-    /* Seviye: PARAM[S,n] */
+    /* Level: PARAM[F] */
     SPL_Status SPI_ITConfig(SPI_TypeDef *spi, uint32_t it_mask, uint8_t enable);
 
 /* DMA request enable bits (SPIx_CR2). */
@@ -176,7 +176,7 @@ extern "C"
      * Enabling is allowed with SPE=0 or 1, but not while SPE=1 and BSY=1 (previous transfer
      * still in progress: BUSY, no write); with SPE=0 a stuck BSY is ignored (ERRATA ES0431 2.14.1
      * / ES0430 2.18.1 / ES0523 2.14.1). Disabling requires SPE=0 (STATE). */
-    /* Seviye: PARAM[S,n] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status SPI_DmaConfig(SPI_TypeDef *spi, uint32_t dma_mask, uint8_t enable);
 
 /* DMA packing options (data size <= 8 bits, DMA PSIZE = 16 bit). */
@@ -186,11 +186,11 @@ extern "C"
     /* Requires SPE=0 (STATE). Non-zero options require data size <= 8 bits
      * (STATE). options=0 restores FRXTH for the data size and clears LDMA_*.
      * While SPI_PACK_RX16 is active, do not use SPI_TryRead8. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status SPI_DmaPackingConfig(SPI_TypeDef *spi, uint32_t options);
 
     /* FTLVL / FRLVL as 0..3 (empty, 1/4, 1/2, full). */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status SPI_GetFifoLevels(SPI_TypeDef *spi, uint32_t *tx_level, uint32_t *rx_level);
 
 /* Error flags in SPIx_SR reported by SPI_GetErrors. */
@@ -198,21 +198,21 @@ extern "C"
     /* One SR read; *errors = SR & SPI_ERRORS_ALL. This read clears FRE in
      * hardware (TI slave frame error): disable the SPI and restart the
      * exchange after FRE (RM0440 42.5.11). No register write. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status SPI_GetErrors(SPI_TypeDef *spi, uint32_t *errors);
     /* MODF clear (RM0440 42.5.11): SR read while MODF=1, then a CR1 write.
      * The written CR1 keeps SPE=0 and MSTR=0 (hardware already cleared them);
      * restore the role with SPI_Init/SPI_MasterInit and SPI_Enable. Keep NSS
      * high during the sequence. No write when MODF=0. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status SPI_ClearModeFault(SPI_TypeDef *spi);
     /* CRCERR is rc_w0: writes 0 to CRCERR only (other written bits are
      * read-only ones). No write when CRCERR=0. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status SPI_ClearCrcError(SPI_TypeDef *spi);
     /* Sets CRCNEXT after the last data frame was written (CPU-managed CRC).
      * Requires CRCEN=1 and SPE=1 (else STATE). */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status SPI_CrcNext(SPI_TypeDef *spi);
 
 #ifdef __cplusplus

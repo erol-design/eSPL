@@ -12,9 +12,9 @@ extern "C" {
  * CxCR is written as the request id only (SE = 0, SPOL = 00, no sync mode) and the request
  * generator is not implemented. A future sync API must set SE and SPOL in one write and
  * keep SPOL = 00 while SE = 0 (2.4.4). */
-/* Seviye: PARAM[S,r] STATE[S] */
+/* Level: PARAM[F,r] STATE[F] */
 SPL_Status DMAMUX_SetRequest(DMA_Channel_TypeDef *dma_channel, uint8_t request_id);
-/* Seviye: PARAM[S] */
+/* Level: PARAM[F] */
 SPL_Status DMAMUX_ClearOverrun(uint16_t mask);
 
 #ifdef __cplusplus

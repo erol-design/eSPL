@@ -27,15 +27,15 @@ extern "C"
 
     /* enable=1: CED=0 (clock error detection on, reset value); enable=0:
      * CED=1. STATE while RNGEN=1 (RM0440 26.7.1: CED changes need RNGEN=0). */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status RNG_ClockErrorDetectionConfig(uint8_t enable);
     /* RNGEN=1 / RNGEN=0. CED and IE kept. */
-    /* Seviye: - */
+    /* Level: - */
     SPL_Status RNG_Enable(void);
-    /* Seviye: - */
+    /* Level: - */
     SPL_Status RNG_Disable(void);
     /* IE=1/0 (DRDY, SEIS, CEIS share one interrupt; RM0440 26.4). */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status RNG_InterruptConfig(uint8_t enable);
     /* Polling read (RM0440 26.3.5). ERR_HW if SEIS/SECS/CEIS (or CECS with
      * CED=0) is set, or if DR reads 0 although DRDY was 1 (seed error
@@ -43,21 +43,21 @@ extern "C"
      * buffered words can still raise DRDY (RM0440 26.3.8, 26.7.2), and no
      * register shows when none are left. With RNGEN=0 bound the poll and
      * call RNG_Enable when it expires. *value written on OK only. */
-    /* Seviye: PARAM[S] HW[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] HW[r] WOULD_BLOCK[r] */
     SPL_Status RNG_TryRead(uint32_t *value);
     /* *errors = RNG_SR & RNG_ERRORS_ALL. No side effects. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status RNG_GetErrors(uint32_t *errors);
     /* Clears CEIS (rc_w0) after the caller fixed the RNG clock; SEIS is not
      * touched (written 1 = no effect). CECS clears itself in hardware. */
-    /* Seviye: - */
+    /* Level: - */
     SPL_Status RNG_ClearClockError(void);
     /* RM0440 26.3.7 seed-error recovery: clear SEIS (CEIS written 1 = no
      * effect), read and discard 12 DR words, then check SR. OK when SEIS
      * and SECS are 0 afterwards (nothing done when both were 0 at entry);
      * ERR_HW when either is set again: retry later, or RNG_Disable /
      * RNG_Enable, or an RCC reset of the RNG. */
-    /* Seviye: HW[r] */
+    /* Level: HW[r] */
     SPL_Status RNG_SeedErrorRecover(void);
 
 #ifdef __cplusplus

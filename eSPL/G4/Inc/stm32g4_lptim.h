@@ -82,14 +82,14 @@ extern "C"
     /* Writes the whole CFGR. STATE: ENABLE=1 (RM0440 33.7.4 caution).
      * PARAM: field out of range, CKPOL=3, CKSEL=1 with both edges, encoder
      * with CKSEL=1 or PRESC!=0, COUNTMODE=1 with CKSEL=0 and PRESC!=0. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status LPTIM_Init(LPTIM_TypeDef *lptim, const LPTIM_InitTypeDef *init);
     /* Writes IER = mask (subset of LPTIM_IT_ALLOWED, 0 disables all).
      * STATE: ENABLE=1 (RM0440 33.7.3 caution). */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status LPTIM_InterruptConfig(LPTIM_TypeDef *lptim, uint32_t mask);
     /* CR = ENABLE (RSTARE kept, command bits never written back). */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status LPTIM_Enable(LPTIM_TypeDef *lptim);
     /* IER = 0: CR = 0. Cannot touch the caller's sync state: zero every
      * LPTIM_SyncTypeDef in use afterwards, else a write left unacknowledged
@@ -103,7 +103,7 @@ extern "C"
      * LPTIM registers (CFGR, IER, ARR, CMP, ...) return to reset values: run
      * LPTIM_Init / LPTIM_InterruptConfig again. Do not race other writers of
      * RCC_APB1RSTR1 (RMW). */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status LPTIM_Disable(LPTIM_TypeDef *lptim);
     /* Sets CNTSTRT or SNGSTRT. STATE: ENABLE=0 (hardware discards the write,
      * RM0440 33.4.6) or single mode with ENC=1 (encoder needs continuous).
@@ -113,7 +113,7 @@ extern "C"
      * sequence or at least two counter clocks after LPTIM_Enable. */
     /* SINGLE during a running one-shot cycle: OK, discarded by hardware (RM0440 33.4.7);
      * start the next cycle after ARRM (contract LP-5, v0.13.5). */
-    /* Seviye: PARAM[S,r] STATE[r] */
+    /* Level: PARAM[F,r] STATE[r] */
     SPL_Status LPTIM_Start(LPTIM_TypeDef *lptim, uint32_t mode);
     /* ARR write (1..0xFFFF; 0 can never be > CMP). STATE: ENABLE=0. BUSY:
      * previous ARR write not acknowledged (ARROK=0). Clears ARROK via
@@ -122,7 +122,7 @@ extern "C"
      * program ARR/CMP with all LPTIM interrupts disabled.
      * Running with PRELOAD=0: a smaller ARR -> STATE, no write (CCL-2 ZMN-02: an ARR below the
      * moving counter runs the period to 0xFFFF); shrink with PRELOAD=1 or while disabled. */
-    /* Seviye: PARAM[S] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status LPTIM_SetAutoReload(LPTIM_TypeDef *lptim, LPTIM_SyncTypeDef *sync, uint32_t arr);
     /* CMP write (0..0xFFFF), same rules with CMPOK / ICR.CMPOKCF. The caller
      * keeps CMP < ARR for PWM / one-pulse / set-once (RM0440 33.4.9).
@@ -130,24 +130,24 @@ extern "C"
      * ERRATA ES0431 2.9.3 / ES0430 2.13.3 / ES0523 2.9.3: CMPM, ARRM, PWM output and IRQs come
      * one kernel clock late; program CMP = wanted - 1; 0 % / 100 % duty cannot
      * be produced. */
-    /* Seviye: PARAM[S] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status LPTIM_SetCompare(LPTIM_TypeDef *lptim, LPTIM_SyncTypeDef *sync, uint32_t cmp);
     /* Updates sync from ARROK/CMPOK (flags not cleared). OK when nothing is
      * pending, BUSY otherwise. */
-    /* Seviye: PARAM[S] BUSY[r] */
+    /* Level: PARAM[F] BUSY[r] */
     SPL_Status LPTIM_SyncStatus(LPTIM_TypeDef *lptim, LPTIM_SyncTypeDef *sync);
     /* RM0440 33.7.8 double read: up to three CNT reads; OK when two
      * consecutive reads match, BUSY otherwise (retry). STATE: RSTARE=1
      * (a read resets CNT, RM0440 33.4.13). */
-    /* Seviye: PARAM[S] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status LPTIM_ReadCounter(LPTIM_TypeDef *lptim, uint32_t *count);
     /* *flags = ISR & LPTIM_FLAGS_ALL. No side effects. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status LPTIM_GetFlags(LPTIM_TypeDef *lptim, uint32_t *flags);
     /* ICR = flags (W1C), non-zero subset of LPTIM_FLAGS_CLEARABLE.
      * ERRATA ES0431 2.9.2 / ES0430 2.13.2 / ES0523 2.9.2: with IER != 0, STATE (no write) unless
      * every flag has its IER bit set, and call it from the LPTIM ISR only. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status LPTIM_ClearFlags(LPTIM_TypeDef *lptim, uint32_t flags);
 
 #ifdef __cplusplus

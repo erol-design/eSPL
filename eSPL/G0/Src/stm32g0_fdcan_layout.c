@@ -1,6 +1,7 @@
-/* FDCAN message RAM layout (FD-01) for STM32G0B1, ported from the G4 SPL v0.13.5. */
-/* Kutuphane birimi: spl_check.h karisma korumasi referansini bu birim de uretir; uretmeyen tek
- * birim stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
+/* FDCAN message RAM layout (FD-01) implementation for STM32G0B1, ported from the G4 SPL v0.13.5;
+ * public contract in stm32g0_fdcan_layout.h. */
+/* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit
+ * that does not is stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
 #define SPL_LIBRARY_BUILD 1
 #include "stm32g0_fdcan_layout.h"
 
@@ -41,11 +42,11 @@ SPL_Status FDCAN_LayoutCalculate(FDCAN_SkuTypeDef sku, uint32_t instance,
     FDCAN_MessageRamLayoutTypeDef candidate = {0};
     uint32_t count;
     uint32_t base;
-    /* Denetim seviyesi (A4 dalga 4a): NULL normal; yapilandirma / cift dogrulamasi bu
-     * dogrulayicinin cevabi (result), her seviyede. */
-    SPL_REQUIRE_SAFE((config != (const FDCAN_MessageRamConfigTypeDef *)0) &&
-                         (layout != (FDCAN_MessageRamLayoutTypeDef *)0),
-                     SPL_ERR_PARAM);
+    /* Check level (A4 wave 4a): NULL is checked; configuration / pair validation is this
+     * validator's answer (result), at every level. */
+    SPL_REQUIRE((config != (const FDCAN_MessageRamConfigTypeDef *)0) &&
+                    (layout != (FDCAN_MessageRamLayoutTypeDef *)0),
+                SPL_ERR_PARAM);
     count = FDCAN_InstanceCount(sku);
     if (count == 0U)
     {

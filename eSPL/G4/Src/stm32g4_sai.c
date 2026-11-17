@@ -184,12 +184,12 @@ SPL_Status SAI_BlockInit(SAI_Block_TypeDef *block, const SAI_BlockInitTypeDef *c
     uint32_t base;
     uint32_t keep_mck;
 
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(Sai_BlockValid(block) == 0U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(cfg == (const SAI_BlockInitTypeDef *)0), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(Sai_ConfigValid(cfg) == 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(Sai_BlockValid(block) == 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(cfg == (const SAI_BlockInitTypeDef *)0), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(Sai_ConfigValid(cfg) == 0U), SPL_ERR_PARAM);
     cr1 = block->CR1;
     if ((cr1 & SAI_xCR1_SAIEN) != 0U)
     {
@@ -231,18 +231,18 @@ SPL_Status SAI_CalcClocks(uint32_t ker_hz, const SAI_BlockInitTypeDef *cfg,
     uint64_t div;
     uint64_t frame_bits;
 
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(ker_hz == 0U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(cfg == (const SAI_BlockInitTypeDef *)0), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(clocks == (SAI_ClocksTypeDef *)0), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(Sai_ConfigValid(cfg) == 0U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(cfg->protocol != SAI_PROTOCOL_FREE), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!((cfg->mode & 2U) != 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(ker_hz == 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(cfg == (const SAI_BlockInitTypeDef *)0), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(clocks == (SAI_ClocksTypeDef *)0), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(Sai_ConfigValid(cfg) == 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(cfg->protocol != SAI_PROTOCOL_FREE), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!((cfg->mode & 2U) != 0U), SPL_ERR_PARAM);
 
     /* RM0440 43.4.8: MCKDIV = 0 acts as 1. */
     div = (cfg->mck_div == 0U) ? 1U : (uint64_t)cfg->mck_div;
@@ -268,8 +268,8 @@ SPL_Status SAI_Enable(SAI_Block_TypeDef *block)
 {
     uint32_t cr1;
 
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(Sai_BlockValid(block) == 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(Sai_BlockValid(block) == 0U), SPL_ERR_PARAM);
     cr1 = block->CR1;
     /* RM0440 43.6.1: setting SAIEN while it reads 1 is not taken into account. */
     if ((cr1 & SAI_xCR1_SAIEN) != 0U)
@@ -291,8 +291,8 @@ SPL_Status SAI_Disable(SAI_Block_TypeDef *block)
 {
     uint32_t cr1;
 
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(Sai_BlockValid(block) == 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(Sai_BlockValid(block) == 0U), SPL_ERR_PARAM);
     cr1 = block->CR1;
     if ((cr1 & SAI_xCR1_SAIEN) == 0U)
     {
@@ -305,18 +305,18 @@ SPL_Status SAI_Disable(SAI_Block_TypeDef *block)
 
 SPL_Status SAI_IsDisabled(SAI_Block_TypeDef *block, uint8_t *disabled)
 {
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(Sai_BlockValid(block) == 0U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(disabled == (uint8_t *)0), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(Sai_BlockValid(block) == 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(disabled == (uint8_t *)0), SPL_ERR_PARAM);
     *disabled = (uint8_t)((Sai_Enabled(block) == 0U) ? 1U : 0U);
     return SPL_OK;
 }
 
 SPL_Status SAI_FlushFifo(SAI_Block_TypeDef *block)
 {
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(Sai_BlockValid(block) == 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(Sai_BlockValid(block) == 0U), SPL_ERR_PARAM);
     /* RM0440 43.6.2: FFLUSH must be configured when the SAI is disabled. */
     if (Sai_Enabled(block) != 0U)
     {
@@ -334,8 +334,8 @@ SPL_Status SAI_TryWrite(SAI_Block_TypeDef *block, uint32_t data)
 {
     uint32_t cr1;
 
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(Sai_BlockValid(block) == 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(Sai_BlockValid(block) == 0U), SPL_ERR_PARAM);
     cr1 = block->CR1;
     if ((cr1 & SAI_xCR1_MODE_0) != 0U)
     {
@@ -353,10 +353,10 @@ SPL_Status SAI_TryRead(SAI_Block_TypeDef *block, uint32_t *data)
 {
     uint32_t cr1;
 
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(Sai_BlockValid(block) == 0U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(data == (uint32_t *)0), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(Sai_BlockValid(block) == 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(data == (uint32_t *)0), SPL_ERR_PARAM);
     cr1 = block->CR1;
     if ((cr1 & SAI_xCR1_MODE_0) == 0U)
     {
@@ -372,20 +372,20 @@ SPL_Status SAI_TryRead(SAI_Block_TypeDef *block, uint32_t *data)
 
 SPL_Status SAI_GetFifoLevel(SAI_Block_TypeDef *block, uint32_t *level)
 {
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(Sai_BlockValid(block) == 0U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(level == (uint32_t *)0), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(Sai_BlockValid(block) == 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(level == (uint32_t *)0), SPL_ERR_PARAM);
     *level = Sai_FifoLevel(block);
     return SPL_OK;
 }
 
 SPL_Status SAI_GetFlags(SAI_Block_TypeDef *block, uint32_t *flags)
 {
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(Sai_BlockValid(block) == 0U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(flags == (uint32_t *)0), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(Sai_BlockValid(block) == 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(flags == (uint32_t *)0), SPL_ERR_PARAM);
     *flags = block->SR & SAI_FLAGS_ALL;
     return SPL_OK;
 }
@@ -394,12 +394,12 @@ SPL_Status SAI_ClearFlags(SAI_Block_TypeDef *block, uint32_t flags)
 {
     uint32_t clr = 0U;
 
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(Sai_BlockValid(block) == 0U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(flags == 0U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!((flags & ~SAI_FLAGS_CLEARABLE) != 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(Sai_BlockValid(block) == 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(flags == 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!((flags & ~SAI_FLAGS_CLEARABLE) != 0U), SPL_ERR_PARAM);
     /* RM0440 43.6.7: CLRFR is write-only; write the matching bits only. */
     if ((flags & SAI_FLAG_OVRUDR) != 0U)
     {
@@ -433,14 +433,14 @@ SPL_Status SAI_ClearFlags(SAI_Block_TypeDef *block, uint32_t flags)
 
 SPL_Status SAI_InterruptConfig(SAI_Block_TypeDef *block, uint32_t interrupts, uint8_t enable)
 {
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(Sai_BlockValid(block) == 0U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(interrupts == 0U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!((interrupts & ~SAI_IT_ALL) != 0U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(enable > 1U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(Sai_BlockValid(block) == 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(interrupts == 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!((interrupts & ~SAI_IT_ALL) != 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(enable > 1U), SPL_ERR_PARAM);
     if (enable != 0U)
     {
         block->IMR = block->IMR | interrupts;
@@ -456,10 +456,10 @@ SPL_Status SAI_DmaCmd(SAI_Block_TypeDef *block, uint8_t enable)
 {
     uint32_t cr1;
 
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(Sai_BlockValid(block) == 0U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(enable > 1U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(Sai_BlockValid(block) == 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(enable > 1U), SPL_ERR_PARAM);
     cr1 = block->CR1;
     if ((cr1 & SAI_xCR1_SAIEN) != 0U)
     {
@@ -482,17 +482,17 @@ SPL_Status SAI_PdmInit(SAI_TypeDef *sai, const SAI_PdmInitTypeDef *cfg)
     uint32_t cr1;
     uint32_t pdmcr;
 
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(sai != SAI1), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(cfg == (const SAI_PdmInitTypeDef *)0), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(sai != SAI1), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(cfg == (const SAI_PdmInitTypeDef *)0), SPL_ERR_PARAM);
     /* RM0440 43.3: D[3:1] and CK[2:1] only (max 6 microphones). */
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(cfg->microphones > SAI_PDM_MIC_6), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!((cfg->clocks & ~(SAI_PDM_CK1 | SAI_PDM_CK2)) != 0U), SPL_ERR_PARAM);
-    /* SAFE: invalid parameter can violate peripheral configuration or memory contract. */
-    SPL_REQUIRE_SAFE(!(cfg->enable > 1U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(cfg->microphones > SAI_PDM_MIC_6), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!((cfg->clocks & ~(SAI_PDM_CK1 | SAI_PDM_CK2)) != 0U), SPL_ERR_PARAM);
+    /* Invalid parameter can violate peripheral configuration or memory contract. */
+    SPL_REQUIRE(!(cfg->enable > 1U), SPL_ERR_PARAM);
     /* RM0440 43.4.10: the PDM interface is enabled before SAI_A. */
     cr1 = SAI1_Block_A->CR1;
     if ((cr1 & SAI_xCR1_SAIEN) != 0U)

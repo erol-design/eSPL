@@ -10,17 +10,23 @@ extern "C"
 {
 #endif
 
-/* v0.9 SKU profile: this API exists only where the device has the peripheral (SPL_G0_HAS_UCPD):
- * STM32G071 / G081 / G0B1 / G0C1 (UCPD1 and UCPD2). */
-#if SPL_G0_HAS_UCPD
-/* USB Type-C / USB Power Delivery interface (RM0444 Rev 6 section 38; Docs/v0.9_UCPD_CONTRACT.md).
- * New for G0. Physical layer only: Type-C pull-ups / pull-downs and CC voltage states, BMC
- * transmit / receive of ordered sets and payload bytes, Hard Reset, Cable Reset, BIST carrier,
- * fast role swap. No static state, no waits.
- * Caller duties (not done by the driver):
+/* USB Type-C / USB Power Delivery physical-layer interface driver (UCPD, RM0444 Rev 6
+ * section 38). New for G0.
+ * Scope: physical layer only: Type-C pull-ups / pull-downs and CC voltage states, BMC transmit /
+ * receive of ordered sets and payload bytes, Hard Reset, Cable Reset, BIST carrier, fast role
+ * swap. v0.9 SKU profile: this API exists only where the device has the peripheral
+ * (SPL_G0_HAS_UCPD): STM32G071 / G081 / G0B1 / G0C1 (UCPD1 and UCPD2).
+ * Usage: UCPD_Config (UCPDEN = 0), optional UCPD_SetRxExtensions, UCPD_Enable, then
+ * UCPD_TypeCConfig + UCPD_Strobe, UCPD_PhyConfig, UCPD_InterruptConfig; transmit with
+ * UCPD_StartMessage + UCPD_TryWriteByte (or TX DMA), receive with UCPD_TryReadByte (or RX DMA)
+ * and UCPD_GetRxMessageEnd.
+ * Common rules: no static state, no waits.
+ * Caller duties (all APIs; not done by the driver):
  *  - Clocks: RCC_EnablePeriphClock(RCC_PERIPH_UCPD1 / UCPD2); ucpd_ker_ck is always HSI16
  * (RM0444 5.2, HSI16 must run); PSC so that ucpd_clk is 6..9 MHz, HBITCLKDIV / IFRGAP / TRANSWIN
- * per RM0444 38.8.1.
+ * per RM0444 38.8.1. UCPD_Strobe writes SYSCFG_CFGR1: SYSCFG clock on.
+ *  - Interrupts (UCPD_InterruptConfig): NVIC enable and handler; the handler clears the event
+ *    flags it handled (UCPD_ClearFlags); TXIS / RXNE clear by the data access.
  *  - The Type-C and USB PD state machines (attach / detach debouncing, VBUS, VCONN, GoodCRC,
  *    MessageID, retries, timers), cable orientation (PHYCCSEL), DMA channels.
  *  - ERRATA ES0418 2.15.1 / ES0412 2.16.1 / ES0548 2.17.1 / ES0549 2.18.1: a Hard Reset issued at
@@ -33,9 +39,11 @@ extern "C"
  *  - ERRATA ES0418 2.15.2 / ES0412 2.16.2 / ES0548 2.17.2 / ES0549 2.18.2: an ordered set with
  *    several errors in one K-code is reported invalid (RXERR); no workaround, still USB PD
  *    compliant. ES0548 2.17.3 / ES0549 2.18.3: Tx high level marginal at low temperature (board).
+ *  - Concurrency: serialize callers per instance (ISR included).
  * HW-011: CMSIS v1.4.4 has no UCPD_CR_DBATTEN (RM0444 38.8.3 bit 15); the dead-battery enable
  * is not provided until the bit is defined and checked on hardware.
- * Serialize callers per instance (ISR included). */
+ * Contract: Docs/v0.9_UCPD_CONTRACT.md. */
+#if SPL_G0_HAS_UCPD
 
 /* 5b K-codes (RM0444 Table 244; 5b column read as a binary number, bit 4 on the left) and the
  * ordered sets of RM0444 Table 245: K-code #1 in bits 4:0 (transmitted first, Figure 406). */
@@ -120,77 +128,104 @@ typedef struct
 /* Writes CFGR1 (UCPDEN = 0, fields above) and CFGR2. Both are effective only with UCPDEN = 0
  * (RM0444 38.8.1 / 38.8.2) -> UCPDEN = 1 -> STATE. Not UCPD1 / UCPD2 or a field out of range ->
  * PARAM. Nothing written on refusal. */
-/* Seviye: PARAM[S,n] STATE[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status UCPD_Config(UCPD_TypeDef *ucpd, const UCPD_ConfigTypeDef *cfg);
 /* RX_ORDEXT1 / RX_ORDEXT2 (20-bit patterns for UCPD_RX_EXT1 / EXT2); UCPDEN = 0 only (38.8.13). */
-/* Seviye: PARAM[S] STATE[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status UCPD_SetRxExtensions(UCPD_TypeDef *ucpd, uint32_t ext1, uint32_t ext2);
 /* UCPDEN = 1 / 0. Disabling resets every control bit (RM0444 38.8.1): configure CR / IMR again
  * after enabling. */
-/* Seviye: PARAM[S] */
+/* Caller: configure CR / IMR again after this call (UCPD_TypeCConfig,
+ * UCPD_PhyConfig, UCPD_InterruptConfig). */
+/* Level: PARAM[F] */
 SPL_Status UCPD_Enable(UCPD_TypeDef *ucpd);
-/* Seviye: PARAM[S] */
+/* Caller: a message in progress is aborted and CR / IMR are reset; stop the UCPD
+ * DMA channels first. */
+/* Level: PARAM[F] */
 SPL_Status UCPD_Disable(UCPD_TypeDef *ucpd);
 /* CR Type-C fields (UCPDEN = 0 -> STATE: CR writes are ignored then, 38.8.3). ANAMODE and RDCH take
  * effect only after UCPD_Strobe (RM0444 38.8.3, SYSCFG_CFGR1). Command bits are written as 0. */
-/* Seviye: PARAM[S,n] STATE[S] */
+/* Caller: call UCPD_Strobe afterwards so ANAMODE / RDCH take effect. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status UCPD_TypeCConfig(UCPD_TypeDef *ucpd, const UCPD_TypeCTypeDef *tc);
 /* SYSCFG_CFGR1.UCPDx_STROBE = 1 (RM0444 SYSCFG): UCPD disabled -> internal dead-battery
  * pull-downs released; enabled -> CR pull configuration applied. */
-/* Seviye: PARAM[S] */
+/* Caller: dead-battery designs call it within 100 ms of power-on (errata above).
+ * SYSCFG_CFGR1 read-modify-write: serialize with other SYSCFG_CFGR1 writers. */
+/* Level: PARAM[F] */
 SPL_Status UCPD_Strobe(const UCPD_TypeDef *ucpd);
 /* TYPEC_VSTATE_CC1 / CC2 (0..3; meaning per RM0444 Table 248 and the ANAMODE / ANASUBMODE set). */
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status UCPD_GetCcState(UCPD_TypeDef *ucpd, uint8_t *cc1, uint8_t *cc2);
 /* PHYCCSEL = cc2, PHYRXEN = rx_enable, RXMODE = bist_rx (BIST test data receive). UCPDEN = 1. */
-/* Seviye: PARAM[S,n] STATE[S] */
+/* Caller: cc2 from the detected cable orientation (file header). */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status UCPD_PhyConfig(UCPD_TypeDef *ucpd, uint8_t cc2, uint8_t rx_enable, uint8_t bist_rx);
 /* FRSRXEN (FRS event detection on the PHYCCSEL line). UCPDEN = 1. */
-/* Seviye: PARAM[S,n] STATE[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status UCPD_FrsConfig(UCPD_TypeDef *ucpd, uint8_t rx_enable);
 /* FRSTX = 1 (cleared by hardware after the signalling, 38.8.3). UCPDEN = 1; FRSTX still 1 -> BUSY.
  */
-/* Seviye: PARAM[S] STATE[S] BUSY[r] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] STATE[F] BUSY[r] */
 SPL_Status UCPD_FrsSignal(UCPD_TypeDef *ucpd);
 /* IMR = mask (subset of UCPD_IT_ALL; IMR bit n enables SR bit n, RXERR has none). UCPDEN = 1
  * (38.8.4). */
-/* Seviye: PARAM[S] STATE[S] */
+/* Caller: clear stale event flags (UCPD_ClearFlags) before enabling them. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status UCPD_InterruptConfig(UCPD_TypeDef *ucpd, uint32_t mask);
 /* TX_ORDSET = ordered_set (<= 0xFFFFF), TX_PAYSZ = payload_size (header included, CRC excluded,
  * <= 1023), then TXMODE = 0 and TXSEND = 1 (RM0444 38.5.3). UCPDEN = 0 -> STATE; TXSEND or TXHRST
  * still set (previous request not started) -> BUSY. TXMSGDISC later: retry (collision avoidance).
  */
-/* Seviye: PARAM[S] STATE[S] BUSY[r] */
+/* Caller: clear the previous message's TX end flags first; supply payload_size
+ * bytes (TX DMA or UCPD_TryWriteByte) without underflow; wait for TXMSGSENT /
+ * TXMSGDISC / TXMSGABT. */
+/* Level: PARAM[F] STATE[F] BUSY[r] */
 SPL_Status UCPD_StartMessage(UCPD_TypeDef *ucpd, uint32_t ordered_set, uint32_t payload_size);
 /* Next payload byte: TXDMAEN = 1 -> STATE (DMA owns TXDR); TXUND set -> ERR_HW (message ends with
  * a bad CRC, RM0444 38.4.4); TXIS = 0 -> WOULD_BLOCK; else TXDR = data. */
-/* Seviye: PARAM[S] STATE[S] HW[r] WOULD_BLOCK[r] */
+/* Caller: write exactly the payload_size bytes of UCPD_StartMessage; on ERR_HW
+ * the protocol layer retransmits. */
+/* Level: PARAM[F] STATE[F] HW[r] WOULD_BLOCK[r] */
 SPL_Status UCPD_TryWriteByte(UCPD_TypeDef *ucpd, uint8_t data);
 /* TXHRST = 1: Hard Reset, takes precedence over an ongoing message (RM0444 38.5.3). UCPDEN = 0 ->
  * STATE; TXHRST already set -> BUSY. See the TXHRST erratum above. */
-/* Seviye: PARAM[S] STATE[S] BUSY[r] */
+/* Caller: wait for HRSTSENT / HRSTDISC and clear it (UCPD_ClearFlags). */
+/* Level: PARAM[F] STATE[F] BUSY[r] */
 SPL_Status UCPD_SendHardReset(UCPD_TypeDef *ucpd);
 /* TXMODE = 1 (Cable Reset) or 2 (BIST Carrier Mode 2) with TXSEND = 1; other modes -> PARAM.
  * Quit BIST carrier by UCPD_Disable (RM0444 38.8.3). UCPDEN / pending rules as UCPD_StartMessage.
  */
-/* Seviye: PARAM[S] STATE[S] BUSY[r] */
+/* Caller: wait for TXMSGSENT / TXMSGDISC; BIST carrier runs until UCPD_Disable. */
+/* Level: PARAM[F] STATE[F] BUSY[r] */
 SPL_Status UCPD_SendSpecial(UCPD_TypeDef *ucpd, uint32_t txmode);
 /* RXDMAEN = 1 -> STATE; RXOVR set -> ERR_HW (nothing read); RXNE = 0 -> WOULD_BLOCK; else RXDR. */
-/* Seviye: PARAM[S] STATE[S] HW[r] WOULD_BLOCK[r] */
+/* Caller: on ERR_HW discard the message and clear RXOVR (UCPD_ClearFlags). */
+/* Level: PARAM[F] STATE[F] HW[r] WOULD_BLOCK[r] */
 SPL_Status UCPD_TryReadByte(UCPD_TypeDef *ucpd, uint8_t *data);
 /* RXORDDET = 0 -> WOULD_BLOCK; else *code = RX_ORDSET.RXORDSET (0 SOP .. 7 extension 2, RM0444
  * 38.8.10) and RXORDDET cleared. */
-/* Seviye: PARAM[S] WOULD_BLOCK[r] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] WOULD_BLOCK[r] */
 SPL_Status UCPD_GetRxOrderedSet(UCPD_TypeDef *ucpd, uint8_t *code);
 /* RXMSGEND = 0 -> WOULD_BLOCK; else *size = RX_PAYSZ, *bad = RXERR (discard the bytes read when 1,
  * RM0444 38.5.4) and RXMSGEND cleared. */
-/* Seviye: PARAM[S] WOULD_BLOCK[r] */
+/* Caller: discard the bytes read when *bad = 1; GoodCRC is the protocol
+ * layer's (file header). */
+/* Level: PARAM[F] WOULD_BLOCK[r] */
 SPL_Status UCPD_GetRxMessageEnd(UCPD_TypeDef *ucpd, uint32_t *size, uint8_t *bad);
 /* *flags = SR & UCPD_FLAGS_ALL. */
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status UCPD_GetFlags(UCPD_TypeDef *ucpd, uint32_t *flags);
 /* ICR = mask (non-empty subset of UCPD_FLAGS_CLEARABLE). */
-/* Seviye: PARAM[S,n] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status UCPD_ClearFlags(UCPD_TypeDef *ucpd, uint32_t mask);
 
 #endif /* SPL_G0_HAS_UCPD */

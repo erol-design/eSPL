@@ -7,7 +7,8 @@
 /* GPIO driver (RM0444 Rev 6 section 7, Docs/v0.2_GPIO_CONTRACT.md). Ports GPIOA..GPIOF.
  * Ported from the STM32G4 SPL (same GPIO IP); difference: analog mode with any pull is Reserved
  * on G0 (RM0444 Table 44) -> SPL_ERR_PARAM.
- * The port clock (RCC_IOPENR) must be enabled by the caller (RCC_GpioClockEnable).
+ * Caller duties (all APIs): the port clock (RCC_IOPENR) must be enabled by the caller
+ * (RCC_GpioClockEnable); the errata notes below are caller rules.
  * ERRATA ES0548 2.2.6: toggling PC13 (input or output) disturbs the LSE crystal; no workaround:
  *   keep PC13 static while LSE runs.
  * ERRATA ES0548 2.3.1 (silicon A only): after wake-up from Standby, pins with the wake-up
@@ -60,13 +61,17 @@ void GPIO_StructInit(GPIO_InitTypeDef *cfg);
 /* Configures the selected pins. Order per pin: OTYPER, OSPEEDR, PUPDR, AFR (AF mode), BSRR
  * (output mode), MODER last. A selected pin locked by GPIOx_LCKR (LCKK = 1) -> SPL_ERR_STATE,
  * nothing written. Not concurrency-safe for the same port (read-modify-write). */
-/* Seviye: PARAM[S,n] STATE[S] */
+/* Caller: serialise per port (read-modify-write); alternate comes from the datasheet AF table
+ * (not validated per pin); open drain for shared lines such as I2C. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status GPIO_Init(GPIO_TypeDef *port, const GPIO_InitTypeDef *cfg);
 /* Atomic set (high = 1) or reset (high = 0) through BSRR. Safe from any context. */
-/* Seviye: PARAM[S,n] */
+/* Caller: the pins must be outputs (GPIO_Init) for the level to reach the pin. */
+/* Level: PARAM[F] */
 SPL_Status GPIO_Write(GPIO_TypeDef *port, uint16_t pins, uint8_t high);
 /* value = IDR & pins. */
-/* Seviye: PARAM[S,n] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status GPIO_Read(GPIO_TypeDef *port, uint16_t pins, uint16_t *value);
 
 #ifdef __cplusplus

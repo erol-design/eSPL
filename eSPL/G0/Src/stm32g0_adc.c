@@ -1,8 +1,8 @@
-/* ADC driver for STM32G0B1 (RM0444 Rev 6 section 15, ES0548 Rev 4 section 2.6). Written for G0;
- * the G4 v0.13.5 ADC driver gave the API names, the state rules for the shared commands
- * (ADEN/ADSTART/ADSTP/ADDIS) and the oversampling overflow rule (#19). */
-/* Kutuphane birimi: spl_check.h karisma korumasi referansini bu birim de uretir; uretmeyen tek
- * birim stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
+/* ADC driver for STM32G0B1 (RM0444 Rev 6 section 15, ES0548 Rev 4 section 2.6); public contract:
+ * Inc/stm32g0_adc.h. Written for G0; the G4 v0.13.5 ADC driver gave the API names, the state rules
+ * for the shared commands (ADEN/ADSTART/ADSTP/ADDIS) and the oversampling overflow rule (#19). */
+/* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit
+ * that does not is stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
 #define SPL_LIBRARY_BUILD 1
 #include "stm32g0_adc.h"
 
@@ -15,10 +15,9 @@
 #define ADC_SQ_END 0xFU
 #define ADC_THRESHOLD_MAX 0xFFFU
 
-/* Denetim seviyesi (A4 dalga 5, Docs/CHECK_LEVEL.md 5.4 ADC tablosu): SPL_REQUIRE = normal sinif
- * (yalniz FULL), SPL_REQUIRE_SAFE = SAFE sinif (FULL ve MIX). Bekleyen komut / CCRDY (BUSY), OVR
- * ve WOULD_BLOCK result: her seviyede. Yalniz denetimde kullanilan yardimcilar static inline (saf,
- * Tools/pure_checks.txt). */
+/* Check level (A4 wave 5, Docs/CHECK_LEVEL.md 5.4 ADC table): SPL_REQUIRE = checked at FULL only
+ * (not compiled at FAST). Pending command / CCRDY (BUSY), OVR and WOULD_BLOCK are result: at every
+ * level. Helpers used only in checks are static inline (pure, Tools/pure_checks.txt). */
 
 static inline uint8_t Adc_Valid(const ADC_TypeDef *adc)
 {
@@ -41,9 +40,9 @@ static SPL_Status Adc_Off(const ADC_TypeDef *adc)
     {
         return SPL_BUSY;
     }
-    /* SAFE: ADEN / ADSTART = 1 iken CFGR1 / CFGR2 / AWD yazimi yok sayilir (ES0548 2.6.2 / 2.6.4).
-     */
-    SPL_REQUIRE_SAFE((cr & (ADC_CR_ADEN | ADC_CR_ADSTART)) == 0U, SPL_ERR_STATE);
+    /* with ADEN / ADSTART = 1 a CFGR1 / CFGR2 / AWD write is ignored (ES0548 2.6.2 /
+     * 2.6.4). */
+    SPL_REQUIRE((cr & (ADC_CR_ADEN | ADC_CR_ADSTART)) == 0U, SPL_ERR_STATE);
     return SPL_OK;
 }
 
@@ -56,7 +55,7 @@ static SPL_Status Adc_NoConversion(const ADC_TypeDef *adc)
     {
         return SPL_BUSY;
     }
-    SPL_REQUIRE_SAFE((cr & ADC_CR_ADSTART) == 0U, SPL_ERR_STATE); /* SAFE: yazim yok sayilir */
+    SPL_REQUIRE((cr & ADC_CR_ADSTART) == 0U, SPL_ERR_STATE); /* the write is ignored */
     return SPL_OK;
 }
 
@@ -183,7 +182,7 @@ SPL_Status ADC_PowerRegulator(ADC_TypeDef *adc)
 {
     SPL_Status st;
 
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     st = Adc_Off(adc);
     if ((st != SPL_OK) || ((adc->CR & ADC_CR_ADVREGEN) != 0U))
     {
@@ -197,7 +196,7 @@ SPL_Status ADC_PowerRegulatorDisable(ADC_TypeDef *adc)
 {
     SPL_Status st;
 
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     st = Adc_Off(adc);
     if ((st != SPL_OK) || ((adc->CR & ADC_CR_ADVREGEN) == 0U))
     {
@@ -211,16 +210,16 @@ SPL_Status ADC_StartCalibration(ADC_TypeDef *adc)
 {
     SPL_Status st;
 
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     st = Adc_Off(adc);
     if (st != SPL_OK)
     {
         return st;
     }
-    /* RM0444 15.3.3: ADVREGEN = 1, AUTOFF = 0, DMAEN = 0 (SAFE: kalibrasyon bozuk). */
-    SPL_REQUIRE_SAFE(((adc->CR & ADC_CR_ADVREGEN) != 0U) &&
-                         ((adc->CFGR1 & (ADC_CFGR1_AUTOFF | ADC_CFGR1_DMAEN)) == 0U),
-                     SPL_ERR_STATE);
+    /* RM0444 15.3.3: ADVREGEN = 1, AUTOFF = 0, DMAEN = 0 (calibration corrupted). */
+    SPL_REQUIRE(((adc->CR & ADC_CR_ADVREGEN) != 0U) &&
+                    ((adc->CFGR1 & (ADC_CFGR1_AUTOFF | ADC_CFGR1_DMAEN)) == 0U),
+                SPL_ERR_STATE);
     adc->ISR = ADC_ISR_EOCAL;
     Adc_Command(adc, ADC_CR_ADCAL);
     return SPL_OK;
@@ -228,16 +227,16 @@ SPL_Status ADC_StartCalibration(ADC_TypeDef *adc)
 
 SPL_Status ADC_CalibrationDone(ADC_TypeDef *adc, uint8_t *done)
 {
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(done != (uint8_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(done != (uint8_t *)0, SPL_ERR_PARAM);
     *done = (uint8_t)(((adc->CR & ADC_CR_ADCAL) == 0U) ? 1U : 0U);
     return SPL_OK;
 }
 
 SPL_Status ADC_GetCalibrationFactor(ADC_TypeDef *adc, uint8_t *factor)
 {
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(factor != (uint8_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(factor != (uint8_t *)0, SPL_ERR_PARAM);
     if ((adc->CR & ADC_CR_ADCAL) != 0U)
     {
         return SPL_BUSY;
@@ -250,15 +249,15 @@ SPL_Status ADC_SetCalibrationFactor(ADC_TypeDef *adc, uint8_t factor)
 {
     uint32_t cr;
 
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(factor <= 0x7FU, SPL_ERR_PARAM);      /* SAFE: CALFACT tasmasi */
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(factor <= 0x7FU, SPL_ERR_PARAM);      /* CALFACT overflow */
     cr = adc->CR;
     if ((cr & ADC_CR_PENDING) != 0U)
     {
         return SPL_BUSY;
     }
-    /* RM0444 15.12.15: ADEN = 1, no calibration, no conversion (SAFE: yazim yok sayilir). */
-    SPL_REQUIRE_SAFE(((cr & ADC_CR_ADEN) != 0U) && ((cr & ADC_CR_ADSTART) == 0U), SPL_ERR_STATE);
+    /* RM0444 15.12.15: ADEN = 1, no calibration, no conversion (the write is ignored). */
+    SPL_REQUIRE(((cr & ADC_CR_ADEN) != 0U) && ((cr & ADC_CR_ADSTART) == 0U), SPL_ERR_STATE);
     adc->CALFACT = factor;
     return SPL_OK;
 }
@@ -267,11 +266,11 @@ SPL_Status ADC_CommonClockConfig(ADC_TypeDef *adc, uint32_t ckmode, uint32_t pre
 {
     SPL_Status st;
 
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    /* SAFE: CKMODE / PRESC tasmasi; senkron saatte PRESC sessizce kullanilmaz. */
-    SPL_REQUIRE_SAFE((ckmode <= ADC_CLOCK_SYNC_DIV1) && (presc <= ADC_PRESC_MAX) &&
-                         ((ckmode == ADC_CLOCK_ASYNC) || (presc == 0U)),
-                     SPL_ERR_PARAM);
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    /* CKMODE / PRESC overflow; with a synchronous clock PRESC would be silently unused. */
+    SPL_REQUIRE((ckmode <= ADC_CLOCK_SYNC_DIV1) && (presc <= ADC_PRESC_MAX) &&
+                    ((ckmode == ADC_CLOCK_ASYNC) || (presc == 0U)),
+                SPL_ERR_PARAM);
     st = Adc_Off(adc);
     if (st != SPL_OK)
     {
@@ -287,8 +286,8 @@ SPL_Status ADC_InternalChannelsConfig(ADC_TypeDef *adc, uint32_t mask)
 {
     SPL_Status st;
 
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM);             /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE((mask & ~ADC_INTERNAL_ALL) == 0U, SPL_ERR_PARAM); /* SAFE: CCR'ye OR */
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM);             /* arbitrary address */
+    SPL_REQUIRE((mask & ~ADC_INTERNAL_ALL) == 0U, SPL_ERR_PARAM); /* ORed into CCR */
     st = Adc_NoConversion(adc);
     if (st != SPL_OK)
     {
@@ -304,16 +303,16 @@ SPL_Status ADC_RegularConfig(ADC_TypeDef *adc, const ADC_RegularConfigTypeDef *c
     uint32_t cfgr2;
     SPL_Status st;
 
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(config != (const ADC_RegularConfigTypeDef *)0, SPL_ERR_PARAM);
-    /* SAFE: kaydirilan CFGR1 alanlari, RM yasak birlesimler. */
-    SPL_REQUIRE_SAFE((config->resolution <= ADC_RES_6BIT) && (config->align <= ADC_ALIGN_LEFT) &&
-                         (config->continuous <= 1U) && (config->discontinuous <= 1U) &&
-                         (config->ext_sel <= 7U) && (config->ext_edge <= ADC_EDGE_BOTH) &&
-                         (config->overrun_overwrite <= 1U) &&
-                         ((config->continuous == 0U) || (config->discontinuous == 0U)) &&
-                         ((config->ext_edge != ADC_EDGE_SOFTWARE) || (config->ext_sel == 0U)),
-                     SPL_ERR_PARAM);
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(config != (const ADC_RegularConfigTypeDef *)0, SPL_ERR_PARAM);
+    /* shifted CFGR1 fields, combinations forbidden by the RM. */
+    SPL_REQUIRE((config->resolution <= ADC_RES_6BIT) && (config->align <= ADC_ALIGN_LEFT) &&
+                    (config->continuous <= 1U) && (config->discontinuous <= 1U) &&
+                    (config->ext_sel <= 7U) && (config->ext_edge <= ADC_EDGE_BOTH) &&
+                    (config->overrun_overwrite <= 1U) &&
+                    ((config->continuous == 0U) || (config->discontinuous == 0U)) &&
+                    ((config->ext_edge != ADC_EDGE_SOFTWARE) || (config->ext_sel == 0U)),
+                SPL_ERR_PARAM);
     st = Adc_Off(adc);
     if (st != SPL_OK)
     {
@@ -327,23 +326,24 @@ SPL_Status ADC_RegularConfig(ADC_TypeDef *adc, const ADC_RegularConfigTypeDef *c
              ((uint32_t)config->ext_sel << ADC_CFGR1_EXTSEL_Pos) |
              ((uint32_t)config->ext_edge << ADC_CFGR1_EXTEN_Pos) |
              ((uint32_t)config->overrun_overwrite << ADC_CFGR1_OVRMOD_Pos);
-    SPL_REQUIRE_SAFE(Adc_Awd1Hazard(cfgr1, adc->CHSELR) == 0U, SPL_ERR_PARAM); /* ES0548 2.6.3 */
+    SPL_REQUIRE(Adc_Awd1Hazard(cfgr1, adc->CHSELR) == 0U, SPL_ERR_PARAM); /* ES0548 2.6.3 */
     cfgr2 = adc->CFGR2;
     (void)cfgr2;
-    /* SAFE: asiri ornekleme sonucu 16 biti asar; bekci esikleri cozunurluge uymaz. */
-    SPL_REQUIRE_SAFE(
-        ((cfgr2 & ADC_CFGR2_OVSE) == 0U) ||
-            (Adc_OvsFits(config->resolution, (cfgr2 & ADC_CFGR2_OVSR) >> ADC_CFGR2_OVSR_Pos,
-                         (cfgr2 & ADC_CFGR2_OVSS) >> ADC_CFGR2_OVSS_Pos) != 0U),
-        SPL_ERR_STATE);
-    SPL_REQUIRE_SAFE(Adc_AwdThresholdConflict(adc, cfgr1, config->resolution) == 0U, SPL_ERR_STATE);
+    /* the oversampling result would exceed 16 bits; watchdog thresholds would not fit the
+     * resolution. */
+    SPL_REQUIRE(((cfgr2 & ADC_CFGR2_OVSE) == 0U) ||
+                    (Adc_OvsFits(config->resolution, (cfgr2 & ADC_CFGR2_OVSR) >> ADC_CFGR2_OVSR_Pos,
+                                 (cfgr2 & ADC_CFGR2_OVSS) >> ADC_CFGR2_OVSS_Pos) != 0U),
+                SPL_ERR_STATE);
+    SPL_REQUIRE(Adc_AwdThresholdConflict(adc, cfgr1, config->resolution) == 0U, SPL_ERR_STATE);
     /* ERRATA ES0548 2.6.2: CFGR1 only with ADEN = 0 (checked above), never auto disable. */
     adc->CFGR1 = cfgr1;
     return SPL_OK;
 }
 
-/* A4 (CHECK_LEVEL.md 4.2): deger ureten dogrulayici ikiye ayrildi. Maske kipinde maske 0 /
- * tanimli kanallar disi normal sinif (CHSELR = 0 ADC_Start'ta gorunur; ayrilmis bitler). */
+/* A4 (CHECK_LEVEL.md 4.2): the value-producing validator was split in two. In mask mode a mask
+ * of 0 / outside the defined channels is checked (CHSELR = 0 is visible in ADC_Start;
+ * reserved bits). */
 static inline uint32_t Adc_ChannelMaskValid(const ADC_ChannelConfigTypeDef *config)
 {
     return (((config->mode != ADC_SEQ_FORWARD) && (config->mode != ADC_SEQ_BACKWARD)) ||
@@ -352,7 +352,8 @@ static inline uint32_t Adc_ChannelMaskValid(const ADC_ChannelConfigTypeDef *conf
                : 0U;
 }
 
-/* SAFE: kip, sirali uzunluk ve sirali kanal araligi (kanal komsu dortluye tasar). */
+/* mode, ordered length and ordered channel range (a channel would spill into the adjacent
+ * nibble). */
 static inline uint32_t Adc_ChannelSeqValid(const ADC_ChannelConfigTypeDef *config)
 {
     uint32_t k;
@@ -407,10 +408,10 @@ SPL_Status ADC_ChannelConfig(ADC_TypeDef *adc, const ADC_ChannelConfigTypeDef *c
     uint32_t cfgr1;
     SPL_Status st;
 
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(config != (const ADC_ChannelConfigTypeDef *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(config != (const ADC_ChannelConfigTypeDef *)0, SPL_ERR_PARAM);
     SPL_REQUIRE(Adc_ChannelMaskValid(config) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(Adc_ChannelSeqValid(config) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(Adc_ChannelSeqValid(config) != 0U, SPL_ERR_PARAM);
     Adc_ChannelImage(config, &chselr, &seq);
     st = Adc_NoConversion(adc);
     if (st != SPL_OK)
@@ -422,7 +423,7 @@ SPL_Status ADC_ChannelConfig(ADC_TypeDef *adc, const ADC_ChannelConfigTypeDef *c
         return SPL_BUSY;
     }
     cfgr1 = (adc->CFGR1 & ~ADC_SEQ_BITS) | seq;
-    SPL_REQUIRE_SAFE(Adc_Awd1Hazard(cfgr1, chselr) == 0U, SPL_ERR_PARAM); /* ES0548 2.6.3 */
+    SPL_REQUIRE(Adc_Awd1Hazard(cfgr1, chselr) == 0U, SPL_ERR_PARAM); /* ES0548 2.6.3 */
     /* RM0444 15.3.8: a write before CCRDY rose for the previous one is ignored by hardware. */
     if (Adc_ChannelConfigPending(adc) != 0U)
     {
@@ -430,8 +431,8 @@ SPL_Status ADC_ChannelConfig(ADC_TypeDef *adc, const ADC_ChannelConfigTypeDef *c
     }
     if ((adc->CFGR1 & ADC_SEQ_BITS) != seq)
     {
-        /* CFGR1 only with ADEN = 0 (ERRATA ES0548 2.6.2); SAFE. */
-        SPL_REQUIRE_SAFE((adc->CR & ADC_CR_ADEN) == 0U, SPL_ERR_STATE);
+        /* CFGR1 only with ADEN = 0 (ERRATA ES0548 2.6.2); */
+        SPL_REQUIRE((adc->CR & ADC_CR_ADEN) == 0U, SPL_ERR_STATE);
         adc->ISR = ADC_ISR_CCRDY;
         adc->CFGR1 = cfgr1;
         return SPL_WOULD_BLOCK; /* call again after CCRDY to write CHSELR */
@@ -443,8 +444,8 @@ SPL_Status ADC_ChannelConfig(ADC_TypeDef *adc, const ADC_ChannelConfigTypeDef *c
 
 SPL_Status ADC_ChannelConfigReady(ADC_TypeDef *adc, uint8_t *ready)
 {
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(ready != (uint8_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(ready != (uint8_t *)0, SPL_ERR_PARAM);
     *ready = (uint8_t)(((adc->ISR & ADC_ISR_CCRDY) != 0U) ? 1U : 0U);
     return SPL_OK;
 }
@@ -454,22 +455,22 @@ SPL_Status ADC_RegularSingleInit(ADC_TypeDef *adc, uint8_t channel, uint8_t samp
     uint32_t cfgr2;
     SPL_Status st;
 
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE((channel <= ADC_CHANNEL_MAX) && (sample_code <= 7U), SPL_ERR_PARAM);
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE((channel <= ADC_CHANNEL_MAX) && (sample_code <= 7U), SPL_ERR_PARAM);
     st = Adc_Off(adc);
     if (st != SPL_OK)
     {
         return st;
     }
-    /* sequencer mode change needs the ADC_ChannelConfig handshake (SAFE: CHSELR yok sayilir) */
-    SPL_REQUIRE_SAFE((adc->CFGR1 & ADC_SEQ_BITS) == 0U, SPL_ERR_STATE);
+    /* sequencer mode change needs the ADC_ChannelConfig handshake (CHSELR is ignored) */
+    SPL_REQUIRE((adc->CFGR1 & ADC_SEQ_BITS) == 0U, SPL_ERR_STATE);
     cfgr2 = adc->CFGR2;
     (void)cfgr2;
-    /* SAFE: sonuc 16 biti asar. */
-    SPL_REQUIRE_SAFE(((cfgr2 & ADC_CFGR2_OVSE) == 0U) ||
-                         (Adc_OvsFits(ADC_RES_12BIT, (cfgr2 & ADC_CFGR2_OVSR) >> ADC_CFGR2_OVSR_Pos,
-                                      (cfgr2 & ADC_CFGR2_OVSS) >> ADC_CFGR2_OVSS_Pos) != 0U),
-                     SPL_ERR_STATE);
+    /* the result would exceed 16 bits. */
+    SPL_REQUIRE(((cfgr2 & ADC_CFGR2_OVSE) == 0U) ||
+                    (Adc_OvsFits(ADC_RES_12BIT, (cfgr2 & ADC_CFGR2_OVSR) >> ADC_CFGR2_OVSR_Pos,
+                                 (cfgr2 & ADC_CFGR2_OVSS) >> ADC_CFGR2_OVSS_Pos) != 0U),
+                SPL_ERR_STATE);
     if (Adc_ChannelConfigPending(adc) != 0U)
     {
         return SPL_BUSY;
@@ -485,10 +486,10 @@ SPL_Status ADC_SamplingConfig(ADC_TypeDef *adc, uint8_t smp1, uint8_t smp2, uint
 {
     SPL_Status st;
 
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM);         /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE((smp1 <= 7U) && (smp2 <= 7U), SPL_ERR_PARAM); /* SAFE: SMP tasmasi */
-    /* SAFE (EDR-003): ayrilmis bite yazim. */
-    SPL_REQUIRE_SAFE((smp2_channels & ~ADC_CHANNEL_MASK) == 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM);         /* arbitrary address */
+    SPL_REQUIRE((smp1 <= 7U) && (smp2 <= 7U), SPL_ERR_PARAM); /* SMP overflow */
+    /* (EDR-003): write to a reserved bit. */
+    SPL_REQUIRE((smp2_channels & ~ADC_CHANNEL_MASK) == 0U, SPL_ERR_PARAM);
     st = Adc_NoConversion(adc);
     if (st != SPL_OK)
     {
@@ -503,14 +504,14 @@ SPL_Status ADC_Enable(ADC_TypeDef *adc)
 {
     uint32_t cr;
 
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     cr = adc->CR;
     if ((cr & (ADC_CR_ADDIS | ADC_CR_ADSTP)) != 0U)
     {
         return SPL_BUSY;
     }
-    /* RM0444 15.12.3 ADEN note: ADVREGEN = 1, no calibration (SAFE: ADEN yok sayilir). */
-    SPL_REQUIRE_SAFE(((cr & ADC_CR_ADVREGEN) != 0U) && ((cr & ADC_CR_ADCAL) == 0U), SPL_ERR_STATE);
+    /* RM0444 15.12.3 ADEN note: ADVREGEN = 1, no calibration (ADEN is ignored). */
+    SPL_REQUIRE(((cr & ADC_CR_ADVREGEN) != 0U) && ((cr & ADC_CR_ADCAL) == 0U), SPL_ERR_STATE);
     if ((cr & ADC_CR_ADEN) != 0U)
     {
         return SPL_OK; /* never re-issue ADEN: clearing ADRDY would lose the ready state */
@@ -527,8 +528,8 @@ SPL_Status ADC_Enable(ADC_TypeDef *adc)
 
 SPL_Status ADC_Ready(ADC_TypeDef *adc, uint8_t *ready)
 {
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(ready != (uint8_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(ready != (uint8_t *)0, SPL_ERR_PARAM);
     /* v0.11: AUTOFF = 1 -> ready as soon as ADEN = 1 (ADRDY is never set, RM0444 15.6.2). */
     *ready =
         (uint8_t)((((adc->CR & ADC_CR_ADEN) != 0U) &&
@@ -542,30 +543,29 @@ SPL_Status ADC_Start(ADC_TypeDef *adc)
 {
     uint32_t cr;
 
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     cr = adc->CR;
     if ((cr & (ADC_CR_ADDIS | ADC_CR_ADSTP)) != 0U)
     {
         return SPL_BUSY;
     }
-    /* SAFE: ADSTART sessizce yok sayilir. */
-    SPL_REQUIRE_SAFE(((cr & ADC_CR_ADEN) != 0U) && (((adc->ISR & ADC_ISR_ADRDY) != 0U) ||
-                                                    ((adc->CFGR1 & ADC_CFGR1_AUTOFF) != 0U)),
-                     SPL_ERR_STATE);
+    /* ADSTART is silently ignored. */
+    SPL_REQUIRE(((cr & ADC_CR_ADEN) != 0U) &&
+                    (((adc->ISR & ADC_ISR_ADRDY) != 0U) || ((adc->CFGR1 & ADC_CFGR1_AUTOFF) != 0U)),
+                SPL_ERR_STATE);
     if ((cr & ADC_CR_ADSTART) != 0U)
     {
         /* RM0444 15.12.3: ADSTART clears by itself only in single mode with software trigger.
-         * SAFE: BUSY surer, bekleme dongusu takilir (K-A4-4 ilkesi). */
-        SPL_REQUIRE_SAFE((adc->CFGR1 & (ADC_CFGR1_CONT | ADC_CFGR1_EXTEN)) == 0U, SPL_ERR_STATE);
+         * BUSY would persist and a wait loop would hang (K-A4-4 principle). */
+        SPL_REQUIRE((adc->CFGR1 & (ADC_CFGR1_CONT | ADC_CFGR1_EXTEN)) == 0U, SPL_ERR_STATE);
         return SPL_BUSY;
     }
     if ((adc->ISR & ADC_ISR_OVR) != 0U)
     {
         return SPL_ERR_HW; /* keep the evidence until ADC_ClearErrors */
     }
-    /* no channel selected (SAFE: EOC hic gelmez, K-A4-4 ilkesi) */
-    SPL_REQUIRE_SAFE(((adc->CFGR1 & ADC_CFGR1_CHSELRMOD) != 0U) || (adc->CHSELR != 0U),
-                     SPL_ERR_STATE);
+    /* no channel selected (EOC never comes, K-A4-4 principle) */
+    SPL_REQUIRE(((adc->CFGR1 & ADC_CFGR1_CHSELRMOD) != 0U) || (adc->CHSELR != 0U), SPL_ERR_STATE);
     if ((adc->ISR & ADC_ISR_CCRDY) == 0U)
     {
         return SPL_BUSY; /* RM0444 15.3.8: ADSTART would be ignored before CCRDY */
@@ -577,22 +577,23 @@ SPL_Status ADC_Start(ADC_TypeDef *adc)
 
 SPL_Status ADC_TryRead(ADC_TypeDef *adc, uint16_t *value)
 {
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(value != (uint16_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(value != (uint16_t *)0, SPL_ERR_PARAM);
     if ((adc->ISR & ADC_ISR_OVR) != 0U)
     {
         return SPL_ERR_HW;
     }
     if ((adc->ISR & ADC_ISR_EOC) == 0U)
     {
-        /* SAFE (K-A4-4 ilkesi): ADC kapali ya da donusum bitti, WOULD_BLOCK surerdi. */
-        SPL_REQUIRE_SAFE((adc->CR & ADC_CR_ADEN) != 0U, SPL_ERR_STATE);
+        /* (K-A4-4 principle): ADC off or conversion finished, WOULD_BLOCK would persist. */
+        SPL_REQUIRE((adc->CR & ADC_CR_ADEN) != 0U, SPL_ERR_STATE);
         /* EOS clears ADSTART right after the last EOC: read EOC again after ADSTART = 0. */
         if ((adc->CR & ADC_CR_ADSTART) == 0U)
         {
-            /* SAFE (K-A4-4): donusum yok ve EOC yok: WOULD_BLOCK sessiz takilma olurdu, DR cop.
-             * ADEN = 0 iken ADSTART da 0 oldugu icin ustteki ADEN denetimini de kapsar. */
-            SPL_REQUIRE_SAFE((adc->ISR & ADC_ISR_EOC) != 0U, SPL_ERR_STATE);
+            /* (K-A4-4): no conversion and no EOC: WOULD_BLOCK would be a silent hang, DR is
+             * garbage. ADSTART is also 0 while ADEN = 0, so this also covers the ADEN check above.
+             */
+            SPL_REQUIRE((adc->ISR & ADC_ISR_EOC) != 0U, SPL_ERR_STATE);
         }
         else
         {
@@ -605,7 +606,7 @@ SPL_Status ADC_TryRead(ADC_TypeDef *adc, uint16_t *value)
 
 SPL_Status ADC_ClearErrors(ADC_TypeDef *adc)
 {
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     adc->ISR = ADC_ISR_OVR;
     /* Read back: the clear reaches the peripheral before return (METHOD 1.7, issue #23). */
     (void)adc->ISR;
@@ -616,8 +617,8 @@ SPL_Status ADC_EnableDma(ADC_TypeDef *adc, uint8_t circular)
 {
     SPL_Status st;
 
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(circular <= 1U, SPL_ERR_PARAM);       /* SAFE: DMACFG SCANDIR'a tasar */
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(circular <= 1U, SPL_ERR_PARAM);       /* DMACFG spills into SCANDIR */
     st = Adc_Off(adc);
     if (st != SPL_OK)
     {
@@ -632,7 +633,7 @@ SPL_Status ADC_DisableDma(ADC_TypeDef *adc)
 {
     SPL_Status st;
 
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     st = Adc_Off(adc);
     if (st != SPL_OK)
     {
@@ -647,18 +648,17 @@ SPL_Status ADC_OversamplingConfig(ADC_TypeDef *adc, const ADC_OversamplingTypeDe
     uint32_t res;
     SPL_Status st;
 
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(config != (const ADC_OversamplingTypeDef *)0, SPL_ERR_PARAM);
-    /* SAFE: kaydirilan CFGR2 alanlari. */
-    SPL_REQUIRE_SAFE((config->enable <= 1U) && (config->ratio <= 7U) && (config->shift <= 8U) &&
-                         (config->triggered <= 1U),
-                     SPL_ERR_PARAM);
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(config != (const ADC_OversamplingTypeDef *)0, SPL_ERR_PARAM);
+    /* shifted CFGR2 fields. */
+    SPL_REQUIRE((config->enable <= 1U) && (config->ratio <= 7U) && (config->shift <= 8U) &&
+                    (config->triggered <= 1U),
+                SPL_ERR_PARAM);
     res = (adc->CFGR1 & ADC_CFGR1_RES) >> ADC_CFGR1_RES_Pos;
     (void)res;
-    /* SAFE: sonuc 16 biti asar. */
-    SPL_REQUIRE_SAFE((config->enable == 0U) ||
-                         (Adc_OvsFits(res, config->ratio, config->shift) != 0U),
-                     SPL_ERR_PARAM);
+    /* the result would exceed 16 bits. */
+    SPL_REQUIRE((config->enable == 0U) || (Adc_OvsFits(res, config->ratio, config->shift) != 0U),
+                SPL_ERR_PARAM);
     st = Adc_Off(adc);
     if (st != SPL_OK)
     {
@@ -694,17 +694,17 @@ SPL_Status ADC_Awd1Config(ADC_TypeDef *adc, const ADC_Awd1ConfigTypeDef *config)
     uint32_t cfgr1;
     SPL_Status st;
 
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(config != (const ADC_Awd1ConfigTypeDef *)0, SPL_ERR_PARAM);
-    /* SAFE: kaydirilan AWD1 alanlari, esik araligi / RM0444 Table 77. */
-    SPL_REQUIRE_SAFE(
-        (config->enable <= 1U) && (config->single <= 1U) && (config->channel <= ADC_CHANNEL_MAX) &&
-            (Adc_ThresholdsValid(adc, config->low, config->high, config->enable) != 0U),
-        SPL_ERR_PARAM);
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(config != (const ADC_Awd1ConfigTypeDef *)0, SPL_ERR_PARAM);
+    /* shifted AWD1 fields, threshold range / RM0444 Table 77. */
+    SPL_REQUIRE((config->enable <= 1U) && (config->single <= 1U) &&
+                    (config->channel <= ADC_CHANNEL_MAX) &&
+                    (Adc_ThresholdsValid(adc, config->low, config->high, config->enable) != 0U),
+                SPL_ERR_PARAM);
     cfgr1 = (adc->CFGR1 & ~ADC_AWD1_BITS) | ((uint32_t)config->channel << ADC_CFGR1_AWD1CH_Pos) |
             ((uint32_t)config->enable << ADC_CFGR1_AWD1EN_Pos) |
             ((uint32_t)config->single << ADC_CFGR1_AWD1SGL_Pos);
-    SPL_REQUIRE_SAFE(Adc_Awd1Hazard(cfgr1, adc->CHSELR) == 0U, SPL_ERR_PARAM); /* ES0548 2.6.3 */
+    SPL_REQUIRE(Adc_Awd1Hazard(cfgr1, adc->CHSELR) == 0U, SPL_ERR_PARAM); /* ES0548 2.6.3 */
     st = Adc_Off(adc);
     if (st != SPL_OK)
     {
@@ -721,13 +721,13 @@ SPL_Status ADC_AwdConfig(ADC_TypeDef *adc, uint8_t index, uint16_t low, uint16_t
     const uint32_t tr = ((uint32_t)high << ADC_AWD2TR_HT2_Pos) | low;
     SPL_Status st;
 
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    /* SAFE (EDR-003): ayrilmis bite yazim. */
-    SPL_REQUIRE_SAFE((channels & ~ADC_CHANNEL_MASK) == 0U, SPL_ERR_PARAM);
-    /* SAFE: AWD3 sessizce yazilir; esik araligi / RM0444 Table 77. */
-    SPL_REQUIRE_SAFE(((index == 2U) || (index == 3U)) &&
-                         (Adc_ThresholdsValid(adc, low, high, (channels != 0U) ? 1U : 0U) != 0U),
-                     SPL_ERR_PARAM);
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    /* (EDR-003): write to a reserved bit. */
+    SPL_REQUIRE((channels & ~ADC_CHANNEL_MASK) == 0U, SPL_ERR_PARAM);
+    /* AWD3 would be written silently; threshold range / RM0444 Table 77. */
+    SPL_REQUIRE(((index == 2U) || (index == 3U)) &&
+                    (Adc_ThresholdsValid(adc, low, high, (channels != 0U) ? 1U : 0U) != 0U),
+                SPL_ERR_PARAM);
     st = Adc_Off(adc);
     if (st != SPL_OK)
     {
@@ -748,18 +748,18 @@ SPL_Status ADC_AwdConfig(ADC_TypeDef *adc, uint8_t index, uint16_t low, uint16_t
 
 SPL_Status ADC_GetFlags(ADC_TypeDef *adc, uint32_t *flags)
 {
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(flags != (uint32_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(flags != (uint32_t *)0, SPL_ERR_PARAM);
     *flags = adc->ISR;
     return SPL_OK;
 }
 
 SPL_Status ADC_ClearFlags(ADC_TypeDef *adc, uint32_t flags)
 {
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE(flags != 0U, SPL_ERR_PARAM);               /* normal: etkisiz */
-    /* SAFE (EDR-003): ayrilmis bite yazim. */
-    SPL_REQUIRE_SAFE((flags & ~ADC_FLAGS_CLEARABLE) == 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(flags != 0U, SPL_ERR_PARAM);          /* no effect */
+    /* (EDR-003): write to a reserved bit. */
+    SPL_REQUIRE((flags & ~ADC_FLAGS_CLEARABLE) == 0U, SPL_ERR_PARAM);
     adc->ISR = flags; /* W1C: only the selected flags, no read-modify-write */
     /* Read back: the clear reaches the peripheral before return (METHOD 1.7, issue #23). */
     (void)adc->ISR;
@@ -770,21 +770,21 @@ SPL_Status ADC_StopRegular(ADC_TypeDef *adc)
 {
     uint32_t cr;
 
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     cr = adc->CR;
     if (((cr & ADC_CR_ADSTP) != 0U) || ((cr & ADC_CR_ADSTART) == 0U))
     {
         return SPL_OK;
     }
-    SPL_REQUIRE_SAFE((cr & ADC_CR_ADDIS) == 0U, SPL_ERR_STATE); /* RM0444 15.12.3; SAFE */
+    SPL_REQUIRE((cr & ADC_CR_ADDIS) == 0U, SPL_ERR_STATE); /* RM0444 15.12.3 */
     Adc_Command(adc, ADC_CR_ADSTP);
     return SPL_OK;
 }
 
 SPL_Status ADC_RegularStopped(ADC_TypeDef *adc, uint8_t *stopped)
 {
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(stopped != (uint8_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(stopped != (uint8_t *)0, SPL_ERR_PARAM);
     *stopped = (uint8_t)(((adc->CR & (ADC_CR_ADSTART | ADC_CR_ADSTP)) == 0U) ? 1U : 0U);
     return SPL_OK;
 }
@@ -793,7 +793,7 @@ SPL_Status ADC_Disable(ADC_TypeDef *adc)
 {
     uint32_t cr;
 
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     cr = adc->CR;
     if ((cr & ADC_CR_ADDIS) != 0U)
     {
@@ -803,8 +803,8 @@ SPL_Status ADC_Disable(ADC_TypeDef *adc)
     {
         return SPL_BUSY;
     }
-    /* RM0444 15.3.4: stop conversions before ADDIS (SAFE). */
-    SPL_REQUIRE_SAFE((cr & ADC_CR_ADSTART) == 0U, SPL_ERR_STATE);
+    /* RM0444 15.3.4: stop conversions before ADDIS. */
+    SPL_REQUIRE((cr & ADC_CR_ADSTART) == 0U, SPL_ERR_STATE);
     if ((cr & ADC_CR_ADEN) == 0U)
     {
         return SPL_OK;
@@ -815,8 +815,8 @@ SPL_Status ADC_Disable(ADC_TypeDef *adc)
 
 SPL_Status ADC_Disabled(ADC_TypeDef *adc, uint8_t *disabled)
 {
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(disabled != (uint8_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(disabled != (uint8_t *)0, SPL_ERR_PARAM);
     *disabled = (uint8_t)(((adc->CR & (ADC_CR_ADEN | ADC_CR_ADDIS)) == 0U) ? 1U : 0U);
     return SPL_OK;
 }
@@ -824,11 +824,11 @@ SPL_Status ADC_Disabled(ADC_TypeDef *adc, uint8_t *disabled)
 /* ---- v0.11: low-power modes (Docs/v0.11_TIME_ANALOG_SYSTEM.md, RM0444 15.6) ---- */
 SPL_Status ADC_LowPowerConfig(ADC_TypeDef *adc, uint8_t auto_off, uint8_t wait, uint8_t lftrig)
 {
-    SPL_REQUIRE_SAFE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(Adc_Valid(adc) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     SPL_REQUIRE((auto_off <= 1U) && (wait <= 1U) && (lftrig <= 1U), SPL_ERR_PARAM);
     /* CFGR1 / CFGR2 only with ADEN = 0 (RM0444 15.12.4 / 15.12.5, ERRATA ES0548 2.6.2 / 2.6.4);
-     * SAFE. */
-    SPL_REQUIRE_SAFE((adc->CR & ADC_CR_ADEN) == 0U, SPL_ERR_STATE);
+     * */
+    SPL_REQUIRE((adc->CR & ADC_CR_ADEN) == 0U, SPL_ERR_STATE);
     adc->CFGR1 = (adc->CFGR1 & ~(ADC_CFGR1_AUTOFF | ADC_CFGR1_WAIT)) |
                  ((auto_off != 0U) ? ADC_CFGR1_AUTOFF : 0U) | ((wait != 0U) ? ADC_CFGR1_WAIT : 0U);
     adc->CFGR2 = (adc->CFGR2 & ~ADC_CFGR2_LFTRIG) | ((lftrig != 0U) ? ADC_CFGR2_LFTRIG : 0U);

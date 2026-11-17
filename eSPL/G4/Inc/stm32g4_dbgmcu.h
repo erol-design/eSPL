@@ -59,9 +59,9 @@ extern "C"
     /* freeze=1: counter stopped while the core is halted; 0: keeps counting.
      * Only the selected bit changes. id >= COUNT or freeze > 1 -> PARAM;
      * bit not on this SKU -> UNSUPPORTED; no write in both cases. */
-    /* Seviye: PARAM[n,r] UNSUPPORTED[r] */
+    /* Level: PARAM[F,r] UNSUPPORTED[r] */
     SPL_Status DBGMCU_SetFreeze(DBGMCU_FreezeTypeDef id, uint8_t freeze);
-    /* Seviye: PARAM[S,r] UNSUPPORTED[r] */
+    /* Level: PARAM[F,r] UNSUPPORTED[r] */
     SPL_Status DBGMCU_GetFreeze(DBGMCU_FreezeTypeDef id, uint8_t *frozen);
 
     /* Sets DBG_SLEEP/DBG_STOP/DBG_STANDBY to exactly 'modes' (subset of
@@ -74,9 +74,9 @@ extern "C"
      * only alternative: keep RCC_AHB1SMENR.FLASHSMEN = 1). Debug-only issue.
      * ERRATA ES0431 2.2.1 / ES0430 2.2.1 / ES0523 2.2.1: 4-wire JTAG needs PB4 = NJTRST; use SWD.
      */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status DBGMCU_SetLowPowerDebug(uint32_t modes);
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status DBGMCU_GetLowPowerDebug(uint32_t *modes);
 
     /* IDCODE (RM0440 47.6.1): devId = DEV_ID[11:0] (0x468 category 2 = G431/G441,
@@ -86,7 +86,7 @@ extern "C"
      * Errata applicability depends on REV_ID: 0x2001 Z, 0x2002 Y, 0x2003 X (ES0430 / ES0431
      * Rev 10, DEV_ID 0x468/0x469); 0x1000 A, 0x1001 Z (ES0523 Rev 7, DEV_ID 0x479). No errata
      * sheet exists here for G411/G414. */
-    /* Seviye: PARAM[n] */
+    /* Level: PARAM[F] */
     SPL_Status DBGMCU_GetIdCode(uint16_t *devId, uint16_t *revId);
 
 #ifdef __cplusplus

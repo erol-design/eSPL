@@ -66,13 +66,13 @@ extern "C"
         return (uint8_t)(((tim->CR1 & TIM_CR1_DIR) != 0U) ? 1U : 0U);
     }
 
-    /* Seviye: PARAM[S] HW[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] HW[r] WOULD_BLOCK[r] */
     static inline SPL_Status Tim_FastCapture(const TIM_TypeDef *tim, uint32_t flag,
                                              const volatile uint32_t *ccr, uint32_t *value)
     {
         uint32_t status;
 
-        SPL_REQUIRE_SAFE(value != (uint32_t *)0, SPL_ERR_PARAM);
+        SPL_REQUIRE(value != (uint32_t *)0, SPL_ERR_PARAM);
         status = tim->SR;
         if ((status & (flag << 8U)) != 0U)
         {
@@ -86,22 +86,22 @@ extern "C"
         return SPL_OK;
     }
 
-    /* Seviye: PARAM[S] HW[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] HW[r] WOULD_BLOCK[r] */
     static inline SPL_Status TIM_FastGetCapture1(const TIM_TypeDef *tim, uint32_t *value)
     {
         return Tim_FastCapture(tim, TIM_SR_CC1IF, &tim->CCR1, value);
     }
-    /* Seviye: PARAM[S] HW[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] HW[r] WOULD_BLOCK[r] */
     static inline SPL_Status TIM_FastGetCapture2(const TIM_TypeDef *tim, uint32_t *value)
     {
         return Tim_FastCapture(tim, TIM_SR_CC2IF, &tim->CCR2, value);
     }
-    /* Seviye: PARAM[S] HW[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] HW[r] WOULD_BLOCK[r] */
     static inline SPL_Status TIM_FastGetCapture3(const TIM_TypeDef *tim, uint32_t *value)
     {
         return Tim_FastCapture(tim, TIM_SR_CC3IF, &tim->CCR3, value);
     }
-    /* Seviye: PARAM[S] HW[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] HW[r] WOULD_BLOCK[r] */
     static inline SPL_Status TIM_FastGetCapture4(const TIM_TypeDef *tim, uint32_t *value)
     {
         return Tim_FastCapture(tim, TIM_SR_CC4IF, &tim->CCR4, value);
@@ -192,20 +192,20 @@ static inline uint32_t Tim_FastFlagMask(const TIM_TypeDef *tim)
     static inline SPL_Status DAC_FastWrite12R2(DAC_TypeDef *dac, uint32_t value)
         SPL_DIAG(value > 0xFFFU, "DAC_FastWrite12R2: value must fit 12 bits");
 
-    /* Seviye: PARAM[S] STATE[S] */
+    /* Level: PARAM[F] STATE[F] */
     static inline SPL_Status DAC_FastWrite12R1(DAC_TypeDef *dac, uint32_t value)
     {
-        SPL_REQUIRE_SAFE(value <= 0xFFFU, SPL_ERR_PARAM);
-        SPL_REQUIRE_SAFE((dac->CR & DAC_CR_DMAEN1) == 0U, SPL_ERR_STATE);
+        SPL_REQUIRE(value <= 0xFFFU, SPL_ERR_PARAM);
+        SPL_REQUIRE((dac->CR & DAC_CR_DMAEN1) == 0U, SPL_ERR_STATE);
         dac->DHR12R1 = value;
         return SPL_OK;
     }
 
-    /* Seviye: PARAM[S] STATE[S] */
+    /* Level: PARAM[F] STATE[F] */
     static inline SPL_Status DAC_FastWrite12R2(DAC_TypeDef *dac, uint32_t value)
     {
-        SPL_REQUIRE_SAFE(value <= 0xFFFU, SPL_ERR_PARAM);
-        SPL_REQUIRE_SAFE((dac->CR & DAC_CR_DMAEN2) == 0U, SPL_ERR_STATE);
+        SPL_REQUIRE(value <= 0xFFFU, SPL_ERR_PARAM);
+        SPL_REQUIRE((dac->CR & DAC_CR_DMAEN2) == 0U, SPL_ERR_STATE);
         dac->DHR12R2 = value;
         return SPL_OK;
     }
@@ -247,19 +247,19 @@ static inline uint32_t Tim_FastFlagMask(const TIM_TypeDef *tim)
 /* Compile-time check (CCL-2 YAP-03): DMA1_Channel1_BASE + (channel - 1) * 0x14 reaches exactly
  * the last CMSIS DMA1 channel, and its ISR/IFCR shift (channel - 1) * 4 stays <= 28. */
 #if defined(DMA1_Channel8)
-    typedef char Dma1_FastChannelCheck
-        [(((DMA1_Channel2_BASE - DMA1_Channel1_BASE) == 0x14U) &&
-          ((DMA1_Channel1_BASE + ((DMA1_FAST_CHANNELS - 1U) * 0x14U)) == DMA1_Channel8_BASE) &&
-          (((DMA1_FAST_CHANNELS - 1U) * 4U) <= 28U))
-             ? 1
-             : -1];
+    typedef char Dma1_FastChannelCheck[(((DMA1_Channel2_BASE - DMA1_Channel1_BASE) == 0x14U) &&
+                                        ((DMA1_Channel1_BASE + ((DMA1_FAST_CHANNELS - 1U) *
+                                                                0x14U)) == DMA1_Channel8_BASE) &&
+                                        (((DMA1_FAST_CHANNELS - 1U) * 4U) <= 28U))
+                                           ? 1
+                                           : -1];
 #else
-    typedef char Dma1_FastChannelCheck
-        [(((DMA1_Channel2_BASE - DMA1_Channel1_BASE) == 0x14U) &&
-          ((DMA1_Channel1_BASE + ((DMA1_FAST_CHANNELS - 1U) * 0x14U)) == DMA1_Channel6_BASE) &&
-          (((DMA1_FAST_CHANNELS - 1U) * 4U) <= 28U))
-             ? 1
-             : -1];
+typedef char Dma1_FastChannelCheck[(((DMA1_Channel2_BASE - DMA1_Channel1_BASE) == 0x14U) &&
+                                    ((DMA1_Channel1_BASE + ((DMA1_FAST_CHANNELS - 1U) * 0x14U)) ==
+                                     DMA1_Channel6_BASE) &&
+                                    (((DMA1_FAST_CHANNELS - 1U) * 4U) <= 28U))
+                                       ? 1
+                                       : -1];
 #endif
 
     static inline uint32_t DMA1_FastFlags(uint32_t channel)
@@ -275,18 +275,17 @@ static inline uint32_t Tim_FastFlagMask(const TIM_TypeDef *tim)
         return (DMA1->ISR >> ((channel - 1U) * 4U)) & 0xFU;
     }
 
-    /* Seviye: PARAM[S,n] STATE[S] */
+    /* Level: PARAM[F] STATE[F] */
     static inline SPL_Status DMA1_FastClearFlags(uint32_t channel, uint32_t flags)
     {
         const DMA_Channel_TypeDef *dma_channel;
 
-        SPL_REQUIRE_SAFE((channel >= 1U) && (channel <= DMA1_FAST_CHANNELS), SPL_ERR_PARAM);
+        SPL_REQUIRE((channel >= 1U) && (channel <= DMA1_FAST_CHANNELS), SPL_ERR_PARAM);
         SPL_REQUIRE(flags != 0U, SPL_ERR_PARAM);
-        SPL_REQUIRE_SAFE(flags <= 0xFU, SPL_ERR_PARAM);
+        SPL_REQUIRE(flags <= 0xFU, SPL_ERR_PARAM);
         dma_channel = (const DMA_Channel_TypeDef *)(DMA1_Channel1_BASE + ((channel - 1U) * 0x14U));
-        SPL_REQUIRE_SAFE(((flags & DMA_IFCR_CGIF1) == 0U) ||
-                             ((dma_channel->CCR & DMA_CCR_EN) == 0U),
-                         SPL_ERR_STATE);
+        SPL_REQUIRE(((flags & DMA_IFCR_CGIF1) == 0U) || ((dma_channel->CCR & DMA_CCR_EN) == 0U),
+                    SPL_ERR_STATE);
         DMA1->IFCR = flags << ((channel - 1U) * 4U);
         (void)DMA1->ISR;
         return SPL_OK;

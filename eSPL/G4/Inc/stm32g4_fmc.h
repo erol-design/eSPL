@@ -166,58 +166,58 @@ extern "C"
      * disabled: bank 1 PARAM unless write_fifo_disable = 1; bank 2..4 STATE
      * unless BCR1.WFDIS = 1 (init bank 1 first); bank 1 with WFDIS = 0 STATE
      * while bank 2..4 is configured as sync-write PSRAM. */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status FMC_NORSRAM_Init(uint32_t bank, const FMC_NORSRAM_InitTypeDef *init,
                                 const FMC_NORSRAM_TimingTypeDef *timing,
                                 const FMC_NORSRAM_TimingTypeDef *write_timing);
     /* Set / clear FMC_BCRx.MBKEN only (idempotent). */
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status FMC_NORSRAM_Enable(uint32_t bank);
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status FMC_NORSRAM_Disable(uint32_t bank);
     /* FMC_PCSCNTR: CSCOUNT (0 disables the split) and CNTBxEN from bank_mask
      * (FMC_PSRAM_CNT_*). STATE while any NOR/PSRAM sub-bank is enabled. */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status FMC_PSRAM_SetCounter(uint16_t count, uint32_t bank_mask);
 
     /* Programs FMC_PMEM, FMC_PATT, then FMC_PCR (PTYP = 1, PBKEN = 0,
      * ECCEN = 0). STATE while PBKEN = 1.
      * ERRATA ES0430 2.5.2: PARAM when common->setup (MEMSET) = 0 and
      * attribute->hold (ATTHOLD) <= 1 (busy-NAND wrong read). */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status FMC_NAND_Init(const FMC_NAND_InitTypeDef *init, const FMC_NAND_TimingTypeDef *common,
                              const FMC_NAND_TimingTypeDef *attribute);
-    /* Seviye: UNSUPPORTED[r] */
+    /* Level: UNSUPPORTED[r] */
     SPL_Status FMC_NAND_Enable(void);
-    /* Seviye: UNSUPPORTED[r] */
+    /* Level: UNSUPPORTED[r] */
     SPL_Status FMC_NAND_Disable(void);
     /* ECCEN = 1. If ECCEN is already 1, it is first written 0 (ECC logic and
      * FMC_ECCR reset, RM0440 19.7.6 step 4) and then 1. */
-    /* Seviye: UNSUPPORTED[r] */
+    /* Level: UNSUPPORTED[r] */
     SPL_Status FMC_NAND_ECCStart(void);
     /* ECCEN = 0: ECC logic disabled and FMC_ECCR cleared. */
-    /* Seviye: UNSUPPORTED[r] */
+    /* Level: UNSUPPORTED[r] */
     SPL_Status FMC_NAND_ECCStop(void);
     /* FMC_ECCR masked to the bits valid for ECCPS (RM0440 Table 156).
      * STATE when ECCEN = 0; WOULD_BLOCK while the write FIFO is not empty
      * (FEMPT = 0, RM0440 FMC_SR). Does not stop the ECC logic. */
-    /* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] WOULD_BLOCK[r] */
+    /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] WOULD_BLOCK[r] */
     SPL_Status FMC_NAND_GetECC(uint32_t *ecc);
     /* FMC_SR & (FMC_NAND_FLAGS_ALL | FMC_NAND_FLAG_FEMPT), no side effects. */
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status FMC_NAND_GetFlags(uint32_t *flags);
     /* Writes 0 to the given IRS/ILS/IFS flags (subset of FMC_NAND_FLAGS_ALL,
      * non-zero). FMC_SR has no atomic clear: a flag set by hardware between
      * the read and the write of the RMW is lost (RM0440 FMC_SR is rw). */
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status FMC_NAND_ClearFlags(uint32_t flags);
     /* Sets (enable = 1) or clears (enable = 0) IREN/ILEN/IFEN (subset of
      * FMC_NAND_IT_ALL, non-zero). Same RMW caveat as FMC_NAND_ClearFlags. */
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status FMC_NAND_ITConfig(uint32_t its, uint8_t enable);
 
     /* Base address of a bank window (FMC_REGION_*). No memory access. */
-    /* Seviye: PARAM[S] UNSUPPORTED[r] */
+    /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status FMC_GetBankAddress(uint32_t region, uint32_t *address);
 
 #ifdef __cplusplus

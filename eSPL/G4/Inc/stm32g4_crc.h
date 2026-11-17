@@ -40,21 +40,21 @@ extern "C"
      * 16.3.3), POL, CR (RESET=0), INIT. The INIT write also loads DR, so a new
      * computation starts from init. PARAM: NULL, field out of range, even
      * polynomial, polynomial/init wider than polysize. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status CRC_Config(const CRC_ConfigTypeDef *config);
     /* Sets CR.RESET (self-clearing) keeping REV_OUT/REV_IN/POLYSIZE: DR = INIT. */
-    /* Seviye: - */
+    /* Level: - */
     SPL_Status CRC_Reset(void);
     /* Feed one byte / half-word / word with an 8/16/32-bit access to DR
      * (RM0440 16.4.1: right-aligned byte and half-word accesses). */
-    /* Seviye: - */
+    /* Level: - */
     SPL_Status CRC_Feed8(uint8_t data);
-    /* Seviye: - */
+    /* Level: - */
     SPL_Status CRC_Feed16(uint16_t data);
-    /* Seviye: - */
+    /* Level: - */
     SPL_Status CRC_Feed32(uint32_t data);
     /* 32-bit DR read, masked to the configured polysize (7/8/16/32 bits). */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status CRC_GetResult(uint32_t *result);
 
 #ifdef __cplusplus

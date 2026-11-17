@@ -16,8 +16,11 @@ extern "C"
  * from the G4 SPL v0.13.5 DAC driver. G0 differences: one DAC; no DACxRDY flag (the caller waits
  * tWAKEUP after DAC_Enable, datasheet), so G4 DAC_Ready does not exist and DAC_WriteData never
  * returns WOULD_BLOCK; no MCR.HFSEL (no DAC_SetHighFrequencyMode), no DMADOUBLE / SINFORMAT.
- * The DAC APB clock (RCC_PERIPH_DAC) and the analog GPIO mode are caller duties.
- * Not reentrant: serialize calls (ISR included). */
+ * Caller duties (all APIs): DAC APB clock (RCC_PERIPH_DAC); analog GPIO mode on PA4 / PA5; the
+ * tWAKEUP wait after DAC_Enable; the trigger source (timer TRGO, EXTI) and the DMA channel when
+ * used. Not reentrant: serialize calls (ISR included).
+ * Usage: DAC_ChannelConfig with ENx = 0, DAC_Enable, wait tWAKEUP, then DAC_WriteData (or the
+ * selected trigger / DMA). */
 /* Channel numbers. */
 #define DAC_CHANNEL_1 1U
 #define DAC_CHANNEL_2 2U
@@ -25,7 +28,10 @@ extern "C"
 #define DAC_MODE_EXT_BUFFERED 0U     /* external pin, buffer enabled */
 #define DAC_MODE_EXT_INT_BUFFERED 1U /* external pin + on-chip peripherals, buffer enabled */
 #define DAC_MODE_EXT_UNBUFFERED 2U   /* external pin, buffer disabled */
-#define DAC_MODE_INT_UNBUFFERED 3U   /* on-chip peripherals only, buffer disabled */
+/* CCL-2 ANL-03: caller duty for DAC_MODE_EXT_UNBUFFERED: the pin drives only a high-impedance
+ * load (output impedance of the unbuffered DAC: device datasheet); a low-impedance load drops
+ * the output voltage. Use DAC_MODE_EXT_BUFFERED for such loads. */
+#define DAC_MODE_INT_UNBUFFERED 3U /* on-chip peripherals only, buffer disabled */
 /* ERRATA ES0418 2.3.1 / ES0412 2.3.1 (G071 / G081): with DAC_MODE_INT_UNBUFFERED the DAC pin
  * (PA4 / PA5) output buffer stays disabled: the pin works only as input or analog, not as GPIO /
  * AF output (no workaround). Caller: do not plan another output function on that pin. */
@@ -51,56 +57,75 @@ typedef struct
 /* EN=0 and CEN=0 required (STATE). Wave generation is forced off (WAVEx=0, MAMPx=0).
  * ERRATA ES0548 2.7.1: MODE programmed before any data write gives an invalid output; the
  * driver writes DHR12Rx (its current value) before MCR.MODEx, then CR. */
-/* Seviye: PARAM[S,n] STATE[S] */
+/* Caller: with dma_enable = 1 configure the DMA channel (DMAMUX DAC request) and keep its
+ * buffer valid while DMAENx = 1; pick the mode for the load (DAC_MODE_* notes). */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status DAC_ChannelConfig(DAC_TypeDef *dac, uint32_t channel,
                              const DAC_ChannelConfigTypeDef *config);
 /* ENx = 1; STATE in calibration mode (CENx = 1). Output valid after tWAKEUP. */
-/* Seviye: PARAM[S] STATE[S] */
+/* Caller: wait tWAKEUP (datasheet) before relying on the output (no ready flag on G0). */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status DAC_Enable(DAC_TypeDef *dac, uint32_t channel);
-/* Seviye: PARAM[S] */
+/* Caller: stop the DMA channel and trigger source first if they feed this channel (not
+ * checked). */
+/* Level: PARAM[F] */
 SPL_Status DAC_Disable(DAC_TypeDef *dac, uint32_t channel);
 /* STATE if DMAENx=1 (the DMA owns the data register). */
-/* Seviye: PARAM[S,r] STATE[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F,r] STATE[F] */
 SPL_Status DAC_WriteData(DAC_TypeDef *dac, uint32_t channel, uint32_t align, uint32_t value);
 /* Requires TENx=1 and TSELx=0 (SWTRIG), else STATE.
  * ERRATA ES0548 2.7.2: with DMA, a trigger on the DMA acknowledge cycle can hide DMAUDR; do not
  * mix software and hardware triggers with DMA. */
-/* Seviye: PARAM[S] STATE[S] */
+/* Caller: with DMA do not mix software and hardware triggers (ES0548 2.7.2). */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status DAC_SoftwareTrigger(DAC_TypeDef *dac, uint32_t channel);
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status DAC_ReadOutput(DAC_TypeDef *dac, uint32_t channel, uint32_t *value);
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status DAC_UnderrunFlag(DAC_TypeDef *dac, uint32_t channel, uint8_t *set);
 /* SR.DMAUDRx is rc_w1: writes only that bit. */
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status DAC_ClearUnderrun(DAC_TypeDef *dac, uint32_t channel);
 /* ---- v0.11: wave generation, sample and hold, dual channel, calibration ---- */
 /* WAVEx = wave (DAC_WAVE_*), MAMPx = amplitude 0..11 (noise: unmasked LFSR bits - 1; triangle:
  * 2^(amplitude + 1) - 1; RM0444 16.4.9 / 16.4.10). ENx / CENx = 1 -> STATE; wave without TENx = 1
  * -> STATE (wave generation is used only with the trigger enabled, RM0444 16.7.1). */
-/* Seviye: PARAM[S,n] STATE[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status DAC_WaveConfig(DAC_TypeDef *dac, uint32_t channel, uint32_t wave, uint32_t amplitude);
 /* Sample and hold (RM0444 16.4.11): MODEx = DAC_MODE_SAMPLE_HOLD | mode (DAC_MODE_* 0..3), SHSRx =
  * sample (0..1023 LSI periods + 1), SHHR hold (0..1023), SHRR refresh (0..255). ENx / CENx = 1 ->
  * STATE. ERRATA ES0548 2.7.1 handled as in DAC_ChannelConfig. LSI / LSE clock: caller. */
-/* Seviye: PARAM[S] STATE[S] */
+/* Caller: LSI / LSE clock running before the channel is enabled. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status DAC_SampleHoldConfig(DAC_TypeDef *dac, uint32_t channel, uint32_t mode, uint32_t sample,
                                 uint32_t hold, uint32_t refresh);
 /* Both channels in one access: DHR12RD / DHR12LD / DHR8RD (align as DAC_WriteData). */
-/* Seviye: PARAM[S] */
+/* Caller: do not use while DMAENx = 1 on either channel (checked by DAC_WriteData, not here). */
+/* Level: PARAM[F] */
 SPL_Status DAC_WriteDual(DAC_TypeDef *dac, uint32_t align, uint32_t value1, uint32_t value2);
 /* SWTRIG1 | SWTRIG2 in one write. */
-/* Seviye: PARAM[S] */
+/* Caller: both channels need TENx = 1 and TSELx = 0 (SWTRIG), not checked here; with DMA see
+ * ES0548 2.7.2. */
+/* Level: PARAM[F] */
 SPL_Status DAC_SoftwareTriggerDual(DAC_TypeDef *dac);
 /* Buffer offset trim CCR.OTRIMx = trim (0..31); ENx = 1 -> STATE (RM0444 16.4.12). */
-/* Seviye: PARAM[S] STATE[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status DAC_SetOffsetTrim(DAC_TypeDef *dac, uint32_t channel, uint32_t trim);
 /* CENx = enable (calibration mode); ENx = 1 -> STATE. The trim search (OTRIM steps, wait, CAL_FLAG)
  * is the caller's loop (RM0444 16.4.12). */
-/* Seviye: PARAM[S,n] STATE[S] */
+/* Caller: run the trim loop (DAC_SetOffsetTrim steps, wait, DAC_CalibrationFlag) and leave
+ * calibration mode before DAC_Enable. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status DAC_CalibrationMode(DAC_TypeDef *dac, uint32_t channel, uint8_t enable);
 /* *high = CAL_FLAGx. */
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status DAC_CalibrationFlag(DAC_TypeDef *dac, uint32_t channel, uint8_t *high);
 
 #endif /* SPL_G0_HAS_DAC */

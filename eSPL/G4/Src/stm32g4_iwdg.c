@@ -23,8 +23,8 @@ SPL_Status IWDG_Start(void)
 
 SPL_Status IWDG_SetPrescalerReload(uint32_t prescaler, uint32_t reload)
 {
-    /* SAFE: invalid PR/RLR produces a wrong or unpredictable watchdog period. */
-    SPL_REQUIRE_SAFE(Iwdg_ValidPrescalerReload(prescaler, reload) != 0U, SPL_ERR_PARAM);
+    /* Invalid PR/RLR produces a wrong or unpredictable watchdog period. */
+    SPL_REQUIRE(Iwdg_ValidPrescalerReload(prescaler, reload) != 0U, SPL_ERR_PARAM);
     /* RM0440 35.4.4: PR/RLR may change only while PVU/RVU are reset. WVU is
      * included so a pending window write is not overtaken. */
     if ((IWDG->SR & IWDG_SR_UPDATING) != 0U)
@@ -40,9 +40,9 @@ SPL_Status IWDG_SetPrescalerReload(uint32_t prescaler, uint32_t reload)
 
 SPL_Status IWDG_SetWindow(uint32_t window)
 {
-    /* SAFE: invalid WINR may silently change watchdog behavior. */
-    SPL_REQUIRE_SAFE(window != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(window <= (IWDG_WINR_WIN_Msk >> IWDG_WINR_WIN_Pos), SPL_ERR_PARAM);
+    /* Invalid WINR may silently change watchdog behavior. */
+    SPL_REQUIRE(window != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(window <= (IWDG_WINR_WIN_Msk >> IWDG_WINR_WIN_Pos), SPL_ERR_PARAM);
     /* RM0440 35.3.2 step 5: wait for IWDG_SR = 0 before writing WINR. */
     if ((IWDG->SR & IWDG_SR_UPDATING) != 0U)
     {
@@ -75,9 +75,9 @@ SPL_Status IWDG_CalcTimeoutUs(uint32_t prescaler, uint32_t reload, uint32_t *tim
     uint32_t divider;
     uint64_t us;
 
-    /* SAFE: invalid output pointer or arithmetic parameters corrupt the result. */
-    SPL_REQUIRE_SAFE(timeout_us != NULL, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(Iwdg_ValidPrescalerReload(prescaler, reload) != 0U, SPL_ERR_PARAM);
+    /* Invalid output pointer or arithmetic parameters corrupt the result. */
+    SPL_REQUIRE(timeout_us != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(Iwdg_ValidPrescalerReload(prescaler, reload) != 0U, SPL_ERR_PARAM);
 
     /* RM0440 35.4.2: /4 << PR, PR 6 and 7 are both /256. */
     divider = (prescaler >= 6U) ? 256U : (4U << prescaler);

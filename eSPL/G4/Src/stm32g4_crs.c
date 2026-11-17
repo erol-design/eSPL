@@ -28,8 +28,8 @@ SPL_Status CRS_CalcReload(uint32_t target_hz, uint32_t sync_hz, uint32_t *reload
 {
     uint32_t ratio = 0U;
 
-    /* SAFE: NULL output can cause an invalid write. */
-    SPL_REQUIRE_SAFE(reload != (uint32_t *)0, SPL_ERR_PARAM);
+    /* NULL output can cause an invalid write. */
+    SPL_REQUIRE(reload != (uint32_t *)0, SPL_ERR_PARAM);
     if (Crs_Ratio(target_hz, sync_hz, &ratio) != SPL_OK)
     {
         return SPL_ERR_PARAM;
@@ -49,12 +49,12 @@ SPL_Status CRS_CalcErrorLimit(uint32_t target_hz, uint32_t sync_hz, uint32_t ste
     uint64_t product;
     uint64_t felim;
 
-    /* SAFE: NULL output pointer. */
-    SPL_REQUIRE_SAFE(error_limit != (uint32_t *)0, SPL_ERR_PARAM);
-    /* SAFE: Zero step is not a valid configuration. */
-    SPL_REQUIRE_SAFE(step_centi_pct != 0U, SPL_ERR_PARAM);
-    /* SAFE: Step outside the defined range. */
-    SPL_REQUIRE_SAFE(step_centi_pct <= CRS_STEP_MAX, SPL_ERR_PARAM);
+    /* NULL output pointer. */
+    SPL_REQUIRE(error_limit != (uint32_t *)0, SPL_ERR_PARAM);
+    /* Zero step is not a valid configuration. */
+    SPL_REQUIRE(step_centi_pct != 0U, SPL_ERR_PARAM);
+    /* Step outside the defined range. */
+    SPL_REQUIRE(step_centi_pct <= CRS_STEP_MAX, SPL_ERR_PARAM);
     if (Crs_Ratio(target_hz, sync_hz, &ratio) != SPL_OK)
     {
         return SPL_ERR_PARAM;
@@ -75,27 +75,27 @@ SPL_Status CRS_Config(const CRS_InitTypeDef *init)
     uint32_t cfgr;
     uint32_t cr;
 
-    /* SAFE: NULL configuration pointer. */
-    SPL_REQUIRE_SAFE(init != (const CRS_InitTypeDef *)0, SPL_ERR_PARAM);
-    /* SAFE: Invalid SYNCSRC encoding. */
-    SPL_REQUIRE_SAFE(init->sync_source <= CRS_SYNCSRC_USB_SOF, SPL_ERR_PARAM);
-    /* SAFE: Invalid SYNCDIV encoding. */
-    SPL_REQUIRE_SAFE(init->sync_divider <= CRS_SYNCDIV_MAX, SPL_ERR_PARAM);
-    /* SAFE: Invalid SYNCPOL bit. */
-    SPL_REQUIRE_SAFE(init->sync_polarity <= 1U, SPL_ERR_PARAM);
-    /* SAFE: RELOAD exceeds field width. */
-    SPL_REQUIRE_SAFE(init->reload <= CRS_RELOAD_MAX, SPL_ERR_PARAM);
-    /* SAFE: Zero error limit is disallowed. */
-    SPL_REQUIRE_SAFE(init->error_limit != 0U, SPL_ERR_PARAM);
-    /* SAFE: FELIM exceeds field width. */
-    SPL_REQUIRE_SAFE(init->error_limit <= CRS_FELIM_MAX, SPL_ERR_PARAM);
-    /* SAFE: TRIM exceeds field width. */
-    SPL_REQUIRE_SAFE(init->trim <= CRS_TRIM_MAX, SPL_ERR_PARAM);
-    /* SAFE: Invalid AUTOTRIMEN bit. */
-    SPL_REQUIRE_SAFE(init->auto_trim <= 1U, SPL_ERR_PARAM);
+    /* NULL configuration pointer. */
+    SPL_REQUIRE(init != (const CRS_InitTypeDef *)0, SPL_ERR_PARAM);
+    /* Invalid SYNCSRC encoding. */
+    SPL_REQUIRE(init->sync_source <= CRS_SYNCSRC_USB_SOF, SPL_ERR_PARAM);
+    /* Invalid SYNCDIV encoding. */
+    SPL_REQUIRE(init->sync_divider <= CRS_SYNCDIV_MAX, SPL_ERR_PARAM);
+    /* Invalid SYNCPOL bit. */
+    SPL_REQUIRE(init->sync_polarity <= 1U, SPL_ERR_PARAM);
+    /* RELOAD exceeds field width. */
+    SPL_REQUIRE(init->reload <= CRS_RELOAD_MAX, SPL_ERR_PARAM);
+    /* Zero error limit is disallowed. */
+    SPL_REQUIRE(init->error_limit != 0U, SPL_ERR_PARAM);
+    /* FELIM exceeds field width. */
+    SPL_REQUIRE(init->error_limit <= CRS_FELIM_MAX, SPL_ERR_PARAM);
+    /* TRIM exceeds field width. */
+    SPL_REQUIRE(init->trim <= CRS_TRIM_MAX, SPL_ERR_PARAM);
+    /* Invalid AUTOTRIMEN bit. */
+    SPL_REQUIRE(init->auto_trim <= 1U, SPL_ERR_PARAM);
     /* RM0440 8.4.6: RELOAD must be greater than the OUTRANGE limit. */
-    /* SAFE: RELOAD must exceed OUTRANGE; invalid configuration. */
-    SPL_REQUIRE_SAFE(init->reload > (CRS_OUTRANGE_FACTOR * init->error_limit), SPL_ERR_PARAM);
+    /* RELOAD must exceed OUTRANGE; invalid configuration. */
+    SPL_REQUIRE(init->reload > (CRS_OUTRANGE_FACTOR * init->error_limit), SPL_ERR_PARAM);
 #if !defined(USB)
     if (init->sync_source == CRS_SYNCSRC_USB_SOF)
     {
@@ -163,8 +163,8 @@ SPL_Status CRS_SetAutoTrim(uint8_t enable)
 {
     uint32_t cr;
 
-    /* SAFE: Invalid boolean enable. */
-    SPL_REQUIRE_SAFE(enable <= 1U, SPL_ERR_PARAM);
+    /* Invalid boolean enable. */
+    SPL_REQUIRE(enable <= 1U, SPL_ERR_PARAM);
     cr = CRS->CR & (CRS_CR_KEEP & ~CRS_CR_AUTOTRIMEN);
     if (enable != 0U)
     {
@@ -178,8 +178,8 @@ SPL_Status CRS_SetTrim(uint32_t trim)
 {
     uint32_t cr;
 
-    /* SAFE: TRIM exceeds its field width. */
-    SPL_REQUIRE_SAFE(trim <= CRS_TRIM_MAX, SPL_ERR_PARAM);
+    /* TRIM exceeds its field width. */
+    SPL_REQUIRE(trim <= CRS_TRIM_MAX, SPL_ERR_PARAM);
     cr = CRS->CR & CRS_CR_KEEP;
     if ((cr & CRS_CR_AUTOTRIMEN) != 0U)
     {
@@ -191,8 +191,8 @@ SPL_Status CRS_SetTrim(uint32_t trim)
 
 SPL_Status CRS_GetTrim(uint32_t *trim)
 {
-    /* SAFE: NULL output pointer. */
-    SPL_REQUIRE_SAFE(trim != (uint32_t *)0, SPL_ERR_PARAM);
+    /* NULL output pointer. */
+    SPL_REQUIRE(trim != (uint32_t *)0, SPL_ERR_PARAM);
     *trim = (CRS->CR & CRS_CR_TRIM) >> CRS_CR_TRIM_Pos;
     return SPL_OK;
 }
@@ -201,12 +201,12 @@ SPL_Status CRS_InterruptConfig(uint32_t mask, uint8_t enable)
 {
     uint32_t cr;
 
-    /* SAFE: Empty interrupt mask. */
-    SPL_REQUIRE_SAFE(mask != 0U, SPL_ERR_PARAM);
-    /* SAFE: Invalid interrupt mask writes reserved CR bits. */
-    SPL_REQUIRE_SAFE((mask & ~CRS_IT_ALL) == 0U, SPL_ERR_PARAM);
-    /* SAFE: Invalid boolean enable. */
-    SPL_REQUIRE_SAFE(enable <= 1U, SPL_ERR_PARAM);
+    /* Empty interrupt mask. */
+    SPL_REQUIRE(mask != 0U, SPL_ERR_PARAM);
+    /* Invalid interrupt mask writes reserved CR bits. */
+    SPL_REQUIRE((mask & ~CRS_IT_ALL) == 0U, SPL_ERR_PARAM);
+    /* Invalid boolean enable. */
+    SPL_REQUIRE(enable <= 1U, SPL_ERR_PARAM);
     cr = CRS->CR & (CRS_CR_KEEP & ~mask);
     if (enable != 0U)
     {
@@ -218,10 +218,10 @@ SPL_Status CRS_InterruptConfig(uint32_t mask, uint8_t enable)
 
 SPL_Status CRS_ClearFlags(uint32_t flags)
 {
-    /* SAFE: Empty clear mask. */
-    SPL_REQUIRE_SAFE(flags != 0U, SPL_ERR_PARAM);
-    /* SAFE: Invalid W1C clear mask. */
-    SPL_REQUIRE_SAFE((flags & ~CRS_CLEAR_ALL) == 0U, SPL_ERR_PARAM);
+    /* Empty clear mask. */
+    SPL_REQUIRE(flags != 0U, SPL_ERR_PARAM);
+    /* Invalid W1C clear mask. */
+    SPL_REQUIRE((flags & ~CRS_CLEAR_ALL) == 0U, SPL_ERR_PARAM);
     CRS->ICR = flags;
     /* Read back: the clear reaches the peripheral before return (METHOD 1.7, issue #23). */
     (void)CRS->ISR;
@@ -243,8 +243,8 @@ SPL_Status CRS_GetStatus(CRS_StatusTypeDef *status)
 {
     uint32_t isr;
 
-    /* SAFE: NULL output pointer. */
-    SPL_REQUIRE_SAFE(status != (CRS_StatusTypeDef *)0, SPL_ERR_PARAM);
+    /* NULL output pointer. */
+    SPL_REQUIRE(status != (CRS_StatusTypeDef *)0, SPL_ERR_PARAM);
     isr = Crs_ReadStatus(status, CRS->CR);
     if ((isr & CRS_ERRORS_ALL) != 0U)
     {
@@ -258,8 +258,8 @@ SPL_Status CRS_TrySyncOk(CRS_StatusTypeDef *status)
     uint32_t cr;
     uint32_t isr;
 
-    /* SAFE: NULL output pointer. */
-    SPL_REQUIRE_SAFE(status != (CRS_StatusTypeDef *)0, SPL_ERR_PARAM);
+    /* NULL output pointer. */
+    SPL_REQUIRE(status != (CRS_StatusTypeDef *)0, SPL_ERR_PARAM);
     cr = CRS->CR;
     isr = Crs_ReadStatus(status, cr);
     /* Counter stopped: no SYNC is evaluated, polling cannot help. */

@@ -63,8 +63,10 @@ typedef char Fdcan_PayloadCheck[((sizeof(((FDCAN_FrameTypeDef *)0)->data) >= FDC
  * sizes: 28 standard filters x 1 word, 8 extended filters x 2, 3 Rx FIFO0 / FIFO1 elements x
  * 18, 3 Tx event elements x 2, 3 Tx buffers x 18. */
 typedef char Fdcan_RamLayoutCheck
-    [((FDCAN_RAM_STD_FILTER_WORD + (FDCAN_STANDARD_FILTER_MAX * 1U)) <= FDCAN_RAM_EXT_FILTER_WORD) &&
-             ((FDCAN_RAM_EXT_FILTER_WORD + (FDCAN_EXTENDED_FILTER_MAX * 2U)) <= FDCAN_RAM_RX_FIFO0_WORD) &&
+    [((FDCAN_RAM_STD_FILTER_WORD + (FDCAN_STANDARD_FILTER_MAX * 1U)) <=
+      FDCAN_RAM_EXT_FILTER_WORD) &&
+             ((FDCAN_RAM_EXT_FILTER_WORD + (FDCAN_EXTENDED_FILTER_MAX * 2U)) <=
+              FDCAN_RAM_RX_FIFO0_WORD) &&
              ((FDCAN_RAM_RX_FIFO0_WORD + (FDCAN_RX_FIFO_ELEMENT_MAX * FDCAN_RAM_ELEMENT_WORDS)) <=
               FDCAN_RAM_RX_FIFO1_WORD) &&
              ((FDCAN_RAM_RX_FIFO1_WORD + (FDCAN_RX_FIFO_ELEMENT_MAX * FDCAN_RAM_ELEMENT_WORDS) +
@@ -165,8 +167,8 @@ static uint8_t Fdcan_IsBool(uint32_t value)
 
 SPL_Status FDCAN_RequestInit(FDCAN_GlobalTypeDef *can)
 {
-    /* SAFE: invalid input may cause an incorrect MMIO access or silent data corruption. */
-    SPL_REQUIRE_SAFE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
+    /* Invalid input may cause an incorrect MMIO access or silent data corruption. */
+    SPL_REQUIRE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
     /* Entering init stops transfers; the configuration APIs then set CCE, which resets TXBRP
      * (RM0440 44.3.4, v0.10_FDCAN_CONTRACT). Pending transmission requests are dropped:
      * with INIT = 0 and TXBRP != 0 a frame would be lost silently (CCL-2 CAN-09b). BUSY until
@@ -183,9 +185,9 @@ SPL_Status FDCAN_RequestInit(FDCAN_GlobalTypeDef *can)
 
 SPL_Status FDCAN_InitReady(FDCAN_GlobalTypeDef *can, uint8_t *ready)
 {
-    /* SAFE: invalid input may cause an incorrect MMIO access or silent data corruption. */
-    SPL_REQUIRE_SAFE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(ready == (uint8_t *)0), SPL_ERR_PARAM);
+    /* Invalid input may cause an incorrect MMIO access or silent data corruption. */
+    SPL_REQUIRE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(ready == (uint8_t *)0), SPL_ERR_PARAM);
 
     *ready = (uint8_t)(((can->CCCR & FDCAN_CCCR_INIT) != 0U) ? 1U : 0U);
     return SPL_OK;
@@ -193,18 +195,18 @@ SPL_Status FDCAN_InitReady(FDCAN_GlobalTypeDef *can, uint8_t *ready)
 
 SPL_Status FDCAN_SetNominalTiming(FDCAN_GlobalTypeDef *can, const FDCAN_NominalTimingTypeDef *cfg)
 {
-    /* SAFE: invalid input may cause an incorrect MMIO access or silent data corruption. */
-    SPL_REQUIRE_SAFE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cfg == (const FDCAN_NominalTimingTypeDef *)0), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cfg->prescaler == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cfg->prescaler > 512U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cfg->seg1 == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cfg->seg1 > 256U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cfg->seg2 == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cfg->seg2 > 128U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cfg->sjw == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cfg->sjw > 128U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cfg->sjw > cfg->seg2), SPL_ERR_PARAM);
+    /* Invalid input may cause an incorrect MMIO access or silent data corruption. */
+    SPL_REQUIRE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cfg == (const FDCAN_NominalTimingTypeDef *)0), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cfg->prescaler == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cfg->prescaler > 512U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cfg->seg1 == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cfg->seg1 > 256U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cfg->seg2 == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cfg->seg2 > 128U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cfg->sjw == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cfg->sjw > 128U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cfg->sjw > cfg->seg2), SPL_ERR_PARAM);
     if ((can->CCCR & FDCAN_CCCR_INIT) == 0U)
     {
         return SPL_ERR_STATE;
@@ -222,8 +224,8 @@ SPL_Status FDCAN_SetNominalTiming(FDCAN_GlobalTypeDef *can, const FDCAN_NominalT
 
 SPL_Status FDCAN_LeaveInit(FDCAN_GlobalTypeDef *can)
 {
-    /* SAFE: invalid input may cause an incorrect MMIO access or silent data corruption. */
-    SPL_REQUIRE_SAFE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
+    /* Invalid input may cause an incorrect MMIO access or silent data corruption. */
+    SPL_REQUIRE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
     if ((can->CCCR & FDCAN_CCCR_INIT) == 0U)
     {
         return SPL_ERR_STATE;
@@ -235,10 +237,10 @@ SPL_Status FDCAN_LeaveInit(FDCAN_GlobalTypeDef *can)
 
 SPL_Status FDCAN_Status(FDCAN_GlobalTypeDef *can, uint32_t *psr, uint32_t *ecr)
 {
-    /* SAFE: invalid input may cause an incorrect MMIO access or silent data corruption. */
-    SPL_REQUIRE_SAFE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(psr == (uint32_t *)0), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(ecr == (uint32_t *)0), SPL_ERR_PARAM);
+    /* Invalid input may cause an incorrect MMIO access or silent data corruption. */
+    SPL_REQUIRE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(psr == (uint32_t *)0), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(ecr == (uint32_t *)0), SPL_ERR_PARAM);
 
     *psr = can->PSR;
     *ecr = can->ECR;
@@ -247,10 +249,10 @@ SPL_Status FDCAN_Status(FDCAN_GlobalTypeDef *can, uint32_t *psr, uint32_t *ecr)
 
 SPL_Status FDCAN_ClearIrq(FDCAN_GlobalTypeDef *can, uint32_t mask)
 {
-    /* SAFE: an invalid pointer cannot identify an FDCAN peripheral. */
-    SPL_REQUIRE_SAFE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM);
-    /* SAFE: reserved W1C bits must be written as zero. */
-    SPL_REQUIRE_SAFE((mask & ~FDCAN_IE_ALL) == 0U, SPL_ERR_PARAM);
+    /* An invalid pointer cannot identify an FDCAN peripheral. */
+    SPL_REQUIRE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM);
+    /* Reserved W1C bits must be written as zero. */
+    SPL_REQUIRE((mask & ~FDCAN_IE_ALL) == 0U, SPL_ERR_PARAM);
 
     /* IR is a write-one-to-clear register. */
     can->IR = mask;
@@ -275,19 +277,19 @@ SPL_Status FDCAN_Configure(FDCAN_GlobalTypeDef *can, const FDCAN_ConfigTypeDef *
     uint32_t word;
     uint32_t cccr;
 
-    /* SAFE: invalid input may cause an incorrect MMIO access or silent data corruption. */
-    SPL_REQUIRE_SAFE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cfg == (const FDCAN_ConfigTypeDef *)0), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cfg->std_filter_count > FDCAN_STANDARD_FILTER_MAX), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cfg->ext_filter_count > FDCAN_EXTENDED_FILTER_MAX), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(Fdcan_NonMatchValid(cfg->nonmatch_std) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(Fdcan_NonMatchValid(cfg->nonmatch_ext) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(Fdcan_IsBool(cfg->reject_remote_std) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(Fdcan_IsBool(cfg->reject_remote_ext) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(Fdcan_IsBool(cfg->tx_queue) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(Fdcan_IsBool(cfg->fd_enable) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(Fdcan_IsBool(cfg->brs_enable) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!((cfg->brs_enable != 0U) && (cfg->fd_enable == 0U)), SPL_ERR_PARAM);
+    /* Invalid input may cause an incorrect MMIO access or silent data corruption. */
+    SPL_REQUIRE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cfg == (const FDCAN_ConfigTypeDef *)0), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cfg->std_filter_count > FDCAN_STANDARD_FILTER_MAX), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cfg->ext_filter_count > FDCAN_EXTENDED_FILTER_MAX), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(Fdcan_NonMatchValid(cfg->nonmatch_std) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(Fdcan_NonMatchValid(cfg->nonmatch_ext) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(Fdcan_IsBool(cfg->reject_remote_std) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(Fdcan_IsBool(cfg->reject_remote_ext) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(Fdcan_IsBool(cfg->tx_queue) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(Fdcan_IsBool(cfg->fd_enable) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(Fdcan_IsBool(cfg->brs_enable) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!((cfg->brs_enable != 0U) && (cfg->fd_enable == 0U)), SPL_ERR_PARAM);
     if (Fdcan_InitSet(can) == 0U)
     {
         return SPL_ERR_STATE;
@@ -330,20 +332,20 @@ SPL_Status FDCAN_SetDataTiming(FDCAN_GlobalTypeDef *can, const FDCAN_DataTimingT
 {
     uint32_t dbtp;
 
-    /* SAFE: invalid input may cause an incorrect MMIO access or silent data corruption. */
-    SPL_REQUIRE_SAFE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cfg == (const FDCAN_DataTimingTypeDef *)0), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cfg->prescaler == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cfg->prescaler > 32U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cfg->seg1 == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cfg->seg1 > 32U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cfg->seg2 == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cfg->seg2 > 16U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cfg->sjw == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cfg->sjw > cfg->seg2), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(Fdcan_IsBool(cfg->tdc) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cfg->tdc_offset > 127U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cfg->tdc_filter > 127U), SPL_ERR_PARAM);
+    /* Invalid input may cause an incorrect MMIO access or silent data corruption. */
+    SPL_REQUIRE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cfg == (const FDCAN_DataTimingTypeDef *)0), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cfg->prescaler == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cfg->prescaler > 32U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cfg->seg1 == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cfg->seg1 > 32U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cfg->seg2 == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cfg->seg2 > 16U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cfg->sjw == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cfg->sjw > cfg->seg2), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(Fdcan_IsBool(cfg->tdc) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cfg->tdc_offset > 127U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cfg->tdc_filter > 127U), SPL_ERR_PARAM);
     if (Fdcan_InitSet(can) == 0U)
     {
         return SPL_ERR_STATE;
@@ -366,10 +368,11 @@ SPL_Status FDCAN_SetTestMode(FDCAN_GlobalTypeDef *can, FDCAN_TestModeTypeDef mod
 {
     uint32_t cccr;
 
-    /* SAFE: invalid input may cause an incorrect MMIO access or silent data corruption. */
-    SPL_REQUIRE_SAFE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!((mode != FDCAN_MODE_NORMAL) && (mode != FDCAN_MODE_EXT_LOOPBACK) &&
-         (mode != FDCAN_MODE_INT_LOOPBACK) && (mode != FDCAN_MODE_BUS_MONITOR)), SPL_ERR_PARAM);
+    /* Invalid input may cause an incorrect MMIO access or silent data corruption. */
+    SPL_REQUIRE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!((mode != FDCAN_MODE_NORMAL) && (mode != FDCAN_MODE_EXT_LOOPBACK) &&
+                  (mode != FDCAN_MODE_INT_LOOPBACK) && (mode != FDCAN_MODE_BUS_MONITOR)),
+                SPL_ERR_PARAM);
     if (Fdcan_InitSet(can) == 0U)
     {
         return SPL_ERR_STATE;
@@ -427,16 +430,16 @@ SPL_Status FDCAN_SetStdFilter(FDCAN_GlobalTypeDef *can, uint32_t index,
 {
     uint32_t count;
 
-    /* SAFE: invalid input may cause an incorrect MMIO access or silent data corruption. */
-    SPL_REQUIRE_SAFE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(Fdcan_FilterValid(filter, FDCAN_STD_ID_MAX) == 0U), SPL_ERR_PARAM);
+    /* Invalid input may cause an incorrect MMIO access or silent data corruption. */
+    SPL_REQUIRE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(Fdcan_FilterValid(filter, FDCAN_STD_ID_MAX) == 0U), SPL_ERR_PARAM);
     count = (can->RXGFC & FDCAN_RXGFC_LSS) >> FDCAN_RXGFC_LSS_Pos;
     if (count > FDCAN_STANDARD_FILTER_MAX)
     {
         count = FDCAN_STANDARD_FILTER_MAX;
     }
-    /* SAFE: invalid input may cause an incorrect MMIO access or silent data corruption. */
-    SPL_REQUIRE_SAFE(!(index >= count), SPL_ERR_PARAM);
+    /* Invalid input may cause an incorrect MMIO access or silent data corruption. */
+    SPL_REQUIRE(!(index >= count), SPL_ERR_PARAM);
     if (Fdcan_InitSet(can) == 0U)
     {
         return SPL_ERR_STATE;
@@ -454,16 +457,16 @@ SPL_Status FDCAN_SetExtFilter(FDCAN_GlobalTypeDef *can, uint32_t index,
     volatile uint32_t *element;
     uint32_t count;
 
-    /* SAFE: invalid input may cause an incorrect MMIO access or silent data corruption. */
-    SPL_REQUIRE_SAFE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(Fdcan_FilterValid(filter, FDCAN_EXT_ID_MAX) == 0U), SPL_ERR_PARAM);
+    /* Invalid input may cause an incorrect MMIO access or silent data corruption. */
+    SPL_REQUIRE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(Fdcan_FilterValid(filter, FDCAN_EXT_ID_MAX) == 0U), SPL_ERR_PARAM);
     count = (can->RXGFC & FDCAN_RXGFC_LSE) >> FDCAN_RXGFC_LSE_Pos;
     if (count > FDCAN_EXTENDED_FILTER_MAX)
     {
         count = FDCAN_EXTENDED_FILTER_MAX;
     }
-    /* SAFE: invalid input may cause an incorrect MMIO access or silent data corruption. */
-    SPL_REQUIRE_SAFE(!(index >= count), SPL_ERR_PARAM);
+    /* Invalid input may cause an incorrect MMIO access or silent data corruption. */
+    SPL_REQUIRE(!(index >= count), SPL_ERR_PARAM);
     if (Fdcan_InitSet(can) == 0U)
     {
         return SPL_ERR_STATE;
@@ -479,10 +482,10 @@ SPL_Status FDCAN_SetExtFilter(FDCAN_GlobalTypeDef *can, uint32_t index,
 
 SPL_Status FDCAN_DlcToLength(uint32_t dlc, uint8_t fd, uint8_t *length)
 {
-    /* SAFE: invalid input may cause an incorrect MMIO access or silent data corruption. */
-    SPL_REQUIRE_SAFE(!(dlc > 15U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(fd > 1U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(length == (uint8_t *)0), SPL_ERR_PARAM);
+    /* Invalid input may cause an incorrect MMIO access or silent data corruption. */
+    SPL_REQUIRE(!(dlc > 15U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(fd > 1U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(length == (uint8_t *)0), SPL_ERR_PARAM);
 
     if ((fd == 0U) && (dlc > 8U))
     {
@@ -500,9 +503,9 @@ SPL_Status FDCAN_LengthToDlc(uint32_t length, uint8_t fd, uint8_t *dlc)
     uint32_t code;
     uint32_t limit = (fd != 0U) ? 15U : 8U;
 
-    /* SAFE: invalid input may cause an incorrect MMIO access or silent data corruption. */
-    SPL_REQUIRE_SAFE(!(fd > 1U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(dlc == (uint8_t *)0), SPL_ERR_PARAM);
+    /* Invalid input may cause an incorrect MMIO access or silent data corruption. */
+    SPL_REQUIRE(!(fd > 1U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(dlc == (uint8_t *)0), SPL_ERR_PARAM);
     for (code = 0U; code <= limit; ++code)
     {
         if (Fdcan_DlcBytes[code] == length)
@@ -553,8 +556,8 @@ SPL_Status FDCAN_TryWrite(FDCAN_GlobalTypeDef *can, const FDCAN_FrameTypeDef *fr
     uint32_t b;
     uint8_t dlc = 0U;
 
-    /* SAFE: validate the peripheral before using its MMIO registers. */
-    SPL_REQUIRE_SAFE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM);
+    /* Validate the peripheral before using its MMIO registers. */
+    SPL_REQUIRE(Fdcan_Valid(can) != 0U, SPL_ERR_PARAM);
     /* The frame validation also computes dlc: required even in FAST. */
     if (Fdcan_FrameValid(frame, &dlc) == 0U)
     {
@@ -624,10 +627,10 @@ SPL_Status FDCAN_TryWrite(FDCAN_GlobalTypeDef *can, const FDCAN_FrameTypeDef *fr
 
 SPL_Status FDCAN_TxCancel(FDCAN_GlobalTypeDef *can, uint32_t mask)
 {
-    /* SAFE: invalid input may cause an incorrect MMIO access or silent data corruption. */
-    SPL_REQUIRE_SAFE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(mask == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!((mask & ~FDCAN_TX_BUFFER_MASK) != 0U), SPL_ERR_PARAM);
+    /* Invalid input may cause an incorrect MMIO access or silent data corruption. */
+    SPL_REQUIRE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(mask == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!((mask & ~FDCAN_TX_BUFFER_MASK) != 0U), SPL_ERR_PARAM);
     if (Fdcan_CceSet(can) != 0U)
     {
         return SPL_ERR_STATE;
@@ -641,11 +644,11 @@ SPL_Status FDCAN_TxCancel(FDCAN_GlobalTypeDef *can, uint32_t mask)
 SPL_Status FDCAN_TxStatus(FDCAN_GlobalTypeDef *can, uint32_t *pending, uint32_t *occurred,
                           uint32_t *cancelled)
 {
-    /* SAFE: invalid input may cause an incorrect MMIO access or silent data corruption. */
-    SPL_REQUIRE_SAFE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(pending == (uint32_t *)0), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(occurred == (uint32_t *)0), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(cancelled == (uint32_t *)0), SPL_ERR_PARAM);
+    /* Invalid input may cause an incorrect MMIO access or silent data corruption. */
+    SPL_REQUIRE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(pending == (uint32_t *)0), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(occurred == (uint32_t *)0), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(cancelled == (uint32_t *)0), SPL_ERR_PARAM);
 
     *pending = can->TXBRP & FDCAN_TX_BUFFER_MASK;
     *occurred = can->TXBTO & FDCAN_TX_BUFFER_MASK;
@@ -665,10 +668,10 @@ SPL_Status FDCAN_TryRead(FDCAN_GlobalTypeDef *can, uint32_t fifo, FDCAN_FrameTyp
     uint32_t w;
     uint32_t b;
 
-    /* SAFE: invalid input may cause an incorrect MMIO access or silent data corruption. */
-    SPL_REQUIRE_SAFE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(fifo > 1U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(frame == (FDCAN_FrameTypeDef *)0), SPL_ERR_PARAM);
+    /* Invalid input may cause an incorrect MMIO access or silent data corruption. */
+    SPL_REQUIRE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(fifo > 1U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(frame == (FDCAN_FrameTypeDef *)0), SPL_ERR_PARAM);
     /* CCE resets RXFxS and holds the Rx handler idle: data cannot arrive. */
     if (Fdcan_CceSet(can) != 0U)
     {
@@ -743,11 +746,11 @@ SPL_Status FDCAN_RxFifoStatus(FDCAN_GlobalTypeDef *can, uint32_t fifo, uint32_t 
 {
     uint32_t status;
 
-    /* SAFE: invalid input may cause an incorrect MMIO access or silent data corruption. */
-    SPL_REQUIRE_SAFE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(fifo > 1U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(fill == (uint32_t *)0), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(lost == (uint8_t *)0), SPL_ERR_PARAM);
+    /* Invalid input may cause an incorrect MMIO access or silent data corruption. */
+    SPL_REQUIRE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(fifo > 1U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(fill == (uint32_t *)0), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(lost == (uint8_t *)0), SPL_ERR_PARAM);
 
     status = (fifo == 0U) ? can->RXF0S : can->RXF1S;
     *fill = status & FDCAN_RXF0S_F0FL;
@@ -757,9 +760,9 @@ SPL_Status FDCAN_RxFifoStatus(FDCAN_GlobalTypeDef *can, uint32_t fifo, uint32_t 
 
 SPL_Status FDCAN_ClearRxLost(FDCAN_GlobalTypeDef *can, uint32_t fifo)
 {
-    /* SAFE: invalid input may cause an incorrect MMIO access or silent data corruption. */
-    SPL_REQUIRE_SAFE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!(fifo > 1U), SPL_ERR_PARAM);
+    /* Invalid input may cause an incorrect MMIO access or silent data corruption. */
+    SPL_REQUIRE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(fifo > 1U), SPL_ERR_PARAM);
 
     /* IR is W1C: write only the one flag, never read-modify-write. */
     can->IR = (fifo == 0U) ? FDCAN_IR_RF0L : FDCAN_IR_RF1L;
@@ -770,9 +773,9 @@ SPL_Status FDCAN_ClearRxLost(FDCAN_GlobalTypeDef *can, uint32_t fifo)
 
 SPL_Status FDCAN_IrqEnable(FDCAN_GlobalTypeDef *can, uint32_t ie_mask)
 {
-    /* SAFE: invalid input may cause an incorrect MMIO access or silent data corruption. */
-    SPL_REQUIRE_SAFE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!((ie_mask & ~FDCAN_IE_ALL) != 0U), SPL_ERR_PARAM);
+    /* Invalid input may cause an incorrect MMIO access or silent data corruption. */
+    SPL_REQUIRE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!((ie_mask & ~FDCAN_IE_ALL) != 0U), SPL_ERR_PARAM);
 
     can->IE = ie_mask;
     return SPL_OK;
@@ -780,9 +783,9 @@ SPL_Status FDCAN_IrqEnable(FDCAN_GlobalTypeDef *can, uint32_t ie_mask)
 
 SPL_Status FDCAN_IrqLineSelect(FDCAN_GlobalTypeDef *can, uint32_t ils_mask)
 {
-    /* SAFE: invalid input may cause an incorrect MMIO access or silent data corruption. */
-    SPL_REQUIRE_SAFE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!((ils_mask & ~FDCAN_ILS_ALL) != 0U), SPL_ERR_PARAM);
+    /* Invalid input may cause an incorrect MMIO access or silent data corruption. */
+    SPL_REQUIRE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!((ils_mask & ~FDCAN_ILS_ALL) != 0U), SPL_ERR_PARAM);
 
     can->ILS = ils_mask;
     return SPL_OK;
@@ -790,9 +793,9 @@ SPL_Status FDCAN_IrqLineSelect(FDCAN_GlobalTypeDef *can, uint32_t ils_mask)
 
 SPL_Status FDCAN_IrqLineEnable(FDCAN_GlobalTypeDef *can, uint32_t ile_mask)
 {
-    /* SAFE: invalid input may cause an incorrect MMIO access or silent data corruption. */
-    SPL_REQUIRE_SAFE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(!((ile_mask & ~FDCAN_ILE_ALL) != 0U), SPL_ERR_PARAM);
+    /* Invalid input may cause an incorrect MMIO access or silent data corruption. */
+    SPL_REQUIRE(!(Fdcan_Valid(can) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(!((ile_mask & ~FDCAN_ILE_ALL) != 0U), SPL_ERR_PARAM);
 
     can->ILE = ile_mask;
     return SPL_OK;

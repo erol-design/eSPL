@@ -76,10 +76,11 @@ static uint32_t Lptim_EncodeCfgr(const LPTIM_InitTypeDef *init)
 
 SPL_Status LPTIM_Init(LPTIM_TypeDef *lptim, const LPTIM_InitTypeDef *init)
 {
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Lptim_ValidInstance(lptim) == 0U) || (init == (const LPTIM_InitTypeDef *)0)), SPL_ERR_PARAM);
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!(Lptim_ValidInit(init) == 0U), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Lptim_ValidInstance(lptim) == 0U) || (init == (const LPTIM_InitTypeDef *)0)),
+                SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!(Lptim_ValidInit(init) == 0U), SPL_ERR_PARAM);
     /* RM0440 33.4.12 / 33.7.4: CFGR only with ENABLE=0. */
     if (Lptim_IsEnabled(lptim) != 0U)
     {
@@ -92,8 +93,9 @@ SPL_Status LPTIM_Init(LPTIM_TypeDef *lptim, const LPTIM_InitTypeDef *init)
 
 SPL_Status LPTIM_InterruptConfig(LPTIM_TypeDef *lptim, uint32_t mask)
 {
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Lptim_ValidInstance(lptim) == 0U) || ((mask & ~LPTIM_IT_ALLOWED) != 0U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Lptim_ValidInstance(lptim) == 0U) || ((mask & ~LPTIM_IT_ALLOWED) != 0U)),
+                SPL_ERR_PARAM);
     /* RM0440 33.4.12 / 33.7.3: IER only with ENABLE=0. */
     if (Lptim_IsEnabled(lptim) != 0U)
     {
@@ -106,8 +108,8 @@ SPL_Status LPTIM_InterruptConfig(LPTIM_TypeDef *lptim, uint32_t mask)
 
 SPL_Status LPTIM_Enable(LPTIM_TypeDef *lptim)
 {
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!(Lptim_ValidInstance(lptim) == 0U), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!(Lptim_ValidInstance(lptim) == 0U), SPL_ERR_PARAM);
     /* COUNTRST, CNTSTRT, SNGSTRT are set-only/self-clearing: never copied. */
     lptim->CR = (lptim->CR & LPTIM_CR_RSTARE) | LPTIM_CR_ENABLE;
     return SPL_OK;
@@ -115,8 +117,8 @@ SPL_Status LPTIM_Enable(LPTIM_TypeDef *lptim)
 
 SPL_Status LPTIM_Disable(LPTIM_TypeDef *lptim)
 {
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!(Lptim_ValidInstance(lptim) == 0U), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!(Lptim_ValidInstance(lptim) == 0U), SPL_ERR_PARAM);
     if (lptim->IER != 0U)
     {
         /* ERRATA ES0431 2.9.1 / ES0430 2.13.1 / ES0523 2.9.1: clearing ENABLE near an LPTIM
@@ -133,8 +135,8 @@ SPL_Status LPTIM_Start(LPTIM_TypeDef *lptim, uint32_t mode)
 {
     uint32_t start;
 
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!(Lptim_ValidInstance(lptim) == 0U), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!(Lptim_ValidInstance(lptim) == 0U), SPL_ERR_PARAM);
     if (mode == LPTIM_START_CONTINUOUS)
     {
         start = LPTIM_CR_CNTSTRT;
@@ -199,13 +201,15 @@ static SPL_Status Lptim_SyncedWrite(LPTIM_TypeDef *lptim, uint32_t *pending, uin
 
 SPL_Status LPTIM_SetAutoReload(LPTIM_TypeDef *lptim, LPTIM_SyncTypeDef *sync, uint32_t arr)
 {
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Lptim_ValidInstance(lptim) == 0U) || (sync == (LPTIM_SyncTypeDef *)0) || (arr == 0U) ||
-        (arr > LPTIM_REG16_MAX)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Lptim_ValidInstance(lptim) == 0U) || (sync == (LPTIM_SyncTypeDef *)0) ||
+                  (arr == 0U) || (arr > LPTIM_REG16_MAX)),
+                SPL_ERR_PARAM);
     /* RM0440 33.4.9: ARR strictly greater than CMP (checked only when the
      * write gate is open, so ENABLE=0 and IER != 0 still report STATE first). */
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Lptim_WriteGateOpen(lptim) != 0U) && (arr <= (lptim->CMP & LPTIM_CMP_CMP))), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Lptim_WriteGateOpen(lptim) != 0U) && (arr <= (lptim->CMP & LPTIM_CMP_CMP))),
+                SPL_ERR_PARAM);
     /* RM0440 33.4.10: PRELOAD=0 updates ARR at once; an ARR at or below the
      * running counter makes the period run to 0xFFFF. Comparing with a counter
      * read races the moving counter (CCL-2 ZMN-02), so a running LPTIM with
@@ -221,12 +225,14 @@ SPL_Status LPTIM_SetAutoReload(LPTIM_TypeDef *lptim, LPTIM_SyncTypeDef *sync, ui
 
 SPL_Status LPTIM_SetCompare(LPTIM_TypeDef *lptim, LPTIM_SyncTypeDef *sync, uint32_t cmp)
 {
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Lptim_ValidInstance(lptim) == 0U) || (sync == (LPTIM_SyncTypeDef *)0) ||
-        (cmp > LPTIM_REG16_MAX)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Lptim_ValidInstance(lptim) == 0U) || (sync == (LPTIM_SyncTypeDef *)0) ||
+                  (cmp > LPTIM_REG16_MAX)),
+                SPL_ERR_PARAM);
     /* RM0440 33.4.9: CMP strictly below ARR (STATE gates of Lptim_SyncedWrite first). */
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Lptim_WriteGateOpen(lptim) != 0U) && (cmp >= (lptim->ARR & LPTIM_ARR_ARR))), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Lptim_WriteGateOpen(lptim) != 0U) && (cmp >= (lptim->ARR & LPTIM_ARR_ARR))),
+                SPL_ERR_PARAM);
     return Lptim_SyncedWrite(lptim, &sync->cmp_pending, LPTIM_ISR_CMPOK, &lptim->CMP, cmp);
 }
 
@@ -234,8 +240,9 @@ SPL_Status LPTIM_SyncStatus(LPTIM_TypeDef *lptim, LPTIM_SyncTypeDef *sync)
 {
     uint32_t isr;
 
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Lptim_ValidInstance(lptim) == 0U) || (sync == (LPTIM_SyncTypeDef *)0)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Lptim_ValidInstance(lptim) == 0U) || (sync == (LPTIM_SyncTypeDef *)0)),
+                SPL_ERR_PARAM);
     isr = lptim->ISR;
     if ((isr & LPTIM_ISR_ARROK) != 0U)
     {
@@ -258,8 +265,8 @@ SPL_Status LPTIM_ReadCounter(LPTIM_TypeDef *lptim, uint32_t *count)
     uint32_t second;
     uint32_t third;
 
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Lptim_ValidInstance(lptim) == 0U) || (count == (uint32_t *)0)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Lptim_ValidInstance(lptim) == 0U) || (count == (uint32_t *)0)), SPL_ERR_PARAM);
     /* RM0440 33.4.13: with RSTARE=1 every CNT read resets the counter. */
     if ((lptim->CR & LPTIM_CR_RSTARE) != 0U)
     {
@@ -284,8 +291,8 @@ SPL_Status LPTIM_ReadCounter(LPTIM_TypeDef *lptim, uint32_t *count)
 
 SPL_Status LPTIM_GetFlags(LPTIM_TypeDef *lptim, uint32_t *flags)
 {
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Lptim_ValidInstance(lptim) == 0U) || (flags == (uint32_t *)0)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Lptim_ValidInstance(lptim) == 0U) || (flags == (uint32_t *)0)), SPL_ERR_PARAM);
     *flags = lptim->ISR & LPTIM_FLAGS_ALL;
     return SPL_OK;
 }
@@ -294,9 +301,10 @@ SPL_Status LPTIM_ClearFlags(LPTIM_TypeDef *lptim, uint32_t flags)
 {
     uint32_t ier;
 
-    /* SAFE: reject invalid parameters before hardware access. */
-    SPL_REQUIRE_SAFE(!((Lptim_ValidInstance(lptim) == 0U) || (flags == 0U) ||
-        ((flags & ~LPTIM_FLAGS_CLEARABLE) != 0U)), SPL_ERR_PARAM);
+    /* Reject invalid parameters before hardware access. */
+    SPL_REQUIRE(!((Lptim_ValidInstance(lptim) == 0U) || (flags == 0U) ||
+                  ((flags & ~LPTIM_FLAGS_CLEARABLE) != 0U)),
+                SPL_ERR_PARAM);
     /* ERRATA ES0431 2.9.2 / ES0430 2.13.2 / ES0523 2.9.2: in interrupt mode (IER != 0) clear
      * only flags whose interrupt is enabled (ISR and IER bit positions match). */
     ier = lptim->IER;

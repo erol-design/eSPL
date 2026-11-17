@@ -31,7 +31,7 @@ cmake --build build
 ```
 
 Output: `build/G431_Template.elf`, `.hex`, `.bin`. Flash with STM32CubeProgrammer or any
-SWD tool. Validation level: `-DSPL_CHECK_LEVEL=0|1|2` (FULL / MIX / FAST).
+SWD tool. Validation level: `-DSPL_CHECK_LEVEL=0|2` (FULL / FAST).
 
 ## Files
 

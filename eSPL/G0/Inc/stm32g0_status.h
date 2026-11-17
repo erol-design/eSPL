@@ -1,3 +1,5 @@
+/* G0 family status header: library version plus the shared SPL_Status and check-level headers.
+ * Included by every G0 module header; declares no API. */
 #ifndef STM32G0_STATUS_H
 #define STM32G0_STATUS_H
 
@@ -9,7 +11,7 @@
 /* SPL_Status is shared by every family (METHOD section 9 option (b)); never defined here.
  * Relative path: no extra include directory in Keil projects or host scripts. */
 #include "../../Common/Inc/spl_status.h"
-/* Denetim seviyesi (SPL_CHECK_LEVEL, SPL_REQUIRE*): METHOD 1.11, Docs/CHECK_LEVEL.md. */
+/* Check level (SPL_CHECK_LEVEL, SPL_REQUIRE*): METHOD 1.11, Docs/CHECK_LEVEL.md. */
 #include "../../Common/Inc/spl_check.h"
 
 #endif /* STM32G0_STATUS_H */

@@ -7,9 +7,14 @@
 /* Reset and clock control (RM0444 Rev 6 section 5, Docs/v0.2_RCC_CONTRACT.md).
  * Written for G0 (not a port: the G4 RCC differs in buses, PLL and prescalers).
  * No static state, no busy-wait: oscillator, PLL and SYSCLK changes are start + poll.
- * Peripheral kernel clocks (RCC_CCIPR/CCIPR2) and MCO are not in v0.2.
+ * Peripheral kernel clocks (RCC_CCIPR/CCIPR2): RCC_SetKernelClock (since v0.3). MCO is not
+ * supported.
  * Frequencies are in Hz. hse_hz is the caller's HSE frequency (crystal or bypass clock); pass 0
- * when HSE is not used: an HSE-based calculation then returns SPL_ERR_STATE. */
+ * when HSE is not used: an HSE-based calculation then returns SPL_ERR_STATE.
+ * Caller duties (all APIs): serialise RCC calls with every ISR or context that also writes RCC
+ * (enable, reset, prescaler and selector writes are read-modify-write); hse_hz must be the real
+ * HSE frequency (the driver cannot measure it); oscillator, PLL and SYSCLK changes are start +
+ * poll: the wait and its timeout belong to the caller. */
 
 #ifdef __cplusplus
 extern "C"
@@ -139,74 +144,105 @@ typedef struct
      RCC_CSR_WWDGRSTF | RCC_CSR_LPWRRSTF)
 
 /* IOPENR bit of a GPIO port (GPIOA..GPIOF). */
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status RCC_GpioClockEnable(GPIO_TypeDef *port);
 
 /* Bus clock enable / disable / query and peripheral reset assert / release. Identifier not in the
  * table -> PARAM. Reset of RTCAPB or WWDG (no reset bit) -> UNSUPPORTED. Disabling PWR, FLASH or
  * SYSCFG is allowed: the caller owns the consequences (documented, not blocked). */
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status RCC_EnablePeriphClock(RCC_PeriphTypeDef periph);
-/* Seviye: PARAM[S] */
+/* Caller: stop the peripheral first (no transfer, DMA request or interrupt in flight); the
+ * driver does not check it, also not for PWR, FLASH or SYSCFG. */
+/* Level: PARAM[F] */
 SPL_Status RCC_DisablePeriphClock(RCC_PeriphTypeDef periph);
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status RCC_GetPeriphClock(RCC_PeriphTypeDef periph, uint8_t *enabled);
-/* Seviye: PARAM[S] UNSUPPORTED[S] */
+/* Caller: the peripheral loses its registers and any transfer in flight: stop its DMA channel
+ * and mask its NVIC line first; release with RCC_ReleasePeriphReset. */
+/* Level: PARAM[F] UNSUPPORTED[F] */
 SPL_Status RCC_AssertPeriphReset(RCC_PeriphTypeDef periph);
-/* Seviye: PARAM[S] UNSUPPORTED[S] */
+/* Caller: reconfigure the peripheral after the release (registers at reset values). */
+/* Level: PARAM[F] UNSUPPORTED[F] */
 SPL_Status RCC_ReleasePeriphReset(RCC_PeriphTypeDef periph);
 
 /* Oscillator on (Start) / off (Stop) / ready flag. LSE: RCC_BDCR, needs PWR DBP = 1 (else
  * STATE). Stop of the SYSCLK source, or of the PLL source while PLLON = 1 -> STATE. */
-/* Seviye: PARAM[r] STATE[S] UNSUPPORTED[r] */
+/* Caller: poll RCC_GetOscReady until ready (HSE / LSE need the crystal or the bypass clock on
+ * the board; RCC_SetHseBypass before HSE). ERRATA ES0548 2.2.1: LSI is unstable as RTC or LSE
+ * CSS clock; prefer LSE. */
+/* Level: PARAM[r] STATE[F] UNSUPPORTED[r] */
 SPL_Status RCC_StartOsc(RCC_OscTypeDef osc);
-/* Seviye: PARAM[r] STATE[S] UNSUPPORTED[r] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[r] STATE[F] UNSUPPORTED[r] */
 SPL_Status RCC_StopOsc(RCC_OscTypeDef osc);
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status RCC_GetOscReady(RCC_OscTypeDef osc, uint8_t *ready);
 /* HSEBYP; HSE must be off (HSEON = 0) -> else STATE. */
-/* Seviye: PARAM[n] STATE[S] */
+/* Caller: bypass = 1 only with an external clock on OSC_IN, bypass = 0 only with a crystal
+ * (board choice, not detectable). */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status RCC_SetHseBypass(uint8_t bypass);
 /* HSISYS divider (1, 2, 4 .. 128). When HSISYS is SYSCLK and the new HCLK needs more flash wait
  * states than FLASH_ACR.LATENCY -> STATE (program the latency first).
  * ERRATA ES0548 2.2.4: a divider other than 1 prevents Stop entry with SYSCLK = HSE and blocks
  * wake-up by peripheral clock requests; PWR_SetLowPowerMode(Stop) checks it. */
-/* Seviye: PARAM[S] STATE[S,r] */
+/* Caller: when HCLK rises, FLASH_SetLatency first; when HCLK drops, the latency may be lowered
+ * only afterwards (RM0444 3.3.4). */
+/* Level: PARAM[F] STATE[F,r] */
 SPL_Status RCC_SetHsiDiv(uint32_t divider);
 
 /* PLL configuration (PLLON must be 0, else STATE). Limits from DS13560 Table 47 for the current
  * voltage range (PWR_CR1.VOS): range 1 VCO 96..344 MHz, P <= 122, Q <= 128, R <= 64 MHz;
  * range 2 VCO <= 128, P <= 40, Q <= 33, R <= 16 MHz; P/Q/R minimum 3.09/12/12 MHz. Limits are
  * checked only for the enabled outputs; the VCO and the input are always checked. */
-/* Seviye: PARAM[S,n] STATE[S] UNSUPPORTED[r] */
+/* Caller: set the voltage range (PWR VOS) before: the limits are those of the current range;
+ * start the PLL source oscillator before RCC_EnablePll. */
+/* Level: PARAM[F] STATE[F] UNSUPPORTED[r] */
 SPL_Status RCC_ConfigPll(const RCC_PllConfigTypeDef *config, uint32_t hse_hz);
 /* PLLON = 1; PLL source oscillator not ready, or PLLSRC = none -> STATE. Poll RCC_GetPllReady. */
-/* Seviye: STATE[n] */
+/* Caller: poll RCC_GetPllReady until 1 before RCC_SetSysclkSource(RCC_SYSCLK_PLLR). */
+/* Level: STATE[F] */
 SPL_Status RCC_EnablePll(void);
 /* PLLON = 0; PLL is the SYSCLK source -> STATE. */
-/* Seviye: STATE[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: STATE[F] */
 SPL_Status RCC_DisablePll(void);
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status RCC_GetPllReady(uint8_t *ready);
 
 /* SYSCLK switch request (CFGR.SW). The source must be ready (PLLR: PLLRDY and PLLREN). The new
  * HCLK must be allowed in the current voltage range and by FLASH_ACR.LATENCY, else STATE
  * (RM0444 3.3.4: program the latency first when the frequency increases). Poll
  * RCC_GetSysclkSource until it reports the new source. */
-/* Seviye: PARAM[S] STATE[S,r] */
+/* Caller: FLASH_SetLatency first when HCLK rises; poll RCC_GetSysclkSource until it reports the
+ * new source; after a drop lower the latency; clock-derived settings (baud rates, SysTick
+ * reload) are not updated. */
+/* Level: PARAM[F] STATE[F,r] */
 SPL_Status RCC_SetSysclkSource(RCC_SysclkTypeDef source, uint32_t hse_hz);
-/* Seviye: PARAM[S] HW[r] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] HW[r] */
 SPL_Status RCC_GetSysclkSource(RCC_SysclkTypeDef *source);
 /* HPRE: 1, 2, 4, 8, 16, 64, 128, 256, 512. Same latency / range rule as RCC_SetSysclkSource. */
-/* Seviye: PARAM[S] STATE[S,r] */
+/* Caller: same latency order as RCC_SetSysclkSource; clock-derived settings (baud rates, SysTick
+ * reload) are not updated. */
+/* Level: PARAM[F] STATE[F,r] */
 SPL_Status RCC_SetAhbPrescaler(uint32_t divider, uint32_t hse_hz);
 /* PPRE: 1, 2, 4, 8, 16.
  * ERRATA ES0487 2.6.6 (family, see stm32g0_tim.h): on G030..G081 TIM16 / TIM17 run on SYSCLK and
  * are functional only while SYSCLK / PCLK <= 4 (caller rule; not checked here). */
-/* Seviye: PARAM[r] */
+/* Caller: keep SYSCLK / PCLK <= 4 while TIM16 / TIM17 are used on G030..G081 (ERRATA ES0487
+ * 2.6.6); PCLK-derived settings (baud rates) are not updated. */
+/* Level: PARAM[r] */
 SPL_Status RCC_SetApbPrescaler(uint32_t divider);
 /* Current clocks from SWS, HSIDIV, PLLCFGR, HPRE and PPRE. */
-/* Seviye: PARAM[S] STATE[r] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] STATE[r] */
 SPL_Status RCC_GetClocks(uint32_t hse_hz, RCC_ClocksTypeDef *clocks);
 
 /* ---- v0.3: peripheral kernel clocks (RCC_CCIPR / RCC_CCIPR2, RM0444 5.4.21 / 5.4.22) ----
@@ -252,41 +288,54 @@ typedef enum
 
 /* Writes the selector field. A source the selector does not offer -> PARAM. The peripheral should
  * be disabled while its kernel clock changes (caller's duty, not checked). */
-/* Seviye: PARAM[S] UNSUPPORTED[r] */
+/* Caller: disable the peripheral while its kernel clock changes; start the selected oscillator
+ * first (readiness not checked). */
+/* Level: PARAM[F] UNSUPPORTED[r] */
 SPL_Status RCC_SetKernelClock(RCC_KernelTypeDef kernel, RCC_KernelSrcTypeDef source);
 /* Reserved encoding read back -> ERR_HW. */
-/* Seviye: PARAM[S] UNSUPPORTED[r] HW[r] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] UNSUPPORTED[r] HW[r] */
 SPL_Status RCC_GetKernelSource(RCC_KernelTypeDef kernel, RCC_KernelSrcTypeDef *source);
 /* Configuration-derived frequency (oscillator readiness is not checked). PLLP/PLLQ with the output
  * disabled (PLLxEN = 0) or an unusable PLL configuration -> STATE; HSE with hse_hz = 0 -> STATE;
  * v0.9: RCC_KSRC_NONE (RNG without clock) -> STATE; RNG: source divided by RNGDIV.
  * v0.10: RCC_KSRC_I2S_CKIN (external pin, frequency not known to the driver) -> STATE. */
-/* Seviye: PARAM[S] STATE[r] UNSUPPORTED[r] HW[r] */
+/* Caller: the result assumes the selected oscillator runs (readiness not checked). */
+/* Level: PARAM[F] STATE[r] UNSUPPORTED[r] HW[r] */
 SPL_Status RCC_GetKernelClock(RCC_KernelTypeDef kernel, uint32_t hse_hz, uint32_t *hz);
 /* v0.9: RNG kernel clock divider RNGDIV (RM0444 5.4.21): divider 1, 2, 4 or 8, else PARAM. No RNG
  * on this SKU -> UNSUPPORTED. Change it with the RNG disabled (caller's duty, not checked). */
-/* Seviye: PARAM[r] UNSUPPORTED[r] */
+/* Caller: disable the RNG before changing the divider. */
+/* Level: PARAM[r] UNSUPPORTED[r] */
 SPL_Status RCC_SetRngDivider(uint32_t divider);
-/* Seviye: PARAM[S] UNSUPPORTED[r] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] UNSUPPORTED[r] */
 SPL_Status RCC_GetRngDivider(uint32_t *divider);
 /* Kernel clock of any USART/LPUART instance (USART4/5/6: PCLK). Not a USART instance -> PARAM. */
-/* Seviye: PARAM[S,r] STATE[r] UNSUPPORTED[r] HW[r] */
+/* Caller: the result assumes the selected oscillator runs (readiness not checked). */
+/* Level: PARAM[F,r] STATE[r] UNSUPPORTED[r] HW[r] */
 SPL_Status RCC_GetUsartKernelClock(const USART_TypeDef *instance, uint32_t hse_hz,
                                    uint32_t *kernel_hz);
 
 /* HSE clock security system: CSSON is set-only (cleared by reset). It may be set before HSE is
  * ready: the hardware enables the detector when HSERDY = 1 (RM0444 5.4.1). */
-/* Seviye: - */
+/* Caller: an HSE failure raises the NMI: the application NMI_Handler switches the clocks and
+ * clears CSSF (RCC_ClearCssFlag); CSSON stays set until reset. */
+/* Level: - */
 SPL_Status RCC_EnableCss(void);
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status RCC_GetCssFlag(uint8_t *set);
-/* Seviye: - */
+/* Caller: none beyond the file-header duties. */
+/* Level: - */
 SPL_Status RCC_ClearCssFlag(void);
 
 /* RCC_CSR reset flags (RCC_RESET_FLAGS mask) and RMVF. */
-/* Seviye: PARAM[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] */
 SPL_Status RCC_GetResetFlags(uint32_t *flags);
-/* Seviye: - */
+/* Caller: read the flags (RCC_GetResetFlags) first; RMVF clears all of them. */
+/* Level: - */
 SPL_Status RCC_ClearResetFlags(void);
 
 #ifdef __cplusplus

@@ -48,30 +48,30 @@ extern "C"
 #define PWR_WAKEUP_PIN_ALL PWR_CR3_EWUP
 
     /* CR1.DBP = enable (0/1) with read-back; mismatch (PWR clock off) -> STATE. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status PWR_SetBackupAccess(uint8_t enable);
     /* Starts a range change (CR5.R1MODE, then CR1.VOS) and returns. Caller handles
      * FLASH latency, SYSCLK and AHB prescaler per RM0440 6.1.5. VOSF/REGLPF set ->
      * BUSY; LPR set -> STATE. */
-    /* Seviye: PARAM[S] STATE[r] BUSY[r] */
+    /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status PWR_StartVoltageScaling(PWR_RangeTypeDef range);
     /* *ready = 1 when SR2.VOSF = 0. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status PWR_GetVoltageScalingStatus(uint8_t *ready);
     /* CR2.PLS/PVDE with read-back; SYSCFG_CFGR2.PVDL lock -> STATE. */
-    /* Seviye: PARAM[S] STATE[r] */
+    /* Level: PARAM[F] STATE[r] */
     SPL_Status PWR_ConfigPVD(PWR_PvdLevelTypeDef level, uint8_t enable);
     /* *below = SR2.PVDO (1: VDD below the PVD threshold). */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status PWR_GetPVDOutput(uint8_t *below);
     /* enable=1: CR4.WPx = falling, then CR3.EWUPx = 1. enable=0: CR3.EWUPx = 0. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status PWR_ConfigWakeupPins(uint32_t pins, uint8_t enable, uint8_t falling);
     /* *flags = SR1.WUF1..5 in PWR_WAKEUP_PINx layout. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status PWR_GetWakeupFlags(uint32_t *flags);
     /* SCR = pins (write-1-to-clear, only the requested CWUFx). ISR-safe. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status PWR_ClearWakeupFlags(uint32_t pins);
     /* CR1.LPMS for the next deep sleep. Does not set SLEEPDEEP or execute WFI/WFE.
      * ERRATA ES0431 2.2.9 / ES0430 2.2.9 / ES0523 2.2.7: Standby cannot be entered with HSE
@@ -92,7 +92,7 @@ extern "C"
      * disabled before entry and re-initialise peripherals whose registers were lost.
      * Caller duty (CCL-2 PWR-03b): after wakeup read the wakeup source (PWR_GetWakeupFlags,
      * EXTI pending bits) or the stay-awake condition before entering sleep again. */
-    /* Seviye: PARAM[S] */
+    /* Level: PARAM[F] */
     SPL_Status PWR_SetLowPowerMode(PWR_LowPowerModeTypeDef mode);
 
 #ifdef __cplusplus

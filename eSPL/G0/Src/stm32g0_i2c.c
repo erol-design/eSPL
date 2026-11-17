@@ -1,24 +1,27 @@
-/* Ported from STM32G4 SPL v0.13.3 (Autometry_Mcu_Spl 130de7a); reviewed against RM0444 Rev 6
+/* I2C driver for STM32G0; public contract: stm32g0_i2c.h.
+ * Ported from STM32G4 SPL v0.13.3 (Autometry_Mcu_Spl 130de7a); reviewed against RM0444 Rev 6
  * section 32 (same I2C IP; 39.x -> 32.x) and ES0548 2.11.x. G0 change: SMBus only on I2C1 and
  * (G0B1/G0C1) I2C2. */
-/* Kutuphane birimi: spl_check.h karisma korumasi referansini bu birim de uretir; uretmeyen tek
- * birim stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
+/* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit that
+ * does not is stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
 #define SPL_LIBRARY_BUILD 1
 #include <stddef.h>
 #include "stm32g0_i2c.h"
 #include "stm32g0_sku.h"
 
-/* Denetim seviyesi (A4 dalga 4b, Docs/CHECK_LEVEL.md 5.4 I2C tablosu): SPL_REQUIRE = normal sinif
- * (yalniz FULL), SPL_REQUIRE_SAFE = SAFE sinif (FULL ve MIX). Hat olaylari (NACKF / ARLO / BERR /
- * OVR / TIMEOUT, BUSY, START bekliyor, WOULD_BLOCK), PE geri okumasi, hedef NACKF ve TIMEOUT = 0
- * result: her seviyede. Yalniz denetimde kullanilan yardimcilar static inline (saf,
- * Tools/pure_checks.txt). */
+/* Check level (A4 wave 4b, Docs/CHECK_LEVEL.md 5.4 I2C table): SPL_REQUIRE = checked at FULL only
+ * (not compiled at FAST). Bus events (NACKF / ARLO / BERR / OVR / TIMEOUT, BUSY, START pending,
+ * WOULD_BLOCK), the PE read-back, target NACKF and TIMEOUT = 0: result, at every level. Helpers
+ * used only in checks are static inline (pure, Tools/pure_checks.txt). */
 
 /* ERRATA ES0548 2.11.2: BERR can be set spuriously in
  * controller mode and the transfer continues normally. Services that drive an
  * ongoing transfer (byte services, TC poll, reload, repeated START) do not
  * abort on BERR; it stays in ISR (I2C_GetErrors) until the caller clears it.
  * Fresh-START gates keep BERR so a stale flag is seen before a new transfer. */
+/* CR2 set-only command bits (set by software, cleared by hardware): never written back from a
+ * read value (CCL-2 KSM-34; METHOD 1.4 trigger row, section 12 lesson 4; rmw_check ledger). */
+#define I2C_CR2_COMMANDS (I2C_CR2_START | I2C_CR2_STOP | I2C_CR2_NACK | I2C_CR2_PECBYTE)
 #define I2C_XFER_ABORT_LEGACY (I2C_ISR_NACKF | I2C_ISR_ARLO)
 #define I2C_XFER_ABORT_ALL (I2C_ERRORS_ALL & ~I2C_ISR_BERR)
 
@@ -65,8 +68,8 @@ static SPL_Status I2c_StartGate(const I2C_TypeDef *i2c, uint32_t errors)
     {
         return SPL_ERR_HW;
     }
-    /* SAFE: START yeniden baslatma olur ya da RELOAD parcasi bozulur. */
-    SPL_REQUIRE_SAFE(I2c_BusHeld(isr) == 0U, SPL_ERR_STATE);
+    /* START becomes a repeated START or the RELOAD chunk is corrupted. */
+    SPL_REQUIRE(I2c_BusHeld(isr) == 0U, SPL_ERR_STATE);
     /* SADD/RD_WRN/NBYTES must not change while START is set (RM0444
      * 32.9.2): a START still waiting for the bus is BUSY as well. */
     if (((isr & I2C_ISR_BUSY) != 0U) || (start != 0U))
@@ -98,18 +101,18 @@ static SPL_Status I2c_RestartGate(const I2C_TypeDef *i2c, uint32_t errors)
     {
         return SPL_WOULD_BLOCK;
     }
-    /* SAFE: yeniden baslatma yerine yeni START / RELOAD parcasi ezilir. */
-    SPL_REQUIRE_SAFE(((isr & I2C_ISR_BUSY) != 0U) && ((isr & (I2C_ISR_STOPF | I2C_ISR_TCR)) == 0U),
-                     SPL_ERR_STATE);
+    /* a new START instead of the repeated START / the RELOAD chunk is overwritten. */
+    SPL_REQUIRE(((isr & I2C_ISR_BUSY) != 0U) && ((isr & (I2C_ISR_STOPF | I2C_ISR_TCR)) == 0U),
+                SPL_ERR_STATE);
     return SPL_WOULD_BLOCK;
 }
 
 SPL_Status I2C_MasterInit(I2C_TypeDef *i2c, uint32_t timingr)
 {
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    /* SAFE: SCL zamanlamasi 0 / ayrilmis bitler. */
-    SPL_REQUIRE_SAFE((timingr != 0U) && ((timingr & 0x0F000000UL) == 0U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((i2c->CR1 & I2C_CR1_PE) == 0U, SPL_ERR_STATE); /* SAFE: TIMINGR yazilamaz */
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    /* SCL timing 0 / reserved bits. */
+    SPL_REQUIRE((timingr != 0U) && ((timingr & 0x0F000000UL) == 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE((i2c->CR1 & I2C_CR1_PE) == 0U, SPL_ERR_STATE); /* TIMINGR locked, PE=1 */
 
     i2c->TIMINGR = timingr;
     i2c->CR1 = I2C_CR1_PE;
@@ -121,11 +124,11 @@ SPL_Status I2C_Start(I2C_TypeDef *i2c, uint8_t address7, uint8_t length, uint8_t
     uint32_t cr2;
     SPL_Status gate;
 
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    /* SAFE: hatta baska hedef / yalniz adres cercevesi gider (5.3). */
-    SPL_REQUIRE_SAFE((address7 <= 127U) && (length != 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    /* another target on the bus / only the address frame is sent (5.3). */
+    SPL_REQUIRE((address7 <= 127U) && (length != 0U), SPL_ERR_PARAM);
     SPL_REQUIRE(read <= 1U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((i2c->CR1 & I2C_CR1_PE) != 0U, SPL_ERR_STATE); /* SAFE: START silinir */
+    SPL_REQUIRE((i2c->CR1 & I2C_CR1_PE) != 0U, SPL_ERR_STATE); /* START cleared */
     gate = I2c_StartGate(i2c, I2C_ISR_NACKF | I2C_ISR_BERR | I2C_ISR_ARLO);
     if (gate != SPL_OK)
     {
@@ -150,9 +153,9 @@ SPL_Status I2C_Start(I2C_TypeDef *i2c, uint8_t address7, uint8_t length, uint8_t
 
 SPL_Status I2C_TryWrite(I2C_TypeDef *i2c, uint8_t byte)
 {
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    /* SAFE: PE = 0 iken TXIS kurulmaz, bekleme dongusu takilir (K-A4-4 ilkesi). */
-    SPL_REQUIRE_SAFE((i2c->CR1 & I2C_CR1_PE) != 0U, SPL_ERR_STATE);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    /* with PE = 0 TXIS is never set, a wait loop hangs (K-A4-4 principle). */
+    SPL_REQUIRE((i2c->CR1 & I2C_CR1_PE) != 0U, SPL_ERR_STATE);
     /* ERRATA ES0548 2.11.2: spurious BERR does not abort. */
     if ((i2c->ISR & I2C_XFER_ABORT_LEGACY) != 0U)
     {
@@ -169,10 +172,10 @@ SPL_Status I2C_TryWrite(I2C_TypeDef *i2c, uint8_t byte)
 
 SPL_Status I2C_TryRead(I2C_TypeDef *i2c, uint8_t *byte)
 {
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(byte != (uint8_t *)0, SPL_ERR_PARAM);
-    /* SAFE: PE = 0 iken RXNE kurulmaz, bekleme dongusu takilir (K-A4-4 ilkesi). */
-    SPL_REQUIRE_SAFE((i2c->CR1 & I2C_CR1_PE) != 0U, SPL_ERR_STATE);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(byte != (uint8_t *)0, SPL_ERR_PARAM);
+    /* with PE = 0 RXNE is never set, a wait loop hangs (K-A4-4 principle). */
+    SPL_REQUIRE((i2c->CR1 & I2C_CR1_PE) != 0U, SPL_ERR_STATE);
     /* ERRATA ES0548 2.11.2: spurious BERR does not abort. */
     if ((i2c->ISR & I2C_XFER_ABORT_LEGACY) != 0U)
     {
@@ -189,18 +192,18 @@ SPL_Status I2C_TryRead(I2C_TypeDef *i2c, uint8_t *byte)
 
 SPL_Status I2C_Stop(I2C_TypeDef *i2c)
 {
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
 
     /* START is cleared by hardware and writing 0 has no effect. Never copy a
      * START=1 read back: hardware may clear it between read and write, and
      * the write-back would request a new START/RESTART. */
-    i2c->CR2 = (i2c->CR2 & (uint32_t)~I2C_CR2_START) | I2C_CR2_STOP;
+    i2c->CR2 = (i2c->CR2 & ~I2C_CR2_COMMANDS) | I2C_CR2_STOP;
     return SPL_OK;
 }
 
 SPL_Status I2C_ClearErrors(I2C_TypeDef *i2c)
 {
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
 
     /* ICR is write-one-to-clear; do not use read-modify-write. */
     /* STOPF is a transfer-completion event, not an error.
@@ -217,8 +220,8 @@ SPL_Status I2C_ClearErrors(I2C_TypeDef *i2c)
 
 SPL_Status I2C_Status(I2C_TypeDef *i2c, uint32_t *status)
 {
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(status != (uint32_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(status != (uint32_t *)0, SPL_ERR_PARAM);
 
     *status = i2c->ISR;
     return SPL_OK;
@@ -231,11 +234,11 @@ SPL_Status I2C_StartNoStop(I2C_TypeDef *i2c, uint8_t address7, uint8_t length, u
     uint32_t cr2;
     SPL_Status gate;
 
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    /* SAFE: hatta baska hedef / yalniz adres cercevesi gider (5.3). */
-    SPL_REQUIRE_SAFE((address7 <= 127U) && (length != 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    /* another target on the bus / only the address frame is sent (5.3). */
+    SPL_REQUIRE((address7 <= 127U) && (length != 0U), SPL_ERR_PARAM);
     SPL_REQUIRE(read <= 1U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((i2c->CR1 & I2C_CR1_PE) != 0U, SPL_ERR_STATE); /* SAFE: START silinir */
+    SPL_REQUIRE((i2c->CR1 & I2C_CR1_PE) != 0U, SPL_ERR_STATE); /* START cleared */
     gate = I2c_StartGate(i2c, I2C_ISR_NACKF | I2C_ISR_BERR | I2C_ISR_ARLO);
     if (gate != SPL_OK)
     {
@@ -258,11 +261,11 @@ SPL_Status I2C_Restart(I2C_TypeDef *i2c, uint8_t address7, uint8_t length, uint8
     uint32_t cr2;
     SPL_Status gate;
 
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    /* SAFE: hatta baska hedef / yalniz adres cercevesi gider (5.3). */
-    SPL_REQUIRE_SAFE((address7 <= 127U) && (length != 0U), SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    /* another target on the bus / only the address frame is sent (5.3). */
+    SPL_REQUIRE((address7 <= 127U) && (length != 0U), SPL_ERR_PARAM);
     SPL_REQUIRE((read <= 1U) && (autoend <= 1U), SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((i2c->CR1 & I2C_CR1_PE) != 0U, SPL_ERR_STATE); /* SAFE: START silinir */
+    SPL_REQUIRE((i2c->CR1 & I2C_CR1_PE) != 0U, SPL_ERR_STATE); /* START cleared */
 
     /* ERRATA ES0548 2.11.2: a repeated START continues the
      * ongoing transfer; spurious BERR does not abort it. */
@@ -288,8 +291,8 @@ SPL_Status I2C_Restart(I2C_TypeDef *i2c, uint8_t address7, uint8_t length, uint8
 
 SPL_Status I2C_TransferComplete(I2C_TypeDef *i2c, uint8_t *complete)
 {
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(complete != (uint8_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(complete != (uint8_t *)0, SPL_ERR_PARAM);
     /* ERRATA ES0548 2.11.2: spurious BERR does not abort. */
     if ((i2c->ISR & I2C_XFER_ABORT_LEGACY) != 0U)
     {
@@ -301,8 +304,8 @@ SPL_Status I2C_TransferComplete(I2C_TypeDef *i2c, uint8_t *complete)
 
 SPL_Status I2C_StopDetected(I2C_TypeDef *i2c, uint8_t *detected)
 {
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(detected != (uint8_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(detected != (uint8_t *)0, SPL_ERR_PARAM);
     /* A target NACK in an AUTOEND transfer also ends with STOPF: report it as
      * ERR_HW like I2C_TransferComplete (flags kept for I2C_GetErrors). */
     if ((i2c->ISR & I2C_XFER_ABORT_LEGACY) != 0U)
@@ -317,7 +320,7 @@ SPL_Status I2C_StopDetected(I2C_TypeDef *i2c, uint8_t *detected)
  * ICR is write-one-to-clear; do not read/modify/write this register. */
 SPL_Status I2C_ClearStop(I2C_TypeDef *i2c)
 {
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
 
     i2c->ICR = I2C_ICR_STOPCF;
     /* Read back: the clear reaches the peripheral before return (METHOD 1.7, issue #23). */
@@ -335,8 +338,8 @@ SPL_Status I2C_ClearStop(I2C_TypeDef *i2c)
      I2C_TIMEOUTR_TEXTEN)
 #define I2C_TIMEOUTR_ENABLES (I2C_TIMEOUTR_TIMOUTEN | I2C_TIMEOUTR_TEXTEN)
 
-/* Validates address/length/HEAD10R shared by StartLong and RestartLong (SAFE; A4: options fazla
- * bitleri ayri, normal sinif: & ile test edilir, kullanilmaz). */
+/* Validates address/length/HEAD10R shared by StartLong and RestartLong (A4: extra options
+ * bits are separate: tested with &, not used). */
 static inline uint8_t I2c_LongArgsValid(uint16_t address, uint32_t options, uint32_t length,
                                         uint8_t restart)
 {
@@ -413,12 +416,12 @@ SPL_Status I2C_StartLong(I2C_TypeDef *i2c, I2C_LongTransferTypeDef *xfer, uint16
 {
     SPL_Status gate;
 
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(xfer != (I2C_LongTransferTypeDef *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(xfer != (I2C_LongTransferTypeDef *)0, SPL_ERR_PARAM);
     SPL_REQUIRE((options & ~I2C_XFER_ALL) == 0U, SPL_ERR_PARAM);
-    /* SAFE: adres kesilir / hatta yanlis cerceve (RM0444 32.4.9). */
-    SPL_REQUIRE_SAFE(I2c_LongArgsValid(address, options, length, 0U) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((i2c->CR1 & I2C_CR1_PE) != 0U, SPL_ERR_STATE); /* SAFE: START silinir */
+    /* address truncated / wrong frame on the bus (RM0444 32.4.9). */
+    SPL_REQUIRE(I2c_LongArgsValid(address, options, length, 0U) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE((i2c->CR1 & I2C_CR1_PE) != 0U, SPL_ERR_STATE); /* START cleared */
 
     /* SADD/ADD10/RD_WRN/NBYTES must not change while START is set. */
     gate = I2c_StartGate(i2c, I2C_ERRORS_ALL);
@@ -438,12 +441,12 @@ SPL_Status I2C_RestartLong(I2C_TypeDef *i2c, I2C_LongTransferTypeDef *xfer, uint
 {
     SPL_Status gate;
 
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(xfer != (I2C_LongTransferTypeDef *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(xfer != (I2C_LongTransferTypeDef *)0, SPL_ERR_PARAM);
     SPL_REQUIRE((options & ~I2C_XFER_ALL) == 0U, SPL_ERR_PARAM);
-    /* SAFE: adres kesilir / hatta yanlis cerceve (RM0444 32.4.9). */
-    SPL_REQUIRE_SAFE(I2c_LongArgsValid(address, options, length, 1U) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((i2c->CR1 & I2C_CR1_PE) != 0U, SPL_ERR_STATE); /* SAFE: START silinir */
+    /* address truncated / wrong frame on the bus (RM0444 32.4.9). */
+    SPL_REQUIRE(I2c_LongArgsValid(address, options, length, 1U) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE((i2c->CR1 & I2C_CR1_PE) != 0U, SPL_ERR_STATE); /* START cleared */
 
     /* ERRATA ES0548 2.11.2: spurious BERR does not abort. */
     gate = I2c_RestartGate(i2c, I2C_XFER_ABORT_ALL);
@@ -463,11 +466,11 @@ SPL_Status I2C_ReloadService(I2C_TypeDef *i2c, I2C_LongTransferTypeDef *xfer)
     uint32_t cr2;
     uint32_t chunk;
 
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(xfer != (I2C_LongTransferTypeDef *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(xfer != (I2C_LongTransferTypeDef *)0, SPL_ERR_PARAM);
     SPL_REQUIRE(xfer->autoend <= 1U, SPL_ERR_PARAM);
-    /* SAFE: PE = 0 iken TCR kurulmaz, bekleme dongusu takilir (K-A4-4 ilkesi). */
-    SPL_REQUIRE_SAFE((i2c->CR1 & I2C_CR1_PE) != 0U, SPL_ERR_STATE);
+    /* with PE = 0 TCR is never set, a wait loop hangs (K-A4-4 principle). */
+    SPL_REQUIRE((i2c->CR1 & I2C_CR1_PE) != 0U, SPL_ERR_STATE);
 
     isr = i2c->ISR;
     /* ERRATA ES0548 2.11.2: spurious BERR does not abort. */
@@ -477,8 +480,8 @@ SPL_Status I2C_ReloadService(I2C_TypeDef *i2c, I2C_LongTransferTypeDef *xfer)
     }
     cr2 = i2c->CR2;
     /* Nothing left to reload, or bookkeeping does not match the hardware
-     * (RELOAD=0 means the last chunk is already programmed). SAFE: NBYTES ezilir. */
-    SPL_REQUIRE_SAFE((xfer->remaining != 0U) && ((cr2 & I2C_CR2_RELOAD) != 0U), SPL_ERR_STATE);
+     * (RELOAD=0 means the last chunk is already programmed). NBYTES overwritten. */
+    SPL_REQUIRE((xfer->remaining != 0U) && ((cr2 & I2C_CR2_RELOAD) != 0U), SPL_ERR_STATE);
     if ((isr & I2C_ISR_TCR) == 0U)
     {
         return SPL_WOULD_BLOCK;
@@ -511,8 +514,8 @@ SPL_Status I2C_ReloadService(I2C_TypeDef *i2c, I2C_LongTransferTypeDef *xfer)
 
 SPL_Status I2C_GetErrors(I2C_TypeDef *i2c, uint32_t *errors)
 {
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(errors != (uint32_t *)0, SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(errors != (uint32_t *)0, SPL_ERR_PARAM);
 
     *errors = i2c->ISR & I2C_ERRORS_ALL;
     return SPL_OK;
@@ -522,16 +525,16 @@ SPL_Status I2C_ClearErrorFlags(I2C_TypeDef *i2c, uint32_t errors)
 {
     uint32_t icr = 0U;
 
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    /* normal: bit bit eslenir, fazla bit kullanilmaz. */
-    SPL_REQUIRE(errors != 0U, SPL_ERR_PARAM); /* normal: etkisiz */
-    /* SAFE (EDR-003): ayrilmis bite yazim. */
-    SPL_REQUIRE_SAFE((errors & ~I2C_ERRORS_ALL) == 0U, SPL_ERR_PARAM);
-    /* SAFE (ornek yetenegi): PECCF / TIMOUTCF SMBus'u olmayan ornekte ayrilmis (RM0444 32.9.8;
-     * Table 165: I2C3 ve 0BX disinda I2C2). 2026-11-14 yetenek taramasi. */
-    SPL_REQUIRE_SAFE(((errors & (I2C_ISR_PECERR | I2C_ISR_TIMEOUT)) == 0U) || (i2c == I2C1) ||
-                         ((SPL_G0_I2C2_SMBUS != 0) && (i2c == I2C2)),
-                     SPL_ERR_UNSUPPORTED);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    /* mapped bit by bit, extra bits are not used. */
+    SPL_REQUIRE(errors != 0U, SPL_ERR_PARAM); /* no effect */
+    /* (EDR-003): write to a reserved bit. */
+    SPL_REQUIRE((errors & ~I2C_ERRORS_ALL) == 0U, SPL_ERR_PARAM);
+    /* (instance capability): PECCF / TIMOUTCF reserved on an instance without SMBus (RM0444
+     * 32.9.8; Table 165: I2C3, and I2C2 outside 0BX). 2026-11-14 capability audit. */
+    SPL_REQUIRE(((errors & (I2C_ISR_PECERR | I2C_ISR_TIMEOUT)) == 0U) || (i2c == I2C1) ||
+                    ((SPL_G0_I2C2_SMBUS != 0) && (i2c == I2C2)),
+                SPL_ERR_UNSUPPORTED);
 
     if ((errors & I2C_ISR_NACKF) != 0U)
     {
@@ -560,6 +563,15 @@ SPL_Status I2C_ClearErrorFlags(I2C_TypeDef *i2c, uint32_t errors)
 
     /* ICR is write-one-to-clear: single write, no read-modify-write. */
     i2c->ICR = icr;
+    /* CCL-2 I2C-02c: a transfer-ending error (NACKF, BERR, ARLO, PECERR, TIMEOUT) leaves the byte
+     * loaded for the failed transfer in TXDR; RM0444 32.9.7: writing TXE = 1 flushes it, so the
+     * next transfer does not send it first (same step as I2C_ClearErrors). OVR alone does not end
+     * the transfer (NOSTRETCH target), so TXDR is kept there. */
+    if ((errors &
+         (I2C_ISR_NACKF | I2C_ISR_BERR | I2C_ISR_ARLO | I2C_ISR_PECERR | I2C_ISR_TIMEOUT)) != 0U)
+    {
+        i2c->ISR = I2C_ISR_TXE;
+    }
     /* Read back: the clear reaches the peripheral before return (METHOD 1.7, issue #23). */
     (void)i2c->ISR;
     return SPL_OK;
@@ -569,7 +581,7 @@ SPL_Status I2C_SoftwareReset(I2C_TypeDef *i2c, uint8_t reenable)
 {
     uint32_t cr1;
 
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     SPL_REQUIRE(reenable <= 1U, SPL_ERR_PARAM);
 
     /* RM0444 32.4.6: 1. write PE=0, 2. check PE=0, 3. write PE=1.
@@ -590,13 +602,12 @@ SPL_Status I2C_SoftwareReset(I2C_TypeDef *i2c, uint8_t reenable)
 
 SPL_Status I2C_TimeoutConfig(I2C_TypeDef *i2c, uint32_t timeoutr)
 {
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    /* SAFE: TIMEOUTR ayrilmis bitleri. */
-    SPL_REQUIRE_SAFE((timeoutr & ~I2C_TIMEOUTR_VALID) == 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    /* TIMEOUTR reserved bits. */
+    SPL_REQUIRE((timeoutr & ~I2C_TIMEOUTR_VALID) == 0U, SPL_ERR_PARAM);
     /* RM0444 Table 165 (v0.8): SMBus (TIMEOUTR) on I2C1 always, on I2C2 only on G0B1/G0C1
-     * (SPL_G0_I2C2_SMBUS), never on I2C3. SAFE: ornek yetenegi. */
-    SPL_REQUIRE_SAFE((i2c == I2C1) || ((SPL_G0_I2C2_SMBUS != 0) && (i2c == I2C2)),
-                     SPL_ERR_UNSUPPORTED);
+     * (SPL_G0_I2C2_SMBUS), never on I2C3. instance capability. */
+    SPL_REQUIRE((i2c == I2C1) || ((SPL_G0_I2C2_SMBUS != 0) && (i2c == I2C2)), SPL_ERR_UNSUPPORTED);
     if ((i2c->ISR & I2C_ISR_BUSY) != 0U)
     {
         return SPL_BUSY;
@@ -628,23 +639,23 @@ SPL_Status I2C_TargetInit(I2C_TypeDef *i2c, const I2C_TargetConfigTypeDef *cfg)
     uint32_t oar2 = 0U;
     uint32_t cr1 = I2C_CR1_PE;
 
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(cfg != NULL, SPL_ERR_PARAM);
-    /* SAFE: SCL zamanlamasi 0 / ayrilmis bitler; OA1 / OA2 alan tasmasi. */
-    SPL_REQUIRE_SAFE((cfg->timingr != 0U) && ((cfg->timingr & 0x0F000000UL) == 0U) &&
-                         ((cfg->addr10 != 0U) || (cfg->own_address <= 127U)) &&
-                         (cfg->own_address <= 1023U) && (cfg->own_address2 <= 127U) &&
-                         (cfg->oa2_mask <= 7U),
-                     SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(cfg != NULL, SPL_ERR_PARAM);
+    /* SCL timing 0 / reserved bits; OA1 / OA2 field overflow. */
+    SPL_REQUIRE((cfg->timingr != 0U) && ((cfg->timingr & 0x0F000000UL) == 0U) &&
+                    ((cfg->addr10 != 0U) || (cfg->own_address <= 127U)) &&
+                    (cfg->own_address <= 1023U) && (cfg->own_address2 <= 127U) &&
+                    (cfg->oa2_mask <= 7U),
+                SPL_ERR_PARAM);
     SPL_REQUIRE((cfg->addr10 <= 1U) && (cfg->oa2_enable <= 1U) && (cfg->general_call <= 1U) &&
                     (cfg->no_stretch <= 1U) && (cfg->byte_control <= 1U) && (cfg->wakeup <= 1U),
                 SPL_ERR_PARAM);
-    /* RM0444 32.4.8 caution: "Setting SBC when NOSTRETCH = 1 is not allowed" (SAFE). */
-    SPL_REQUIRE_SAFE((cfg->byte_control == 0U) || (cfg->no_stretch == 0U), SPL_ERR_PARAM);
-    /* RM0444 Table 165: no wake-up from Stop on this instance (SAFE). */
-    SPL_REQUIRE_SAFE((cfg->wakeup == 0U) || (I2c_HasSmbus(i2c) != 0U), SPL_ERR_UNSUPPORTED);
-    /* NOSTRETCH (and DNF / ANFOFF) are writable only with PE = 0 (RM0444 32.9.1); SAFE. */
-    SPL_REQUIRE_SAFE((i2c->CR1 & I2C_CR1_PE) == 0U, SPL_ERR_STATE);
+    /* RM0444 32.4.8 caution: "Setting SBC when NOSTRETCH = 1 is not allowed". */
+    SPL_REQUIRE((cfg->byte_control == 0U) || (cfg->no_stretch == 0U), SPL_ERR_PARAM);
+    /* RM0444 Table 165: no wake-up from Stop on this instance. */
+    SPL_REQUIRE((cfg->wakeup == 0U) || (I2c_HasSmbus(i2c) != 0U), SPL_ERR_UNSUPPORTED);
+    /* NOSTRETCH (and DNF / ANFOFF) are writable only with PE = 0 (RM0444 32.9.1); */
+    SPL_REQUIRE((i2c->CR1 & I2C_CR1_PE) == 0U, SPL_ERR_STATE);
     oar1 = I2C_OAR1_OA1EN | ((cfg->addr10 != 0U) ? ((uint32_t)cfg->own_address | I2C_OAR1_OA1MODE)
                                                  : ((uint32_t)cfg->own_address << 1U));
     if (cfg->oa2_enable != 0U)
@@ -681,8 +692,8 @@ SPL_Status I2C_TargetPollAddress(I2C_TypeDef *i2c, uint8_t *addcode, uint8_t *co
 {
     uint32_t isr;
 
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE((addcode != NULL) && (controller_reads != NULL), SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE((addcode != NULL) && (controller_reads != NULL), SPL_ERR_PARAM);
     isr = i2c->ISR;
     if ((isr & I2C_ISR_ADDR) == 0U)
     {
@@ -695,13 +706,13 @@ SPL_Status I2C_TargetPollAddress(I2C_TypeDef *i2c, uint8_t *addcode, uint8_t *co
 
 SPL_Status I2C_TargetSetBytes(I2C_TypeDef *i2c, uint8_t nbytes, uint8_t reload)
 {
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     SPL_REQUIRE(reload <= 1U, SPL_ERR_PARAM);
-    /* NBYTES / RELOAD count target bytes only with SBC = 1 (SAFE: sessizce kullanilmaz). */
-    SPL_REQUIRE_SAFE((i2c->CR1 & (I2C_CR1_PE | I2C_CR1_SBC)) == (I2C_CR1_PE | I2C_CR1_SBC),
-                     SPL_ERR_STATE);
+    /* NBYTES / RELOAD count target bytes only with SBC = 1 (silently unused). */
+    SPL_REQUIRE((i2c->CR1 & (I2C_CR1_PE | I2C_CR1_SBC)) == (I2C_CR1_PE | I2C_CR1_SBC),
+                SPL_ERR_STATE);
     /* START written low (ERRATA ES0418 2.11.3 family, SBC sequence step 1). */
-    i2c->CR2 = (i2c->CR2 & ~(I2C_CR2_NBYTES_Msk | I2C_CR2_RELOAD | I2C_CR2_START)) |
+    i2c->CR2 = (i2c->CR2 & ~(I2C_CR2_NBYTES_Msk | I2C_CR2_RELOAD | I2C_CR2_COMMANDS)) |
                ((uint32_t)nbytes << I2C_CR2_NBYTES_Pos) | ((reload != 0U) ? I2C_CR2_RELOAD : 0U);
     return SPL_OK;
 }
@@ -710,14 +721,14 @@ SPL_Status I2C_TargetAckAddress(I2C_TypeDef *i2c)
 {
     uint32_t cr2;
 
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    /* normal: ADDR = 0 iken ADDRCF etkisiz, CR2 ayni degerle yazilir (zararsiz). */
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    /* with ADDR = 0 ADDRCF has no effect, CR2 is written with the same value (harmless). */
     SPL_REQUIRE((i2c->ISR & I2C_ISR_ADDR) != 0U, SPL_ERR_STATE);
     /* ERRATA ES0418 2.11.3 / ES0412 2.12.3 / ES0468 2.8.3 / ES0486 2.8.3 / ES0487 2.9.3 /
      * ES0488 2.10.3 (spurious controller transfer on own address match): set ADDRCF, then write
      * CR2 with START low before the STOP (SBC = 0), or rewrite CR2 with its value (SBC = 1,
      * after I2C_TargetSetBytes and more than three I2C kernel clocks: timing by the caller). */
-    cr2 = i2c->CR2 & ~I2C_CR2_START;
+    cr2 = i2c->CR2 & ~I2C_CR2_COMMANDS; /* START low, no read-back command bit (KSM-34) */
     i2c->ICR = I2C_ICR_ADDRCF;
     i2c->CR2 = cr2;
     return SPL_OK;
@@ -725,16 +736,16 @@ SPL_Status I2C_TargetAckAddress(I2C_TypeDef *i2c)
 
 SPL_Status I2C_TargetNack(I2C_TypeDef *i2c)
 {
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);          /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE((i2c->CR1 & I2C_CR1_PE) != 0U, SPL_ERR_STATE); /* SAFE: NACK silinir */
-    i2c->CR2 = (i2c->CR2 & ~I2C_CR2_START) | I2C_CR2_NACK;
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM);          /* arbitrary address */
+    SPL_REQUIRE((i2c->CR1 & I2C_CR1_PE) != 0U, SPL_ERR_STATE); /* NACK cleared */
+    i2c->CR2 = (i2c->CR2 & ~I2C_CR2_COMMANDS) | I2C_CR2_NACK;
     return SPL_OK;
 }
 
 SPL_Status I2C_TargetFlushTx(I2C_TypeDef *i2c)
 {
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    i2c->ISR = I2C_ISR_TXE; /* writing 1 flushes TXDR (RM0444 32.9.7) */
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    i2c->ISR = I2C_ISR_TXE;                           /* writing 1 flushes TXDR (RM0444 32.9.7) */
     return SPL_OK;
 }
 
@@ -742,7 +753,7 @@ SPL_Status I2C_TargetTryWrite(I2C_TypeDef *i2c, uint8_t byte)
 {
     uint32_t isr;
 
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     isr = i2c->ISR;
     if ((isr & (I2C_ISR_OVR | I2C_ISR_BERR)) != 0U)
     {
@@ -764,8 +775,8 @@ SPL_Status I2C_TargetTryRead(I2C_TypeDef *i2c, uint8_t *byte)
 {
     uint32_t isr;
 
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(byte != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(byte != NULL, SPL_ERR_PARAM);
     isr = i2c->ISR;
     if ((isr & (I2C_ISR_OVR | I2C_ISR_BERR)) != 0U)
     {
@@ -783,10 +794,10 @@ SPL_Status I2C_TargetTimeoutRecover(I2C_TypeDef *i2c)
 {
     uint32_t i;
 
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
     if ((i2c->ISR & I2C_ISR_TIMEOUT) == 0U)
     {
-        return SPL_ERR_STATE; /* nothing to recover (result: donanim olayi, her seviyede) */
+        return SPL_ERR_STATE; /* nothing to recover (result: hardware event, at every level) */
     }
     /* ERRATA ES0548 2.11.5 (family): SDA stays low after an SMBus timeout in target mode.
      * Called by the caller once the frame is expected to have ended: STOPF = 1 -> the bus is
@@ -806,30 +817,30 @@ SPL_Status I2C_TargetTimeoutRecover(I2C_TypeDef *i2c)
 
 SPL_Status I2C_SmbusConfig(I2C_TypeDef *i2c, uint32_t options)
 {
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    /* SAFE: CR1'e OR'lanir, fazla bit PE / NOSTRETCH ... degistirir. */
-    SPL_REQUIRE_SAFE((options & ~I2C_SMBUS_ALL) == 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(I2c_HasSmbus(i2c) != 0U, SPL_ERR_UNSUPPORTED); /* SAFE: ornek yetenegi */
-    SPL_REQUIRE_SAFE((i2c->CR1 & I2C_CR1_PE) == 0U, SPL_ERR_STATE); /* SAFE */
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    /* ORed into CR1, extra bits change PE / NOSTRETCH ... */
+    SPL_REQUIRE((options & ~I2C_SMBUS_ALL) == 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(I2c_HasSmbus(i2c) != 0U, SPL_ERR_UNSUPPORTED); /* instance capability */
+    SPL_REQUIRE((i2c->CR1 & I2C_CR1_PE) == 0U, SPL_ERR_STATE);
     i2c->CR1 = (i2c->CR1 & ~I2C_SMBUS_ALL) | options;
     return SPL_OK;
 }
 
 SPL_Status I2C_SetPecByte(I2C_TypeDef *i2c)
 {
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    /* SAFE: PECBYTE sessizce yok sayilir. */
-    SPL_REQUIRE_SAFE((i2c->CR1 & (I2C_CR1_PE | I2C_CR1_PECEN)) == (I2C_CR1_PE | I2C_CR1_PECEN),
-                     SPL_ERR_STATE);
-    i2c->CR2 = (i2c->CR2 & ~I2C_CR2_START) | I2C_CR2_PECBYTE;
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    /* PECBYTE silently ignored. */
+    SPL_REQUIRE((i2c->CR1 & (I2C_CR1_PE | I2C_CR1_PECEN)) == (I2C_CR1_PE | I2C_CR1_PECEN),
+                SPL_ERR_STATE);
+    i2c->CR2 = (i2c->CR2 & ~I2C_CR2_COMMANDS) | I2C_CR2_PECBYTE;
     return SPL_OK;
 }
 
 SPL_Status I2C_GetPec(I2C_TypeDef *i2c, uint8_t *pec)
 {
-    SPL_REQUIRE_SAFE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* SAFE: rastgele adres */
-    SPL_REQUIRE_SAFE(pec != NULL, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE((i2c->CR1 & I2C_CR1_PECEN) != 0U, SPL_ERR_STATE); /* SAFE: PECR sessizce 0 */
+    SPL_REQUIRE(I2c_Valid(i2c) != 0U, SPL_ERR_PARAM); /* arbitrary address */
+    SPL_REQUIRE(pec != NULL, SPL_ERR_PARAM);
+    SPL_REQUIRE((i2c->CR1 & I2C_CR1_PECEN) != 0U, SPL_ERR_STATE); /* PECR silently 0 */
     *pec = (uint8_t)(i2c->PECR & I2C_PECR_PEC_Msk);
     return SPL_OK;
 }

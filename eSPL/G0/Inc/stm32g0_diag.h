@@ -1,27 +1,27 @@
 #ifndef STM32G0_DIAG_H
 #define STM32G0_DIAG_H
 
-/* Derleme zamani arguman denetimi (Docs/FAST_PATH.md bolum 3).
+/* Compile-time argument check (Docs/FAST_PATH.md section 3).
  *
- * SPL_DIAG(kosul, mesaj) bir fonksiyon bildirimine eklenir. Cagri yerinde arguman SABIT ise
- * derleyici kosulu derleme zamaninda degerlendirir; kosul dogruysa derleme HATA ile durur.
- * Arguman degiskense hicbir sey yapmaz ve hic kod uretmez: o durumda calisma ani denetimi
- * (varsa) gecerlidir.
+ * SPL_DIAG(condition, message) is attached to a function declaration. If the argument at the
+ * call site is a CONSTANT, the compiler evaluates the condition at compile time; if the condition
+ * is true, the build stops with an ERROR. If the argument is a variable it does nothing and
+ * generates no code: the run-time check (if any) applies in that case.
  *
- * Neden: sabit argumanla yapilan hatalar (kanal 5, bos pin maskesi) kod yazildigi an bellidir;
- * her cagrida calisma aninda yeniden sormak yerine derleyiciye bir kez kanitlatilir.
+ * Why: errors made with constant arguments (channel 5, empty pin mask) are known the moment the
+ * code is written; instead of asking again at run time on every call, the compiler proves it once.
  *
- * Sinir: yalniz skaler argumanlar. CMSIS cevre birimi isaretcileri ((TIM_TypeDef *)TIM1_BASE)
- * C'de sabit ifade sayilmaz; ornek dogrulugu bu yolla denetlenemez (kart esleme basligi ve
- * Init ile saglanir).
+ * Limit: scalar arguments only. CMSIS peripheral pointers ((TIM_TypeDef *)TIM1_BASE) are not
+ * constant expressions in C; instance validity cannot be checked this way (it is ensured by the
+ * board mapping header and Init).
  *
- * Etkin oldugu yer: clang tabanli derleyicilerde (Keil AC6, clang) ve yalniz ARM hedefinde.
- * Host register-model testleri kotu sabit argumanla calisma ani yolunu sinadigi icin orada
- * kapali kalir; SPL_DIAG_OFF tanimlanirsa ARM hedefinde de kapanir. Baska derleyicide bos
- * makrodur: calisma ani davranisi degismez, yalniz derleme zamani guvencesi yoktur.
+ * Where it is active: clang-based compilers (Keil AC6, clang) and only on the ARM target. Host
+ * register-model tests exercise the run-time path with bad constant arguments, so it stays off
+ * there; defining SPL_DIAG_OFF turns it off on the ARM target too. On other compilers it is an
+ * empty macro: run-time behaviour does not change, only the compile-time guarantee is missing.
  *
- * -pedantic, diagnose_if'i "clang uzantisi" diye uyarir (-Wgcc-compat); uyari yalniz bu
- * ozniteligin cevresinde kapatilir, derleme biriminin geri kalani etkilenmez. */
+ * -pedantic warns about diagnose_if as a "clang extension" (-Wgcc-compat); the warning is
+ * disabled only around this attribute, the rest of the translation unit is not affected. */
 
 #if defined(__clang__) && defined(__arm__) && !defined(SPL_DIAG_OFF)
 #define SPL_DIAG(cond, msg)                                                                        \

@@ -34,8 +34,8 @@ static uint32_t Comp_ClearBits(uint32_t value, uint32_t bits)
 /* Instance valid and register writable. */
 static SPL_Status Comp_CheckWritable(const COMP_TypeDef *comp)
 {
-    /* SAFE: reject an invalid peripheral address before reading CSR. */
-    SPL_REQUIRE_SAFE(Comp_Valid(comp) != 0U, SPL_ERR_PARAM);
+    /* Reject an invalid peripheral address before reading CSR. */
+    SPL_REQUIRE(Comp_Valid(comp) != 0U, SPL_ERR_PARAM);
     if (Comp_Locked(comp) != 0U)
     {
         return SPL_ERR_STATE;
@@ -48,15 +48,15 @@ SPL_Status COMP_Config(COMP_TypeDef *comp, const COMP_ConfigTypeDef *config)
     SPL_Status status;
     uint32_t csr;
 
-    /* SAFE: an invalid CSR address or NULL configuration can cause silent reads. */
-    SPL_REQUIRE_SAFE(Comp_Valid(comp) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(config != NULL, SPL_ERR_PARAM);
-    /* SAFE: out-of-range fields may modify adjacent CSR bit fields. */
-    SPL_REQUIRE_SAFE(config->inp_sel <= COMP_INP_SEL_MAX, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(config->inm_sel <= COMP_INM_SEL_MAX, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(config->hysteresis <= COMP_HYST_MAX, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(config->polarity <= COMP_POL_INVERTED, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(config->blanking <= COMP_BLANK_MAX, SPL_ERR_PARAM);
+    /* An invalid CSR address or NULL configuration can cause silent reads. */
+    SPL_REQUIRE(Comp_Valid(comp) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(config != NULL, SPL_ERR_PARAM);
+    /* Out-of-range fields may modify adjacent CSR bit fields. */
+    SPL_REQUIRE(config->inp_sel <= COMP_INP_SEL_MAX, SPL_ERR_PARAM);
+    SPL_REQUIRE(config->inm_sel <= COMP_INM_SEL_MAX, SPL_ERR_PARAM);
+    SPL_REQUIRE(config->hysteresis <= COMP_HYST_MAX, SPL_ERR_PARAM);
+    SPL_REQUIRE(config->polarity <= COMP_POL_INVERTED, SPL_ERR_PARAM);
+    SPL_REQUIRE(config->blanking <= COMP_BLANK_MAX, SPL_ERR_PARAM);
 #if !defined(TIM20)
     /* BLANKSEL 101 = TIM20_OC5 (RM0440 Table 201); TIM20 is absent on this SKU. */
     if (config->blanking == COMP_BLANK_TIM20_OC5)
@@ -129,9 +129,9 @@ SPL_Status COMP_GetOutput(const COMP_TypeDef *comp, uint8_t *level)
 {
     uint32_t csr;
 
-    /* SAFE: an invalid peripheral or output address can return silent wrong data. */
-    SPL_REQUIRE_SAFE(Comp_Valid(comp) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(level != NULL, SPL_ERR_PARAM);
+    /* An invalid peripheral or output address can return silent wrong data. */
+    SPL_REQUIRE(Comp_Valid(comp) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(level != NULL, SPL_ERR_PARAM);
     csr = comp->CSR;
     if ((csr & COMP_CSR_EN) == 0U)
     {
@@ -156,9 +156,9 @@ SPL_Status COMP_Lock(COMP_TypeDef *comp)
 
 SPL_Status COMP_GetLockState(const COMP_TypeDef *comp, uint8_t *locked)
 {
-    /* SAFE: invalid addresses can cause silent wrong status observations. */
-    SPL_REQUIRE_SAFE(Comp_Valid(comp) != 0U, SPL_ERR_PARAM);
-    SPL_REQUIRE_SAFE(locked != NULL, SPL_ERR_PARAM);
+    /* Invalid addresses can cause silent wrong status observations. */
+    SPL_REQUIRE(Comp_Valid(comp) != 0U, SPL_ERR_PARAM);
+    SPL_REQUIRE(locked != NULL, SPL_ERR_PARAM);
     *locked = Comp_Locked(comp);
     return SPL_OK;
 }

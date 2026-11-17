@@ -4,12 +4,18 @@
 #include "stm32g0xx.h"
 #include "stm32g0_status.h"
 
-/* Debug support MCU registers (RM0444 Rev 6 section 40.10, Docs/v0.2_DBGMCU_CONTRACT.md).
+/* Debug support MCU registers (RM0444 Rev 6 section 40.10): device id, low-power debug modes
+ * and peripheral freeze in debug halt.
+ * Usage: enable the DBG clock, then any call in any order.
+ * No static state, no function waits. Output parameters are written only on OK.
+ * Contract: Docs/v0.2_DBGMCU_CONTRACT.md.
  * G0 difference: DBG has its own APB clock (RCC_APBENR1.DBGEN). Writes to DBG_CR / DBG_APB_FZx with
  * DBGEN = 0 would be lost silently: they return SPL_ERR_STATE. DBGMCU_GetIdCode does not check
  * DBGEN: whether IDCODE reads without the clock is open (HW-006, G6).
  * ERRATA ES0548 2.2.8 (documentation): after a debugger connection, until power-down, the boot
  *   source after reset / low-power wake-up is the PA14-BOOT0 level latched before the connection.
+ * Caller duties (all APIs): DBG clock on first (RCC_EnablePeriphClock(RCC_PERIPH_DBG));
+ * serialize DBGMCU_SetFreeze calls (read-modify-write of DBG_APB_FZx).
  */
 
 #ifdef __cplusplus
@@ -46,23 +52,31 @@ typedef enum
 #define DBGMCU_LP_ALL (DBGMCU_LP_STOP | DBGMCU_LP_STANDBY)
 
 /* DEV_ID (0x467 for G0B1/G0C1) and REV_ID (0x1000 A, 0x1001 Z, 0x1003 Y per ES0548). */
-/* Seviye: PARAM[S] */
+/* Caller: enable the DBG clock first; IDCODE with DBGEN = 0 is not checked (open, HW-006). */
+/* Level: PARAM[F] */
 SPL_Status DBGMCU_GetIdCode(uint16_t *dev_id, uint16_t *rev_id);
 /* DBG_CR = modes (subset of DBGMCU_LP_ALL, 0 allowed). Not reset by a system reset. */
-/* Seviye: PARAM[S] STATE[S] */
+/* Caller: debug/bench use; DBG_CR survives a system reset, so leaving modes set in a
+ * product image is a product decision (contract). */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status DBGMCU_SetLowPowerDebug(uint32_t modes);
-/* Seviye: PARAM[S] STATE[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status DBGMCU_GetLowPowerDebug(uint32_t *modes);
-/* Seviye: PARAM[S,n] STATE[S] UNSUPPORTED[S] */
+/* Caller: debug/bench use; leaving a freeze set in a product image is a product decision
+ * (contract). */
+/* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
 SPL_Status DBGMCU_SetFreeze(DBGMCU_FreezeTypeDef id, uint8_t freeze);
-/* Seviye: PARAM[S] STATE[S] UNSUPPORTED[S] */
+/* Caller: none beyond the file-header duties. */
+/* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
 SPL_Status DBGMCU_GetFreeze(DBGMCU_FreezeTypeDef id, uint8_t *frozen);
 /* v0.12: DBG_APB_FZ1 = mask (whole register, no read; DBG_APB_FZ1_* bits of this SKU, else PARAM).
  * ERRATA ES0544 2.2.6 / ES0545 2.2.7 / ES0546 2.2.7 (G050 / G051 / G061): APB_FZ1 reads back
  * wrong TIM6 / TIM7 / RTC
  * bits. There DBGMCU_SetFreeze on an APB_FZ1 id -> UNSUPPORTED (its read-modify-write would store
  * the wrong bits) and DBGMCU_GetFreeze on TIM6 / TIM7 / RTC -> UNSUPPORTED; this call works. */
-/* Seviye: PARAM[S] STATE[S] */
+/* Caller: mask is the complete APB_FZ1 value; freeze bits left out are cleared. */
+/* Level: PARAM[F] STATE[F] */
 SPL_Status DBGMCU_WriteFreeze1(uint32_t mask);
 
 #ifdef __cplusplus
