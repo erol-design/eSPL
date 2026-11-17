@@ -88,14 +88,13 @@ else
 
 The caller retains responsibility for retrying data that was not accepted.
 
-### Three Runtime Validation Levels
+### Two Runtime Validation Levels
 
-eSPL provides three compile-time validation configurations from a single source codebase.
+eSPL provides two compile-time validation configurations from a single source codebase (`SPL_CHECK_FULL` = 0, `SPL_CHECK_FAST` = 2; level 1 is rejected at compile time).
 
 | Level | Description | Intended Use |
 |---|---|---|
 | **FULL** | All defined runtime validation checks enabled | Development, debugging, diagnostics |
-| **MIX** | Selected hardware-risk and silent-failure checks retained | Applications balancing validation and overhead |
 | **FAST** | Optional runtime validation checks removed | Performance-critical applications with externally guaranteed preconditions |
 
 The default is **FULL**.
@@ -110,7 +109,7 @@ Important hardware result checks, register access rules, required silicon errata
 
 **FAST does not remove the caller's obligations.** Applications must satisfy all documented API preconditions, even when the corresponding checks are compiled out.
 
-The terms FULL, MIX, and FAST describe validation policies. They do not represent functional safety certification levels.
+The terms FULL and FAST describe validation policies. They do not represent functional safety certification levels.
 
 ### Explicit Error Reporting
 
@@ -169,7 +168,7 @@ eSPL is initially focused on STMicroelectronics STM32 microcontrollers.
 | MCU Family | Status |
 |---|---|
 | STM32G0 | Reference implementation (v0.20.0-dev); development paused, hardware test pending |
-| STM32G4 | Release candidate (v0.18.0); FULL/MIX/FAST host-verified, selected tests hardware-verified on NUCLEO-G431RB and NUCLEO-G474RE |
+| STM32G4 | Release candidate (v0.18.0); FULL/FAST host-verified, selected tests hardware-verified on NUCLEO-G431RB and NUCLEO-G474RE |
 | STM32H7 | Planned |
 | Other MCU families | Future development |
 
@@ -195,7 +194,7 @@ Each eSPL release is developed and checked with internal tooling for:
 - API validation behavior
 - Register access modeling
 - Multiple MCU/SKU configurations
-- FULL/MIX/FAST configuration testing
+- FULL/FAST configuration testing
 - MMIO write-sequence equivalence
 - Validation-expression purity analysis
 - Mutation testing
