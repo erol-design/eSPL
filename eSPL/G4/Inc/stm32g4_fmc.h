@@ -197,7 +197,8 @@ extern "C"
     SPL_Status FMC_NORSRAM_Disable(uint32_t bank);
     /* FMC_PCSCNTR: CSCOUNT (0 disables the split) and CNTBxEN from bank_mask
      * (FMC_PSRAM_CNT_*). STATE while any NOR/PSRAM sub-bank is enabled. */
-    /* Caller: count from the PSRAM tCEM requirement (not checked). */
+    /* Caller: count = PSRAM tCEM (maximum NE low time) in HCLK cycles for asynchronous or FMC_CLK
+     * cycles for synchronous accesses (RM0440 19.6.4); not checked. */
     /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status FMC_PSRAM_SetCounter(uint16_t count, uint32_t bank_mask);
 

@@ -330,8 +330,8 @@ extern "C"
     /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status RTC_SetCalibration(uint8_t add_512, uint32_t minus_pulses, uint32_t period);
     /* RTC_CR OSEL / COE / COSEL / POL / TAMPALRM type and pull-up / OUT2EN in one write.
-     * Caller: RTC_OUT1 is on PC13: an output that toggles there disturbs a running LSE (errata
-     * 2.2.8 / 2.2.6 at RTC_ClockConfig); open_drain_pullup for the board circuit. */
+     * Caller: RTC_OUT1 is on PC13 (RM0440 37.3): an output that toggles there disturbs a running
+     * LSE (errata 2.2.8 / 2.2.6 at RTC_ClockConfig); open_drain_pullup for the board circuit. */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status RTC_OutputConfig(const RTC_OutputTypeDef *out);
     /* hour_step +1 (ADD1H), -1 (SUB1H), 0 (none); BKP = backup_bit (RM0440 37.6.7).

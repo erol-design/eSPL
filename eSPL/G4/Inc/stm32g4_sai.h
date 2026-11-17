@@ -174,7 +174,8 @@ extern "C"
      * slave transmitter with an empty FIFO (preload it first, RM0440 43.4.4).
      * Master: the kernel clock must be running (caller duty). */
     /* Caller: master: the kernel clock runs; slave: SCK / FS come from the external master; with
-     * SAI_SYNC_INTERNAL enable this block before the clock-providing one. With DMA follow the
+     * SAI_SYNC_INTERNAL (this block is a slave) enable it before the clock-providing master block
+     * (RM0440 43.4.4: enable the slave before the master). With DMA follow the
      * SAI_DmaCmd order. */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status SAI_Enable(SAI_Block_TypeDef *block);

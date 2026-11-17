@@ -98,7 +98,7 @@ extern "C"
         SYSCFG_MEM_QUADSPI = 4
     } SYSCFG_MemoryModeTypeDef;
 
-    /* CFGR1 BOOSTEN/ANASWVDD per RM0440 Table 60 (see contract open item). */
+    /* CFGR1 BOOSTEN/ANASWVDD per RM0440 Rev 9 Table 60 (checked against the PDF 2026-11-18). */
     typedef enum
     {
         SYSCFG_ANASW_VDDA = 0,   /* BOOSTEN=0 ANASWVDD=0: VDDA > 2.4 V */
@@ -164,8 +164,9 @@ extern "C"
     SPL_Status SYSCFG_GetFpuInterrupts(uint32_t *mask);
 
     /* Writes BOOSTEN/ANASWVDD for the I/O analog switch supply. */
-    /* Caller: choose the value from the actual VDD / VDDA levels (RM0440 Table 60; the driver
-     * cannot measure them; mapping still an open item in the contract). */
+    /* Caller: choose the value from the actual VDD / VDDA levels (RM0440 Table 60: VDDA > 2.4 V
+     * -> VDDA; VDDA < 2.4 V and VDD > 2.4 V -> VDD; both < 2.4 V -> BOOSTER); the driver cannot
+     * measure the supplies. */
     /* Level: PARAM[r] STATE[r] */
     SPL_Status SYSCFG_SetAnalogSwitchSupply(SYSCFG_AnalogSwitchTypeDef supply);
 

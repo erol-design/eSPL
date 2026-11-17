@@ -835,7 +835,7 @@ SPL_Status DAC_ClearUnderrun(DAC_TypeDef *dac, uint32_t channel);
 
 SR.DMAUDRx is rc_w1: writes only that bit.
 
-- Caller: after an underrun re-initialize the DMA channel and the DAC channel (DMA requests stop on DMAUDR, RM0440 DAC DMA underrun).
+- Caller: after an underrun (no new DMA request, the channel keeps converting old data) clear DMAEN, re-initialize the DMA and the DAC channel, lower the trigger rate or the DMA load, then re-enable DMA and trigger (RM0440 22.4.8).
 - Level: `PARAM[F] UNSUPPORTED[r]`
 
 
@@ -1908,7 +1908,7 @@ SPL_Status FMC_PSRAM_SetCounter(uint16_t count, uint32_t bank_mask);
 
 FMC_PCSCNTR: CSCOUNT (0 disables the split) and CNTBxEN from bank_mask (FMC_PSRAM_CNT_*). STATE while any NOR/PSRAM sub-bank is enabled.
 
-- Caller: count from the PSRAM tCEM requirement (not checked).
+- Caller: count = PSRAM tCEM (maximum NE low time) in HCLK cycles for asynchronous or FMC_CLK cycles for synchronous accesses (RM0440 19.6.4); not checked.
 - Level: `PARAM[F] STATE[r] UNSUPPORTED[r]`
 
 ### `FMC_NAND_Init`
@@ -3515,7 +3515,7 @@ SPL_Status RCC_ConfigPll(const RCC_PllConfigTypeDef *config, uint32_t hse_hz);
 
 --- PLL --- Validates and writes the whole PLLCFGR while the PLL is off. hse_hz is used only for the HSE source. PLLON=1 -> STATE; PLLON=0, PLLRDY=1 -> BUSY.
 
-- Caller: real hse_hz; VCO limits are from the G431/G474 datasheet (confirm for the part).
+- Caller: real hse_hz. The checked limits are those of Range 1 boost (input 2.66..16 MHz, VCO 96..344 MHz, outputs <= 170 MHz; STM32G474 datasheet Table 46). The driver does not know the voltage range: in Range 1 without boost keep the outputs <= 150 MHz, in Range 2 the VCO <= 128 MHz and the outputs <= 26 MHz. Confirm the table for parts other than G431/G474.
 - Level: `PARAM[F,r] STATE[r] BUSY[r]`
 
 ### `RCC_EnablePll`
@@ -4282,7 +4282,7 @@ SPL_Status RTC_OutputConfig(const RTC_OutputTypeDef *out);
 
 RTC_CR OSEL / COE / COSEL / POL / TAMPALRM type and pull-up / OUT2EN in one write.
 
-- Caller: RTC_OUT1 is on PC13: an output that toggles there disturbs a running LSE (errata 2.2.8 / 2.2.6 at RTC_ClockConfig); open_drain_pullup for the board circuit.
+- Caller: RTC_OUT1 is on PC13 (RM0440 37.3): an output that toggles there disturbs a running LSE (errata 2.2.8 / 2.2.6 at RTC_ClockConfig); open_drain_pullup for the board circuit.
 - Level: `PARAM[F] STATE[r]`
 
 ### `RTC_DaylightSaving`
@@ -4397,7 +4397,7 @@ SPL_Status SAI_Enable(SAI_Block_TypeDef *block);
 
 Sets SAIEN. STATE: SAIEN already 1 (enabled or disable pending), or a slave transmitter with an empty FIFO (preload it first, RM0440 43.4.4). Master: the kernel clock must be running (caller duty).
 
-- Caller: master: the kernel clock runs; slave: SCK / FS come from the external master; with SAI_SYNC_INTERNAL enable this block before the clock-providing one. With DMA follow the SAI_DmaCmd order.
+- Caller: master: the kernel clock runs; slave: SCK / FS come from the external master; with SAI_SYNC_INTERNAL (this block is a slave) enable it before the clock-providing master block (RM0440 43.4.4: enable the slave before the master). With DMA follow the SAI_DmaCmd order.
 - Level: `PARAM[F] STATE[r]`
 
 ### `SAI_Disable`
@@ -4820,7 +4820,7 @@ SPL_Status SYSCFG_SetAnalogSwitchSupply(SYSCFG_AnalogSwitchTypeDef supply);
 
 Writes BOOSTEN/ANASWVDD for the I/O analog switch supply.
 
-- Caller: choose the value from the actual VDD / VDDA levels (RM0440 Table 60; the driver cannot measure them; mapping still an open item in the contract).
+- Caller: choose the value from the actual VDD / VDDA levels (RM0440 Table 60: VDDA > 2.4 V -> VDDA; VDDA < 2.4 V and VDD > 2.4 V -> VDD; both < 2.4 V -> BOOSTER); the driver cannot measure the supplies.
 - Level: `PARAM[r] STATE[r]`
 
 ### `SYSCFG_SetFastModePlus`

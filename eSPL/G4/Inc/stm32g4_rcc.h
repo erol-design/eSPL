@@ -294,7 +294,10 @@ extern "C"
     /* --- PLL --- */
     /* Validates and writes the whole PLLCFGR while the PLL is off. hse_hz is used
      * only for the HSE source. PLLON=1 -> STATE; PLLON=0, PLLRDY=1 -> BUSY.
-     * Caller: real hse_hz; VCO limits are from the G431/G474 datasheet (confirm for the part). */
+     * Caller: real hse_hz. The checked limits are those of Range 1 boost (input 2.66..16 MHz, VCO
+     * 96..344 MHz, outputs <= 170 MHz; STM32G474 datasheet Table 46). The driver does not know the
+     * voltage range: in Range 1 without boost keep the outputs <= 150 MHz, in Range 2 the VCO
+     * <= 128 MHz and the outputs <= 26 MHz. Confirm the table for parts other than G431/G474. */
     /* Level: PARAM[F,r] STATE[r] BUSY[r] */
     SPL_Status RCC_ConfigPll(const RCC_PllConfigTypeDef *config, uint32_t hse_hz);
     /* Sets PLLON; source oscillator must be ready (on, not ready -> BUSY; off -> STATE).

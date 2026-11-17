@@ -98,8 +98,9 @@ extern "C"
     /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status DAC_UnderrunFlag(DAC_TypeDef *dac, uint32_t channel, uint8_t *set);
     /* SR.DMAUDRx is rc_w1: writes only that bit. */
-    /* Caller: after an underrun re-initialize the DMA channel and the DAC channel (DMA requests
-     * stop on DMAUDR, RM0440 DAC DMA underrun). */
+    /* Caller: after an underrun (no new DMA request, the channel keeps converting old data) clear
+     * DMAEN, re-initialize the DMA and the DAC channel, lower the trigger rate or the DMA load,
+     * then re-enable DMA and trigger (RM0440 22.4.8). */
     /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status DAC_ClearUnderrun(DAC_TypeDef *dac, uint32_t channel);
 
