@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* PWR driver for STM32G0B1 (RM0444 Rev 6 section 4, ES0548 Rev 4); public contract in
  * stm32g0_pwr.h. */
 /* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit

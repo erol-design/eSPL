@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* HDMI-CEC driver for STM32G0 (RM0444 Rev 6 section 39), new in v0.9; public contract:
  * stm32g0_cec.h, Docs/v0.9_CEC_CONTRACT.md. */
 /* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit that

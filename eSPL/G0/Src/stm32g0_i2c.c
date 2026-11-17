@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* I2C driver for STM32G0; public contract: stm32g0_i2c.h.
  * Ported from STM32G4 SPL v0.13.3 (Autometry_Mcu_Spl 130de7a); reviewed against RM0444 Rev 6
  * section 32 (same I2C IP; 39.x -> 32.x) and ES0548 2.11.x. G0 change: SMBus only on I2C1 and

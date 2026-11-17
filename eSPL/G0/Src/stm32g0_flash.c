@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* Ported from STM32G4 SPL Src/stm32g4_flash.c (G4 v0.13.2) and adapted to RM0444 Rev 6
  * section 3: busy = BSY1 | BSY2 | CFGBSY, no DCEN, geometry Table 9..12, latency Table 13,
  * ES0548 2.2.3 and 2.2.10. Public contract: stm32g0_flash.h. */

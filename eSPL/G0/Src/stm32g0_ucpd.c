@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* UCPD driver implementation for STM32G0 (RM0444 Rev 6 section 38), new in v0.9; compiled only
  * when SPL_G0_HAS_UCPD. Public contract in stm32g0_ucpd.h and Docs/v0.9_UCPD_CONTRACT.md. */
 /* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit

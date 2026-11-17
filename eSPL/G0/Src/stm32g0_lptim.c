@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* LPTIM driver implementation; public contract: Inc/stm32g0_lptim.h. Ported from STM32G4 SPL
  * v0.13.4 (Autometry_Mcu_Spl 4994f2b); reviewed against RM0444 Rev 6 section 26 (Table 135) and
  * ES0548 2.9.1 / 2.9.2. G0 changes: LPTIM1 and LPTIM2, encoder on LPTIM1 only, TRIGSEL[2:0], RCC

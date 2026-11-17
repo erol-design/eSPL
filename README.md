@@ -223,7 +223,7 @@ Test coverage, known limitations, supported silicon revisions, and verification 
 | Path | Content |
 |---|---|
 | `eSPL/Common/Inc` | Shared headers: `SPL_Status`, validation level, compiler abstraction |
-| `eSPL/G0` | STM32G0 drivers (`Inc`, `Src`, `Private`), CMSIS, README, release notes |
+| `eSPL/G0` | STM32G0 drivers (`Inc`, `Src`, `Private`), CMSIS, CMake integration, start project, API reference, README, release notes |
 | `eSPL/G4` | STM32G4 drivers (`Inc`, `Src`, `Private`), CMSIS, example, README, release notes |
 
 Each family README explains how to add the library to a project. Verification tooling, test suites and design documents are not part of the published package. ST reference manuals and errata sheets are cited by document number and are not redistributed.
@@ -293,7 +293,7 @@ Bug reports should identify the MCU part number, silicon revision, compiler vers
 
 ## License
 
-The license and applicable third-party component notices will be provided with the public release.
+eSPL is released under the MIT License (`LICENSE`). Third-party components keep their own licenses: CMSIS Core (Arm) and CMSIS Device (ST) under each family's `CMSIS/` folder are Apache-2.0 (see `eSPL/G0/THIRD_PARTY_NOTICES.md`).
 
 ---
 

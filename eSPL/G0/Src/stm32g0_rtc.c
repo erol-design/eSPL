@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* RTC / RCC_BDCR / TAMP driver; public contract in stm32g0_rtc.h.
  * Ported from STM32G4 SPL v0.13.4 (Autometry_Mcu_Spl 4994f2b); reviewed against RM0444 Rev 6
  * sections 30 (RTC), 31 (TAMP), 5.4.23 (RCC_BDCR) and ES0548 2.2.1 / 2.2.6 / 2.2.11 / 2.10.x.

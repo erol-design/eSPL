@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 #ifndef STM32G0_MPU_H
 #define STM32G0_MPU_H
 #include <stdint.h>

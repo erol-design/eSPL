@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* Check level symbol (METHOD 1.11, Docs/CHECK_LEVEL.md 3.2).
  * Defines the symbol of the SPL_CHECK_LEVEL the library was built with
  * (spl_check_level_full / _mix / _fast). Every translation unit of the application and of the

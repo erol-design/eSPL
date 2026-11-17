@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* CRS driver (RM0444 Rev 6 section 6), built only where SPL_G0_HAS_CRS; public contract in
  * stm32g0_crs.h.
  * Ported from STM32G4 SPL v0.13.3 (Autometry_Mcu_Spl 130de7a); reviewed against RM0444 Rev 6

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* ADC driver for STM32G0B1 (RM0444 Rev 6 section 15, ES0548 Rev 4 section 2.6); public contract:
  * Inc/stm32g0_adc.h. Written for G0; the G4 v0.13.5 ADC driver gave the API names, the state rules
  * for the shared commands (ADEN/ADSTART/ADSTP/ADDIS) and the oversampling overflow rule (#19). */

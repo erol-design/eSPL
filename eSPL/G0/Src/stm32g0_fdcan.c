@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* FDCAN driver implementation for STM32G0B1 (RM0444 Rev 6 section 36, ES0548 Rev 4 section 2.15),
  * ported from the G4 SPL v0.13.5 FDCAN driver (Autometry_Mcu_Spl 13c21ce): same IP and message
  * RAM. Compiled only when SPL_G0_HAS_FDCAN; public contract in stm32g0_fdcan.h. */

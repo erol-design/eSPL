@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* SPI and I2S driver for STM32G0; public contract: stm32g0_spi.h.
  * Ported from STM32G4 SPL v0.13.3 (Autometry_Mcu_Spl 130de7a); reviewed against RM0444 Rev 6
  * section 35 (same SPI IP; section numbers 42.x -> 35.x) and ES0548 2.14.1 / 2.14.2. */

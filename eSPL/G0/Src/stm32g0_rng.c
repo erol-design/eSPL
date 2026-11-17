@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* RNG driver implementation (RM0444 Rev 6 section 19); public contract in stm32g0_rng.h.
  * Compiled only when SPL_G0_HAS_RNG. Ported from STM32G4 SPL v0.13 (Src/stm32g4_rng.c) and
  * reviewed against RM0444 Rev 6 section 19: same IP, registers and procedures; references changed

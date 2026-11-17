@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* DBG driver for STM32G0B1 (RM0444 Rev 6 section 40.10); public contract in stm32g0_dbgmcu.h.
  * Only 32-bit accesses (RM0444). */
 /* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit

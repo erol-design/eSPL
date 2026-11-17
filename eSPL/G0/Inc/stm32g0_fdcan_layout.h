@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 #ifndef STM32G0_FDCAN_LAYOUT_H
 #define STM32G0_FDCAN_LAYOUT_H
 

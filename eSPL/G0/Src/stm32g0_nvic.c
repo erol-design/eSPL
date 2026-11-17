@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* NVIC / SysTick wrappers for Cortex-M0+ (PM0223, CMSIS Core(M) 5.6 core_cm0plus.h). Public
  * contract: stm32g0_nvic.h. */
 /* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit

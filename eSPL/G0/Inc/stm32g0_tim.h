@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 #ifndef STM32G0_TIM_H
 #define STM32G0_TIM_H
 #include "stm32g0xx.h"

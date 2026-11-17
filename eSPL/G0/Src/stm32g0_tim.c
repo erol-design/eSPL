@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* TIM driver implementation; public contract: Inc/stm32g0_tim.h. Ported from STM32G4 SPL
  * v0.13.4 (Autometry_Mcu_Spl 4994f2b); reviewed against RM0444 Rev 6 sections 21..25 and ES0548
  * 2.8.x. G0 changes: timer set (TIM14 added; TIM5/8/20 removed), no encoder index flags, MMS[2:0]

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* EXTI driver for STM32G0 (RM0444 Rev 6 section 13). Bank 1 = lines 0..31, bank 2 = lines 32..36;
  * only IMR2/EMR2 of bank 2 are used (HW-001: the CMSIS RTSR2..FPR2 offsets are not trusted).
  * v0.8: the lines that exist and the configurable ones come from the generated per-SKU masks.

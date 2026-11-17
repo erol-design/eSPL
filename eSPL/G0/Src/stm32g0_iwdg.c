@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* IWDG driver (RM0444 Rev 6 section 28); public contract in stm32g0_iwdg.h.
  * Ported from STM32G4 SPL v0.13.3 (Autometry_Mcu_Spl 130de7a) and reviewed against RM0444 Rev 6:
  * same IP, register layout and rules; only references changed (v0.3). */

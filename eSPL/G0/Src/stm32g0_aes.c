@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* AES driver implementation for STM32G0 (RM0444 Rev 6 section 20), new in v0.9; compiled only
  * when SPL_G0_HAS_AES. Public contract in stm32g0_aes.h and Docs/v0.9_AES_CONTRACT.md. */
 /* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* FDCAN message RAM layout (FD-01) implementation for STM32G0B1, ported from the G4 SPL v0.13.5;
  * public contract in stm32g0_fdcan_layout.h. */
 /* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit

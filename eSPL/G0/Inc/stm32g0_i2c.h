@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 #ifndef STM32G0_I2C_H
 #define STM32G0_I2C_H
 #include <stdint.h>

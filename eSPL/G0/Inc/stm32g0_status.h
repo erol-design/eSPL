@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* G0 family status header: library version plus the shared SPL_Status and check-level headers.
  * Included by every G0 module header; declares no API. */
 #ifndef STM32G0_STATUS_H

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* Internal DMA/DMAMUX device mapping for every STM32G0 SKU (v0.8). Not a public API.
  * RM0444 Rev 6 11.3.2 / Tables 49 and 54: DMAMUX1 channels 0..n-1 serve DMA1 channels 1..n
  * (n = 5 on G030/G031/G041, 7 elsewhere), the next 5 serve DMA2 channels 1..5 (group 0BX only;

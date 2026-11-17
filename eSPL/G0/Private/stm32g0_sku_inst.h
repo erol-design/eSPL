@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* Internal per-SKU instance tests (v0.8, Docs/v0.8_SKU_PROFILES.md). Not a public API.
  * SPL_G0_IS_<X>(p) is ((p) == X) when the CMSIS header of the selected SKU defines instance X and
  * the constant 0 otherwise, so that a driver can name every family instance without #if blocks

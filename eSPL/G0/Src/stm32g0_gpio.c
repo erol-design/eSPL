@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* GPIO driver. Ported from STM32G4 SPL Src/stm32g4_gpio.c (commit 5bcc2d7 tree, G4 v0.13.2);
  * reviewed against RM0444 Rev 6 section 7. G0 differences: AF0..AF7 only, analog + pull Reserved.
  * Public contract: stm32g0_gpio.h. */

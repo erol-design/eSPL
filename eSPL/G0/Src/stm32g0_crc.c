@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* CRC calculation unit driver implementation (RM0444 Rev 6 section 14); public contract in
  * stm32g0_crc.h. Ported from STM32G4 SPL v0.13.3 (Autometry_Mcu_Spl 130de7a) and reviewed against
  * RM0444 Rev 6: same IP, register layout and rules; only references changed (v0.3). */

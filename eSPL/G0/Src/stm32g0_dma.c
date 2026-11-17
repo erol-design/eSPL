@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* DMA channel driver implementation (RM0444 Rev 6 section 10); public contract in
  * stm32g0_dma.h. Ported from STM32G4 SPL v0.13.3 (Autometry_Mcu_Spl 130de7a); reviewed against
  * RM0444 Rev 6 section 10: same channel registers and ISR/IFCR layout, G0B1 channel map in

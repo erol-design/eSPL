@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* COMP driver for STM32G0B1 (RM0444 Rev 6 section 18), ported from the G4 SPL v0.13.5.
  * Built only where SPL_G0_HAS_COMP; public contract in stm32g0_comp.h. */
 /* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit

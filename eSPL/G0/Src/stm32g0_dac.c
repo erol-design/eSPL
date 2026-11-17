@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* DAC driver for STM32G0B1 (RM0444 Rev 6 section 16, ES0548 Rev 4 section 2.7), ported from the
  * G4 SPL v0.13.5 DAC driver (Autometry_Mcu_Spl 13c21ce); public contract: Inc/stm32g0_dac.h. */
 /* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit

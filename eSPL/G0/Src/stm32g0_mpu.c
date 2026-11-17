@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* Cortex-M0+ MPU driver (v0.9), adapted from STM32H7 SPL Src/stm32h7_mpu.c (Armv7-M) for Armv6-M.
  * Public contract: stm32g0_mpu.h, Docs/v0.9_MPU_CONTRACT.md. */
 /* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit

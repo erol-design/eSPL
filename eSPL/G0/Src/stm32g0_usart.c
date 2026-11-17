@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* USART / LPUART driver for STM32G0; public contract: stm32g0_usart.h.
  * Ported from STM32G4 SPL v0.13.3 (Autometry_Mcu_Spl 130de7a); reviewed against RM0444 Rev 6
  * sections 33 (USART) and 34 (LPUART), Tables 183/184, and ES0548 2.12.x / 2.13.1.

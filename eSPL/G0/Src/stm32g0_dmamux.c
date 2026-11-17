@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* DMAMUX request routing for STM32G0B1 (RM0444 Rev 6 section 11); public contract in
  * stm32g0_dmamux.h. Ported from the STM32G4 SPL v0.13.3 and rewritten for the contiguous G0B1
  * channel map (no G431 address hole). */

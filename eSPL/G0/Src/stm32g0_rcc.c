@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* RCC driver for STM32G0 (RM0444 Rev 6 section 5, DS13560 Rev 6 Table 47); v0.8: every G0 SKU
  * through stm32g0_sku.h (HSI48, PLL Q output, CCIPR2 and kernel selectors only where present).
  * Public contract: stm32g0_rcc.h. */

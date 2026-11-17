@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 #ifndef STM32G0_NVIC_H
 #define STM32G0_NVIC_H
 #include <stdint.h>

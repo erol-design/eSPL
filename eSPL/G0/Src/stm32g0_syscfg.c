@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* SYSCFG driver for STM32G0B1 (RM0444 Rev 6 section 8). Public contract: stm32g0_syscfg.h. */
 /* Library unit: this unit also emits the spl_check.h mismatch-guard reference; the only unit
  * that does not is stm32g0_check.c (SPL_CHECK_LEVEL_DEFINER). BULGU-02, CHECK_LEVEL.md 3.2. */
