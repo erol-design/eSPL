@@ -1,14 +1,18 @@
-# ST CMSIS Device G0 (üçüncü taraf)
+# ST CMSIS Device G0 (third party)
 
-Kaynak: https://github.com/STMicroelectronics/cmsis_device_g0, etiket `v1.4.4` (dosya tarihleri 2023-12-22). İndirme: 2026-11-11. Dosyalar değiştirilmedi. Lisans: Apache 2.0 (`LICENSE.md`).
+Source: https://github.com/STMicroelectronics/cmsis_device_g0, tag `v1.4.4` (file dates
+2023-12-22). Downloaded 2026-11-11. Files are unmodified. License: Apache 2.0 (`LICENSE.md`).
 
-Arşiv `cmsis_device_g0-v1.4.4.zip` SHA-256: `c60d9f8478f356db0461d797d573d82baebe62695acea5944128f242a7a71fc6`
+Archive `cmsis_device_g0-v1.4.4.zip` SHA-256:
+`c60d9f8478f356db0461d797d573d82baebe62695acea5944128f242a7a71fc6`
 
-Yerleşim (G4 ile aynı): `Include/`, `Source/system_stm32g0xx.c`, `Source/startup/{arm,gcc,iar}` (paketteki `Source/Templates`).
+Layout (same as G4): `Include/`, `Source/system_stm32g0xx.c`, `Source/startup/{arm,gcc,iar}`
+(`Source/Templates` in the package).
 
-`stm32g0b1xx.h` ve `system_stm32g0xx.h` hash'leri `Body_Controller_2026/test-altyapisi/vendor/st-cmsis-device-g0/KAYNAK.md` kaydıyla aynı.
+The `stm32g0b1xx.h` and `system_stm32g0xx.h` hashes match an independent earlier download of the
+same tag.
 
-| Dosya | SHA-256 |
+| File | SHA-256 |
 |---|---|
 | `Include/stm32g0b1xx.h` | `7c6bd009a910a44338fee0ca537a26cc488f38ced5bb830efce6c41e9a4192af` |
 | `Include/stm32g0c1xx.h` | `c09c1b111faccc7f9bc26d80c510f4732fc40dbdbfec2abd4ade1e3abbdd355c` |

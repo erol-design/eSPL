@@ -1,10 +1,14 @@
-# CMSIS Core(M) (üçüncü taraf)
+# CMSIS Core(M) (third party)
 
-Kaynak: ST `cmsis_core` (ARM CMSIS_5 kopyası; pdsc son sürüm 5.9.0, `cmsis_version.h` Core(M) 5.6), yerel kopya `C:\Autometry\elgs-driverdeveloper\ELGS-v3\Target\third_party\cmsis_core\Core\Include`. Alınma: 2026-11-11. Dosyalar değiştirilmedi. Lisans: Apache 2.0 (her dosyanın başlığında).
+Source: ST `cmsis_core` (copy of Arm CMSIS_5; latest pdsc version 5.9.0, `cmsis_version.h`
+Core(M) 5.6), taken from a local copy of that package on 2026-11-11. Files are unmodified.
+License: Apache 2.0 (in each file header; `LICENSE.md`).
 
-Neden: bu PC'de Keil CMSIS paketi yalnız 4.2.0/4.3.0 (cmsis_device_g0 v1.4.4 için eski); ARM hedef derlemesi (clang `--target=arm-none-eabi -mcpu=cortex-m0plus`) ve Keil projesi bu klasörü kullanır, RTE CMSIS bileşenine bağlı değildir.
+Why: the Keil CMSIS pack installed on the development PC was 4.2.0 / 4.3.0, too old for
+cmsis_device_g0 v1.4.4. The Arm target build (clang `--target=arm-none-eabi -mcpu=cortex-m0plus`)
+and the Keil projects use this folder and do not depend on the RTE CMSIS component.
 
-| Dosya | SHA-256 |
+| File | SHA-256 |
 |---|---|
 | `Include/cachel1_armv7.h` | `2e336a64f60a9c0eaf5a08e2c4845d94da86c3fd84d219d0d0c9f530e63bc9c3` |
 | `Include/cmsis_armcc.h` | `5bc0d7ed8e36e9bcb868c4042fff350c702eca305df4162fb00384789e35ee1c` |
