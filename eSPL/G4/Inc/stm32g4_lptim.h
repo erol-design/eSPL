@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 #ifndef STM32G4_LPTIM_H
 #define STM32G4_LPTIM_H
 #include <stdint.h>
@@ -9,20 +10,24 @@ extern "C"
 {
 #endif
 
-/* Low-power timer LPTIM1 (RM0440 Rev 9 section 33). Only LPTIM1 exists on the
- * supported SKUs; any other pointer is SPL_ERR_PARAM. No static state, no
- * waits. Caller duties: kernel clock RCC_CCIPR.LPTIM1SEL and bus clock
- * RCC_APB1ENR1.LPTIM1EN (RCC module / board layer); GPIO AF for LPTIM1_IN1,
- * IN2, ETR, OUT; LPTIM_OR input remap (not handled in v0.11).
- * Serialize all callers per instance. Contract: Docs/v0.11_LPTIM_CONTRACT.md.
- *
- * Recommended sequence (as RM0440 33.4.10/33.4.12 and ST's reference flow):
- *   LPTIM_Init (ENABLE=0) -> LPTIM_InterruptConfig (ENABLE=0) -> LPTIM_Enable
- *   -> LPTIM_SetAutoReload / LPTIM_SetCompare -> poll LPTIM_SyncStatus until
- *   OK (also covers the two-counter-clock enable latency) -> LPTIM_Start.
- * Bound the SyncStatus poll (caller timeout): ARROK/CMPOK come from the
- * kernel clock domain, and with CKSEL=1 Input1 is the kernel clock
- * (RM0440 33.4.11), so without input edges they never set. */
+/* Low-power timer driver (LPTIM, RM0440 Rev 9 section 33).
+ * Scope: LPTIM1 only (the only instance on the supported SKUs; any other pointer is
+ * SPL_ERR_PARAM). LPTIM_OR input remap is not handled.
+ * Usage (RM0440 33.4.10/33.4.12 and ST's reference flow): LPTIM_Init (ENABLE=0) ->
+ * LPTIM_InterruptConfig (ENABLE=0) -> LPTIM_Enable -> LPTIM_SetAutoReload / LPTIM_SetCompare ->
+ * poll LPTIM_SyncStatus until OK (also covers the two-counter-clock enable latency) ->
+ * LPTIM_Start.
+ * Common rules: no function waits; no static state (ARR/CMP write tracking lives in the
+ * caller's LPTIM_SyncTypeDef); no clock is enabled here. CR command bits are never copied back.
+ * Caller duties (all APIs):
+ *  - Clock: kernel clock RCC_CCIPR.LPTIM1SEL and bus clock RCC_APB1ENR1.LPTIM1EN (RCC module /
+ *    board layer).
+ *  - Pins: GPIO AF for LPTIM1_IN1, IN2, ETR, OUT.
+ *  - Polling: bound every LPTIM_SyncStatus poll (caller timeout): ARROK/CMPOK come from the
+ *    kernel clock domain, and with CKSEL=1 Input1 is the kernel clock (RM0440 33.4.11), so
+ *    without input edges they never set.
+ *  - Concurrency: serialize all callers per instance; one owner per LPTIM_SyncTypeDef.
+ * Contract: Docs/v0.11_LPTIM_CONTRACT.md. */
 
 /* Field values for LPTIM_InitTypeDef (raw, unshifted). */
 #define LPTIM_CLOCK_INTERNAL 0U /* CKSEL=0 */
@@ -82,37 +87,43 @@ extern "C"
     /* Writes the whole CFGR. STATE: ENABLE=1 (RM0440 33.7.4 caution).
      * PARAM: field out of range, CKPOL=3, CKSEL=1 with both edges, encoder
      * with CKSEL=1 or PRESC!=0, COUNTMODE=1 with CKSEL=0 and PRESC!=0. */
+    /* Caller: filters and CKPOL=both need an internal clock (>= 4x the input for both edges);
+     * encoder input frequency <= kernel clock / 4 (RM0440 33.4.4, 33.4.11, 33.4.14; not
+     * checked). */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status LPTIM_Init(LPTIM_TypeDef *lptim, const LPTIM_InitTypeDef *init);
     /* Writes IER = mask (subset of LPTIM_IT_ALLOWED, 0 disables all).
      * STATE: ENABLE=1 (RM0440 33.7.3 caution). */
+    /* Caller: NVIC enable / priority of the LPTIM1 vector and its handler (the handler clears
+     * the flags it handled, LPTIM_ClearFlags); clear stale flags before enabling. */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status LPTIM_InterruptConfig(LPTIM_TypeDef *lptim, uint32_t mask);
     /* CR = ENABLE (RSTARE kept, command bits never written back). */
+    /* Caller: LPTIM_Init / LPTIM_InterruptConfig first (both refused once enabled). */
     /* Level: PARAM[F] */
     SPL_Status LPTIM_Enable(LPTIM_TypeDef *lptim);
-    /* IER = 0: CR = 0. Cannot touch the caller's sync state: zero every
-     * LPTIM_SyncTypeDef in use afterwards, else a write left unacknowledged
-     * keeps pending=1 and SetAutoReload/SetCompare/SyncStatus return BUSY
-     * forever after the next LPTIM_Enable.
-     * Caller duty (CCL-2 ZMN-08): the LPTIM1_OUT level after this call is not guaranteed by
-     * the driver; on error and shutdown the caller drives the pin to its safe level (e.g.
-     * GPIO output at the safe level) instead of relying on LPTIM_Disable.
+    /* IER = 0: CR = 0. The caller's sync state is not touched.
      * ERRATA ES0431 2.9.1 / ES0430 2.13.1 / ES0523 2.9.1: with IER != 0 ENABLE is not cleared;
      * LPTIM1 is reset via RCC_APB1RSTR1.LPTIM1RST (set, then cleared) and ALL
      * LPTIM registers (CFGR, IER, ARR, CMP, ...) return to reset values: run
-     * LPTIM_Init / LPTIM_InterruptConfig again. Do not race other writers of
-     * RCC_APB1RSTR1 (RMW). */
+     * LPTIM_Init / LPTIM_InterruptConfig again. */
+    /* Caller: zero every LPTIM_SyncTypeDef in use afterwards, else a write left unacknowledged
+     * keeps pending=1 and SetAutoReload/SetCompare/SyncStatus return BUSY forever after the next
+     * LPTIM_Enable. Do not race other writers of RCC_APB1RSTR1 (RMW on the reset path).
+     * Caller duty (CCL-2 ZMN-08): the LPTIM1_OUT level after this call is not guaranteed by
+     * the driver; on error and shutdown the caller drives the pin to its safe level (e.g.
+     * GPIO output at the safe level) instead of relying on LPTIM_Disable. */
     /* Level: PARAM[F] */
     SPL_Status LPTIM_Disable(LPTIM_TypeDef *lptim);
     /* Sets CNTSTRT or SNGSTRT. STATE: ENABLE=0 (hardware discards the write,
      * RM0440 33.4.6) or single mode with ENC=1 (encoder needs continuous).
      * Checks CR.ENABLE only: the timer is enabled two counter clocks after
      * ENABLE=1 (RM0440 33.4.12) and start bits written earlier are lost, so
-     * OK does not prove a start then. Call it after the recommended
-     * sequence or at least two counter clocks after LPTIM_Enable. */
-    /* SINGLE during a running one-shot cycle: OK, discarded by hardware (RM0440 33.4.7);
-     * start the next cycle after ARRM (contract LP-5, v0.13.5). */
+     * OK does not prove a start then.
+     * SINGLE during a running one-shot cycle: OK, discarded by hardware (RM0440 33.4.7)
+     * (contract LP-5, v0.13.5). */
+    /* Caller: call after the recommended sequence or at least two counter clocks after
+     * LPTIM_Enable; issue the next SINGLE only after ARRM of the running cycle. */
     /* Level: PARAM[F,r] STATE[r] */
     SPL_Status LPTIM_Start(LPTIM_TypeDef *lptim, uint32_t mode);
     /* ARR write (1..0xFFFF; 0 can never be > CMP). STATE: ENABLE=0. BUSY:
@@ -121,32 +132,41 @@ extern "C"
      * ERRATA ES0431 2.9.2 / ES0430 2.13.2 / ES0523 2.9.2: STATE (no write) while IER != 0;
      * program ARR/CMP with all LPTIM interrupts disabled.
      * Running with PRELOAD=0: a smaller ARR -> STATE, no write (CCL-2 ZMN-02: an ARR below the
-     * moving counter runs the period to 0xFFFF); shrink with PRELOAD=1 or while disabled. */
+     * moving counter runs the period to 0xFFFF); shrink with PRELOAD=1 or while disabled.
+     * PARAM: arr <= current CMP (RM0440 33.7.7; a CMP write still in flight is not seen). */
+    /* Caller: write order: ARR first when growing, CMP first when shrinking; zero sync after
+     * LPTIM_Disable (see there). */
     /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status LPTIM_SetAutoReload(LPTIM_TypeDef *lptim, LPTIM_SyncTypeDef *sync, uint32_t arr);
-    /* CMP write (0..0xFFFF), same rules with CMPOK / ICR.CMPOKCF. The caller
-     * keeps CMP < ARR for PWM / one-pulse / set-once (RM0440 33.4.9).
+    /* CMP write (0..0xFFFF), same rules with CMPOK / ICR.CMPOKCF. PARAM: cmp >= current ARR
+     * (RM0440 33.4.9; an ARR write still in flight is not seen).
      * ERRATA ES0431 2.9.2 / ES0430 2.13.2 / ES0523 2.9.2: STATE while IER != 0 (as ARR).
      * ERRATA ES0431 2.9.3 / ES0430 2.13.3 / ES0523 2.9.3: CMPM, ARRM, PWM output and IRQs come
      * one kernel clock late; program CMP = wanted - 1; 0 % / 100 % duty cannot
      * be produced. */
+    /* Caller: program CMP = wanted - 1 (ERRATA 2.9.3 above); write order as for
+     * LPTIM_SetAutoReload. */
     /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status LPTIM_SetCompare(LPTIM_TypeDef *lptim, LPTIM_SyncTypeDef *sync, uint32_t cmp);
     /* Updates sync from ARROK/CMPOK (flags not cleared). OK when nothing is
      * pending, BUSY otherwise. */
+    /* Caller: bound the poll (file header; without Input1 edges and CKSEL=1 never OK). */
     /* Level: PARAM[F] BUSY[r] */
     SPL_Status LPTIM_SyncStatus(LPTIM_TypeDef *lptim, LPTIM_SyncTypeDef *sync);
     /* RM0440 33.7.8 double read: up to three CNT reads; OK when two
      * consecutive reads match, BUSY otherwise (retry). STATE: RSTARE=1
      * (a read resets CNT, RM0440 33.4.13). */
+    /* Caller: on BUSY retry with a bound (the counter changed between the reads). */
     /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status LPTIM_ReadCounter(LPTIM_TypeDef *lptim, uint32_t *count);
     /* *flags = ISR & LPTIM_FLAGS_ALL. No side effects. */
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] */
     SPL_Status LPTIM_GetFlags(LPTIM_TypeDef *lptim, uint32_t *flags);
     /* ICR = flags (W1C), non-zero subset of LPTIM_FLAGS_CLEARABLE.
      * ERRATA ES0431 2.9.2 / ES0430 2.13.2 / ES0523 2.9.2: with IER != 0, STATE (no write) unless
-     * every flag has its IER bit set, and call it from the LPTIM ISR only. */
+     * every flag has its IER bit set. */
+    /* Caller: with IER != 0 call it from the LPTIM ISR only (ERRATA 2.9.2 above). */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status LPTIM_ClearFlags(LPTIM_TypeDef *lptim, uint32_t flags);
 

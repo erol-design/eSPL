@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: MIT */
+/* FDCAN Message RAM layout calculator (FD-01): pure computation of the fixed G4 layout.
+ * Public contract: stm32g4_fdcan_layout.h, Docs/FD-01_API_CONTRACT.md. */
 #include "stm32g4_fdcan_layout.h"
 
 static uint32_t FDCAN_InstanceCount(FDCAN_SkuTypeDef sku)

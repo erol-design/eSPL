@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: MIT */
+/* Operational amplifier (OPAMP) driver, RM0440 section 25. Compiled only where CMSIS
+ * defines OPAMP1 (not on G414). Public contract: stm32g4_opamp.h. */
 #define SPL_LIBRARY_BUILD 1
 #include "stm32g4_opamp.h"
 #include <stddef.h>

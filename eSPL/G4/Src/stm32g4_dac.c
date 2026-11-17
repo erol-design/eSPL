@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: MIT */
+/* DAC driver (DAC1..DAC4 as present in CMSIS), RM0440 section 22.
+ * Public contract: stm32g4_dac.h. */
 #define SPL_LIBRARY_BUILD 1
 #include <stddef.h>
 #include "stm32g4_dac.h"

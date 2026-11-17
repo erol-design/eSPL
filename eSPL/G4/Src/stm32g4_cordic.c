@@ -1,8 +1,9 @@
+/* SPDX-License-Identifier: MIT */
+/* CORDIC coprocessor driver, RM0440 Rev 9 section 17.
+ * Public contract: stm32g4_cordic.h; Docs/v0.13_CORDIC_CONTRACT.md. */
 #define SPL_LIBRARY_BUILD 1
 #include <stddef.h>
 #include "stm32g4_cordic.h"
-
-/* RM0440 Rev 9 section 17. Contract: Docs/v0.13_CORDIC_CONTRACT.md. */
 
 #define CORDIC_CSR_RW_BITS                                                                         \
     (CORDIC_CSR_FUNC_Msk | CORDIC_CSR_PRECISION_Msk | CORDIC_CSR_SCALE_Msk | CORDIC_CSR_IEN |      \

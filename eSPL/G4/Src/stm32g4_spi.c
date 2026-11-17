@@ -1,8 +1,19 @@
+/* SPDX-License-Identifier: MIT */
+/* SPI driver (SPI mode). Reviewed against RM0440 Rev 9 section 42. SPI3 / SPI4 are compiled
+ * only where CMSIS defines them. Public contract: stm32g4_spi.h. */
 #include "stm32g4_spi.h"
+#include <stddef.h>
 
 /* DS field value 7 = 8-bit frame; values >= 8 are 9..16-bit frames
  * (RM0440 42.9.2). "Not used" values 0..2 are forced to 8 bit by hardware. */
 #define SPI_DS_8BIT_FIELD 7U
+
+/* 16-bit DR access (data packing: the access width sets the number of bytes sent to the FIFO).
+ * CMSIS defines DR as uint32_t; *(uint16_t *)&spi->DR gives a -Wstrict-aliasing warning on GCC
+ * (an intermediate uintptr_t cast is not enough either, GCC tracks the object). The address is
+ * built as an integer from base + offsetof: the AC6 object is byte-identical, no GCC warning.
+ * 8-bit access (character type) is not affected by the rule and is unchanged. */
+#define SPI_DR16(spi) (*(__IO uint16_t *)((uintptr_t)(spi) + offsetof(SPI_TypeDef, DR)))
 
 /* All defined SPIx_SR bits (RM0440 42.9.3); only CRCERR is writable. */
 #define SPI_SR_DEFINED                                                                             \
@@ -211,7 +222,7 @@ SPL_Status SPI_ClearOverrun(SPI_TypeDef *spi)
     /* DR read width follows the frame size (RM0440 42.5.9 alignment). */
     if (Spi_IsWide(spi) != 0U)
     {
-        discarded = *(__IO uint16_t *)&spi->DR;
+        discarded = SPI_DR16(spi);
     }
     else
     {
@@ -432,7 +443,7 @@ SPL_Status SPI_TryWrite16(SPI_TypeDef *spi, uint16_t data)
     }
 
     /* Half-word DR access: one frame of 9..16 bits, right-aligned. */
-    *(__IO uint16_t *)&spi->DR = data;
+    SPI_DR16(spi) = data;
     return SPL_OK;
 }
 
@@ -460,7 +471,7 @@ SPL_Status SPI_TryRead16(SPI_TypeDef *spi, uint16_t *data)
         return SPL_WOULD_BLOCK;
     }
 
-    *data = *(__IO uint16_t *)&spi->DR;
+    *data = SPI_DR16(spi);
     return SPL_OK;
 }
 

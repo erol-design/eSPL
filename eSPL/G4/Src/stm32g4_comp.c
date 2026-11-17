@@ -1,3 +1,7 @@
+/* SPDX-License-Identifier: MIT */
+/* Analog comparator driver (RM0440 Rev 9 section 24). Variants: COMP4..COMP7 and the TIM20
+ * blanking source are compiled only where the CMSIS header defines them. Public contract:
+ * stm32g4_comp.h, Docs/v0.11_COMP_CONTRACT.md. */
 #define SPL_LIBRARY_BUILD 1
 #include "stm32g4_comp.h"
 #include <stddef.h>

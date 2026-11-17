@@ -1,9 +1,11 @@
+/* SPDX-License-Identifier: MIT */
+/* FMC driver (NOR/PSRAM/SRAM and NAND). RM0440 Rev 9 section 19 (FSMC/FMC). Register
+ * descriptions: 19.6.6 (NOR/PSRAM), 19.7.7 (NAND); parameter ranges: Table 126, Table 152.
+ * Without FMC_Bank1_R in CMSIS every API returns SPL_ERR_UNSUPPORTED.
+ * Public contract: stm32g4_fmc.h. */
 #define SPL_LIBRARY_BUILD 1
 #include <stddef.h>
 #include "stm32g4_fmc.h"
-
-/* RM0440 Rev 9 section 19 (FSMC/FMC). Register descriptions: 19.6.6
- * (NOR/PSRAM), 19.7.7 (NAND); parameter ranges: Table 126, Table 152. */
 
 #if defined(FMC_Bank1_R)
 
@@ -285,15 +287,15 @@ SPL_Status FMC_NORSRAM_Init(uint32_t bank, const FMC_NORSRAM_InitTypeDef *init,
     uint32_t value;
     uint32_t bwtr;
 
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!((Fmc_BankValid(bank) == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!((init == NULL)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!((timing == NULL)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!((Fmc_InitValid(bank, init) == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!((Fmc_TimingsValid(init, timing, write_timing) == 0U)), SPL_ERR_PARAM);
     idx = Fmc_BcrIndex(bank);
     bcr = FMC_Bank1_R->BTCR[idx];
@@ -353,7 +355,7 @@ SPL_Status FMC_NORSRAM_Enable(uint32_t bank)
 {
     uint32_t idx;
 
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!(Fmc_BankValid(bank) == 0U), SPL_ERR_PARAM);
     idx = Fmc_BcrIndex(bank);
     /* FMC_BCRx has no W1C or self-clearing bits: RMW is safe. */
@@ -365,7 +367,7 @@ SPL_Status FMC_NORSRAM_Disable(uint32_t bank)
 {
     uint32_t idx;
 
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!(Fmc_BankValid(bank) == 0U), SPL_ERR_PARAM);
     idx = Fmc_BcrIndex(bank);
     FMC_Bank1_R->BTCR[idx] = FMC_Bank1_R->BTCR[idx] & ~FMC_BCRx_MBKEN;
@@ -376,7 +378,7 @@ SPL_Status FMC_PSRAM_SetCounter(uint16_t count, uint32_t bank_mask)
 {
     uint32_t value;
 
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!((bank_mask & ~FMC_PSRAM_CNT_ALL) != 0U), SPL_ERR_PARAM);
     /* The counter is common to all sub-banks: no sub-bank may be active. */
     if (Fmc_AnyNorEnabled(0U) != 0U)
@@ -430,28 +432,28 @@ SPL_Status FMC_NAND_Init(const FMC_NAND_InitTypeDef *init, const FMC_NAND_Timing
     uint32_t pcr;
     uint32_t value;
 
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!((init == NULL)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!((common == NULL)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!((attribute == NULL)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!((Fmc_Bool(init->wait_feature) == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!((init->data_width > FMC_WIDTH_16)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!((init->ecc_page_size > FMC_ECC_PAGE_8192)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!((init->tclr > FMC_FIELD4_MAX)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!((init->tar > FMC_FIELD4_MAX)), SPL_ERR_PARAM);
     /* ERRATA ES0430 2.5.2: refuse MEMSET = 0 together with ATTHOLD <= 1. */
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!((Fmc_NandTimingValid(common) == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!((Fmc_NandTimingValid(attribute) == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!((Fmc_NandBusyReadSafe(common, attribute) == 0U)), SPL_ERR_PARAM);
     pcr = FMC_Bank3_R->PCR;
     if ((pcr & FMC_PCR_PBKEN) != 0U)
@@ -510,7 +512,7 @@ SPL_Status FMC_NAND_GetECC(uint32_t *ecc)
     uint32_t bits;
     uint32_t value;
 
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!(ecc == NULL), SPL_ERR_PARAM);
     pcr = FMC_Bank3_R->PCR;
     if ((pcr & FMC_PCR_ECCEN) == 0U)
@@ -536,7 +538,7 @@ SPL_Status FMC_NAND_GetECC(uint32_t *ecc)
 
 SPL_Status FMC_NAND_GetFlags(uint32_t *flags)
 {
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!(flags == NULL), SPL_ERR_PARAM);
     *flags = FMC_Bank3_R->SR & (FMC_NAND_FLAGS_ALL | FMC_NAND_FLAG_FEMPT);
     return SPL_OK;
@@ -544,9 +546,9 @@ SPL_Status FMC_NAND_GetFlags(uint32_t *flags)
 
 SPL_Status FMC_NAND_ClearFlags(uint32_t flags)
 {
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!((flags == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!(((flags & ~FMC_NAND_FLAGS_ALL) != 0U)), SPL_ERR_PARAM);
     /* IRS/IFS: writing 1 sets the flag, so only the read value is written
      * back for the other flags; the cleared ones are written 0. */
@@ -558,11 +560,11 @@ SPL_Status FMC_NAND_ITConfig(uint32_t its, uint8_t enable)
 {
     uint32_t sr;
 
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!((its == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!(((its & ~FMC_NAND_IT_ALL) != 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!((Fmc_Bool(enable) == 0U)), SPL_ERR_PARAM);
     sr = FMC_Bank3_R->SR & FMC_SR_RW;
     if (enable != 0U)
@@ -590,9 +592,9 @@ typedef char Fmc_RegionTableCheck[((sizeof(fmc_region_base) / sizeof(fmc_region_
 
 SPL_Status FMC_GetBankAddress(uint32_t region, uint32_t *address)
 {
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!((region > FMC_REGION_NAND_ATTRIBUTE)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input: silent register corruption or wrong address risk. */
     SPL_REQUIRE(!((address == NULL)), SPL_ERR_PARAM);
     *address = fmc_region_base[region];
     return SPL_OK;

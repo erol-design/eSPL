@@ -1,3 +1,7 @@
+/* SPDX-License-Identifier: MIT */
+/* FDCAN driver (RM0440 Rev 9 section 44). FDCAN2 / FDCAN3 support is compiled only where CMSIS
+ * defines them; Message RAM accesses are single 32-bit words at the FD-01 fixed offsets.
+ * Public contract: stm32g4_fdcan.h, Docs/v0.10_FDCAN_CONTRACT.md. */
 #define SPL_LIBRARY_BUILD 1
 #include "stm32g4_fdcan.h"
 #include "stm32g4_fdcan_layout.h"

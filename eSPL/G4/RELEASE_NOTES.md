@@ -1,5 +1,18 @@
 # eSPL STM32G4 release notes
 
+## v0.18.0 candidate, package update (2026-11-17)
+
+- MIT license file and `SPDX-License-Identifier: MIT` in every source; third-party notices and
+  CMSIS license texts.
+- Umbrella header `stm32g4_spl.h`; CMake integration (`espl::g4`, `espl::g4_startup`, 12 devices,
+  FULL / FAST) with an example Arm GCC toolchain file; `Examples/G431_Template` builds through it.
+- API reference `Docs/API.md`; every public status API documents its `Caller:` duty.
+- Comments are English.
+- Fix: on STM32G411xC the backup register functions accepted index 16..31 although the CMSIS TAMP
+  register block declares 16 registers; the limit is now `RTC_BKP_COUNT` (16 on G411xC, unchanged
+  on the other devices).
+- Fix: 16-bit SPI data register access no longer triggers the Arm GCC strict-aliasing warning.
+
 ## v0.18.0 candidate (2026-11-16)
 
 - Added parameter, state and size checks: LPTIM / HRTIM period shrink without preload, TIM dead

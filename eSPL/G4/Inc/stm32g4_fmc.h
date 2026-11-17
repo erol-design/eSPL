@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 #ifndef STM32G4_FMC_H
 #define STM32G4_FMC_H
 #include <stdint.h>
@@ -9,20 +10,33 @@ extern "C"
 {
 #endif
 
-/* FMC (RM0440 Rev 9 section 19): NOR/PSRAM/SRAM controller (bank 1, four
- * sub-banks NE1..NE4) and NAND controller (bank 3). There is no SDRAM
- * controller on STM32G4. FMC exists only where CMSIS defines FMC_Bank1_R
- * (G473/G474/G483/G484); on every other SKU each API returns
- * SPL_ERR_UNSUPPORTED without any access.
- * Caller duties: RCC_AHB3ENR.FMCEN (and the FMC reset if needed), GPIO
- * alternate functions, MPU attributes of the bank windows, NVIC (FMC_IRQn).
- * The driver never accesses the external memory windows; it only programs
- * the FMC registers. RM0440 Rev 9 has no global FMC enable bit in FMC_BCR1
- * (bits 31:24 are reserved), unlike some other STM32 families.
+/* Flexible memory controller driver for STM32G4 (RM0440 Rev 9 section 19).
+ * Scope: NOR/PSRAM/SRAM controller (bank 1, four sub-banks NE1..NE4) and NAND controller
+ * (bank 3). There is no SDRAM controller on STM32G4. FMC exists only where CMSIS defines
+ * FMC_Bank1_R (G473/G474/G483/G484); on every other SKU each API returns
+ * SPL_ERR_UNSUPPORTED without any access. RM0440 Rev 9 has no global FMC enable bit in
+ * FMC_BCR1 (bits 31:24 are reserved), unlike some other STM32 families.
+ * Usage: FMC_NORSRAM_Init (sub-bank disabled), optional FMC_PSRAM_SetCounter, then
+ * FMC_NORSRAM_Enable; NAND: FMC_NAND_Init, FMC_NAND_ITConfig, FMC_NAND_Enable, per page
+ * FMC_NAND_ECCStart -> data transfer -> FMC_NAND_GetECC.
+ * Common rules: no dynamic memory, no static state; no function waits (WOULD_BLOCK is returned
+ * instead); parameters are validated before any write; output parameters are written only on
+ * OK. The driver never accesses the external memory windows (0x6000 0000..0x8FFF FFFF); it
+ * only programs the FMC registers.
+ * Caller duties (all APIs; not done by the driver):
+ *  - Clock: RCC_AHB3ENR.FMCEN (and the FMC reset if needed).
+ *  - Pins: GPIO alternate functions of the FMC pins.
+ *  - MPU attributes of the bank windows (the NAND bank must be Device, RM0440 19.5); NVIC
+ *    (FMC_IRQn).
+ *  - Serialize all FMC calls (single owner or critical section): every write is a
+ *    read-modify-write of shared registers.
+ *  - Device layer: every access through the memory windows (commands, addresses, data, NAND
+ *    R/B waiting) and the external memory timing calculation.
  * Errata: ES0430 Rev 10 (G471/473/474/483/484) section 2.5; contract section
  * "Errata". ES0431 (G431/441) has no FMC items (no FMC on those parts).
- * ERRATA ES0430 2.5.1: a synchronous burst read is followed by two dummy read
- * accesses; read-sensitive synchronous devices (FIFOs) see them (caller). */
+ * ERRATA ES0430 2.5.1 (CALLER): a synchronous burst read is followed by two dummy read
+ * accesses; read-sensitive synchronous devices (FIFOs) see them.
+ * Contract: Docs/v0.12_FMC_CONTRACT.md. */
 
 /* NOR/PSRAM sub-bank (chip select NEx). */
 #define FMC_NORSRAM_BANK1 1U
@@ -166,17 +180,24 @@ extern "C"
      * disabled: bank 1 PARAM unless write_fifo_disable = 1; bank 2..4 STATE
      * unless BCR1.WFDIS = 1 (init bank 1 first); bank 1 with WFDIS = 0 STATE
      * while bank 2..4 is configured as sync-write PSRAM. */
+    /* Caller: timing codes from the external memory data sheet and HCLK (the driver checks ranges
+     * only); synchronous burst read on a read-sensitive device: see ERRATA ES0430 2.5.1 above. */
     /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status FMC_NORSRAM_Init(uint32_t bank, const FMC_NORSRAM_InitTypeDef *init,
                                 const FMC_NORSRAM_TimingTypeDef *timing,
                                 const FMC_NORSRAM_TimingTypeDef *write_timing);
     /* Set / clear FMC_BCRx.MBKEN only (idempotent). */
+    /* Caller: initialise the sub-bank (FMC_NORSRAM_Init) and configure the pins and the MPU before
+     * the first window access. */
     /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status FMC_NORSRAM_Enable(uint32_t bank);
+    /* Caller: no access through the sub-bank window may be in progress, or be made while the
+     * sub-bank is disabled. */
     /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status FMC_NORSRAM_Disable(uint32_t bank);
     /* FMC_PCSCNTR: CSCOUNT (0 disables the split) and CNTBxEN from bank_mask
      * (FMC_PSRAM_CNT_*). STATE while any NOR/PSRAM sub-bank is enabled. */
+    /* Caller: count from the PSRAM tCEM requirement (not checked). */
     /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status FMC_PSRAM_SetCounter(uint16_t count, uint32_t bank_mask);
 
@@ -184,39 +205,51 @@ extern "C"
      * ECCEN = 0). STATE while PBKEN = 1.
      * ERRATA ES0430 2.5.2: PARAM when common->setup (MEMSET) = 0 and
      * attribute->hold (ATTHOLD) <= 1 (busy-NAND wrong read). */
+    /* Caller: timing codes from the NAND data sheet and HCLK (the driver checks ranges only). */
     /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status FMC_NAND_Init(const FMC_NAND_InitTypeDef *init, const FMC_NAND_TimingTypeDef *common,
                              const FMC_NAND_TimingTypeDef *attribute);
+    /* Caller: configure the interrupt enables (FMC_NAND_ITConfig) before enabling; the NAND window
+     * MPU attribute is Device. */
     /* Level: UNSUPPORTED[r] */
     SPL_Status FMC_NAND_Enable(void);
+    /* Caller: no access through the NAND window may be in progress. */
     /* Level: UNSUPPORTED[r] */
     SPL_Status FMC_NAND_Disable(void);
     /* ECCEN = 1. If ECCEN is already 1, it is first written 0 (ECC logic and
      * FMC_ECCR reset, RM0440 19.7.6 step 4) and then 1. */
+    /* Caller: start it right before the data transfer of each ECC block. */
     /* Level: UNSUPPORTED[r] */
     SPL_Status FMC_NAND_ECCStart(void);
     /* ECCEN = 0: ECC logic disabled and FMC_ECCR cleared. */
+    /* Caller: read FMC_NAND_GetECC first: stopping clears FMC_ECCR. */
     /* Level: UNSUPPORTED[r] */
     SPL_Status FMC_NAND_ECCStop(void);
     /* FMC_ECCR masked to the bits valid for ECCPS (RM0440 Table 156).
      * STATE when ECCEN = 0; WOULD_BLOCK while the write FIFO is not empty
      * (FEMPT = 0, RM0440 FMC_SR). Does not stop the ECC logic. */
+    /* Caller: call after the last data byte of the ECC block was transferred; bound the WOULD_BLOCK
+     * retries. */
     /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] WOULD_BLOCK[r] */
     SPL_Status FMC_NAND_GetECC(uint32_t *ecc);
     /* FMC_SR & (FMC_NAND_FLAGS_ALL | FMC_NAND_FLAG_FEMPT), no side effects. */
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status FMC_NAND_GetFlags(uint32_t *flags);
     /* Writes 0 to the given IRS/ILS/IFS flags (subset of FMC_NAND_FLAGS_ALL,
      * non-zero). FMC_SR has no atomic clear: a flag set by hardware between
      * the read and the write of the RMW is lost (RM0440 FMC_SR is rw). */
+    /* Caller: clear flags from the FMC ISR only (no atomic clear, see above). */
     /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status FMC_NAND_ClearFlags(uint32_t flags);
     /* Sets (enable = 1) or clears (enable = 0) IREN/ILEN/IFEN (subset of
      * FMC_NAND_IT_ALL, non-zero). Same RMW caveat as FMC_NAND_ClearFlags. */
+    /* Caller: configure before FMC_NAND_Enable; the FMC ISR clears the flags it services. */
     /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status FMC_NAND_ITConfig(uint32_t its, uint8_t enable);
 
     /* Base address of a bank window (FMC_REGION_*). No memory access. */
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status FMC_GetBankAddress(uint32_t region, uint32_t *address);
 

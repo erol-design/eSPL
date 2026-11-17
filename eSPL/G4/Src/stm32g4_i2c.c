@@ -1,3 +1,7 @@
+/* SPDX-License-Identifier: MIT */
+/* I2C driver (RM0440 Rev 9 chapter 39): controller, long / 10-bit transfers, target mode and
+ * SMBus/PEC. Variants: I2C3 only where the CMSIS header defines it; SMBus, TIMEOUTR and wake-up
+ * on I2C1 only (RM0440 Table 352). Public contract: stm32g4_i2c.h. */
 #define SPL_LIBRARY_BUILD 1
 #include "stm32g4_i2c.h"
 
@@ -106,11 +110,11 @@ static SPL_Status I2c_RestartGate(const I2C_TypeDef *i2c, uint32_t errors)
 
 SPL_Status I2C_MasterInit(I2C_TypeDef *i2c, uint32_t timingr)
 {
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((timingr == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!(((timingr & 0x0F000000UL) != 0U)), SPL_ERR_PARAM);
     if ((i2c->CR1 & I2C_CR1_PE) != 0U)
     {
@@ -127,13 +131,13 @@ SPL_Status I2C_Start(I2C_TypeDef *i2c, uint8_t address7, uint8_t length, uint8_t
     uint32_t cr2;
     SPL_Status gate;
 
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((address7 > 127U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((length == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((read > 1U)), SPL_ERR_PARAM);
     if ((i2c->CR1 & I2C_CR1_PE) == 0U)
     {
@@ -163,7 +167,7 @@ SPL_Status I2C_Start(I2C_TypeDef *i2c, uint8_t address7, uint8_t length, uint8_t
 
 SPL_Status I2C_TryWrite(I2C_TypeDef *i2c, uint8_t byte)
 {
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!(I2c_Valid(i2c) == 0U), SPL_ERR_PARAM);
     if ((i2c->CR1 & I2C_CR1_PE) == 0U)
     {
@@ -185,9 +189,9 @@ SPL_Status I2C_TryWrite(I2C_TypeDef *i2c, uint8_t byte)
 
 SPL_Status I2C_TryRead(I2C_TypeDef *i2c, uint8_t *byte)
 {
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((byte == (uint8_t *)0)), SPL_ERR_PARAM);
     if ((i2c->CR1 & I2C_CR1_PE) == 0U)
     {
@@ -209,7 +213,7 @@ SPL_Status I2C_TryRead(I2C_TypeDef *i2c, uint8_t *byte)
 
 SPL_Status I2C_Stop(I2C_TypeDef *i2c)
 {
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!(I2c_Valid(i2c) == 0U), SPL_ERR_PARAM);
 
     /* START is cleared by hardware and writing 0 has no effect. Never copy a
@@ -221,7 +225,7 @@ SPL_Status I2C_Stop(I2C_TypeDef *i2c)
 
 SPL_Status I2C_ClearErrors(I2C_TypeDef *i2c)
 {
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!(I2c_Valid(i2c) == 0U), SPL_ERR_PARAM);
 
     /* ICR is write-one-to-clear; do not use read-modify-write. */
@@ -239,9 +243,9 @@ SPL_Status I2C_ClearErrors(I2C_TypeDef *i2c)
 
 SPL_Status I2C_Status(I2C_TypeDef *i2c, uint32_t *status)
 {
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((status == (uint32_t *)0)), SPL_ERR_PARAM);
 
     *status = i2c->ISR;
@@ -255,13 +259,13 @@ SPL_Status I2C_StartNoStop(I2C_TypeDef *i2c, uint8_t address7, uint8_t length, u
     uint32_t cr2;
     SPL_Status gate;
 
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((address7 > 127U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((length == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((read > 1U)), SPL_ERR_PARAM);
     if ((i2c->CR1 & I2C_CR1_PE) == 0U)
     {
@@ -289,15 +293,15 @@ SPL_Status I2C_Restart(I2C_TypeDef *i2c, uint8_t address7, uint8_t length, uint8
     uint32_t cr2;
     SPL_Status gate;
 
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((address7 > 127U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((length == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((read > 1U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((autoend > 1U)), SPL_ERR_PARAM);
     if ((i2c->CR1 & I2C_CR1_PE) == 0U)
     {
@@ -328,9 +332,9 @@ SPL_Status I2C_Restart(I2C_TypeDef *i2c, uint8_t address7, uint8_t length, uint8
 
 SPL_Status I2C_TransferComplete(I2C_TypeDef *i2c, uint8_t *complete)
 {
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((complete == (uint8_t *)0)), SPL_ERR_PARAM);
     /* ERRATA ES0431 2.11.2 / ES0430 2.15.2 / ES0523 2.11.2: spurious BERR does not abort.
      * PECERR (PEC enabled; CCL-2 I2C-27) is reported too, flags kept for I2C_GetErrors. */
@@ -344,9 +348,9 @@ SPL_Status I2C_TransferComplete(I2C_TypeDef *i2c, uint8_t *complete)
 
 SPL_Status I2C_StopDetected(I2C_TypeDef *i2c, uint8_t *detected)
 {
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((detected == (uint8_t *)0)), SPL_ERR_PARAM);
     /* A target NACK in an AUTOEND transfer also ends with STOPF: report it as
      * ERR_HW like I2C_TransferComplete (flags kept for I2C_GetErrors); PECERR as well. */
@@ -362,7 +366,7 @@ SPL_Status I2C_StopDetected(I2C_TypeDef *i2c, uint8_t *detected)
  * ICR is write-one-to-clear; do not read/modify/write this register. */
 SPL_Status I2C_ClearStop(I2C_TypeDef *i2c)
 {
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!(I2c_Valid(i2c) == 0U), SPL_ERR_PARAM);
 
     i2c->ICR = I2C_ICR_STOPCF;
@@ -460,11 +464,11 @@ SPL_Status I2C_StartLong(I2C_TypeDef *i2c, I2C_LongTransferTypeDef *xfer, uint16
 {
     SPL_Status gate;
 
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((xfer == (I2C_LongTransferTypeDef *)0)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((I2c_LongArgsValid(address, options, length, 0U) == 0U)), SPL_ERR_PARAM);
     if ((i2c->CR1 & I2C_CR1_PE) == 0U)
     {
@@ -489,11 +493,11 @@ SPL_Status I2C_RestartLong(I2C_TypeDef *i2c, I2C_LongTransferTypeDef *xfer, uint
 {
     SPL_Status gate;
 
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((xfer == (I2C_LongTransferTypeDef *)0)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((I2c_LongArgsValid(address, options, length, 1U) == 0U)), SPL_ERR_PARAM);
     if ((i2c->CR1 & I2C_CR1_PE) == 0U)
     {
@@ -518,11 +522,11 @@ SPL_Status I2C_ReloadService(I2C_TypeDef *i2c, I2C_LongTransferTypeDef *xfer)
     uint32_t cr2;
     uint32_t chunk;
 
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((xfer == (I2C_LongTransferTypeDef *)0)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((xfer->autoend > 1U)), SPL_ERR_PARAM);
     if ((i2c->CR1 & I2C_CR1_PE) == 0U)
     {
@@ -574,9 +578,9 @@ SPL_Status I2C_ReloadService(I2C_TypeDef *i2c, I2C_LongTransferTypeDef *xfer)
 
 SPL_Status I2C_GetErrors(I2C_TypeDef *i2c, uint32_t *errors)
 {
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((errors == (uint32_t *)0)), SPL_ERR_PARAM);
 
     *errors = i2c->ISR & I2C_ERRORS_ALL;
@@ -587,11 +591,11 @@ SPL_Status I2C_ClearErrorFlags(I2C_TypeDef *i2c, uint32_t errors)
 {
     uint32_t icr = 0U;
 
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((errors == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!(((errors & ~I2C_ERRORS_ALL) != 0U)), SPL_ERR_PARAM);
 
     if ((errors & I2C_ISR_NACKF) != 0U)
@@ -639,9 +643,9 @@ SPL_Status I2C_SoftwareReset(I2C_TypeDef *i2c, uint8_t reenable)
 {
     uint32_t cr1;
 
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((reenable > 1U)), SPL_ERR_PARAM);
 
     /* RM0440 39.4.6: 1. write PE=0, 2. check PE=0, 3. write PE=1.
@@ -662,9 +666,9 @@ SPL_Status I2C_SoftwareReset(I2C_TypeDef *i2c, uint8_t reenable)
 
 SPL_Status I2C_TimeoutConfig(I2C_TypeDef *i2c, uint32_t timeoutr)
 {
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!((I2c_Valid(i2c) == 0U)), SPL_ERR_PARAM);
-    /* Gecersiz girdi sessiz register bozulmasi veya yanlis adres riski. */
+    /* Invalid input risks silent register corruption or a wrong address. */
     SPL_REQUIRE(!(((timeoutr & ~I2C_TIMEOUTR_VALID) != 0U)), SPL_ERR_PARAM);
     SPL_REQUIRE(I2c_HasSmbus(i2c) != 0U, SPL_ERR_UNSUPPORTED);
     if ((i2c->ISR & I2C_ISR_BUSY) != 0U)

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 #ifndef STM32G4_FAST_H
 #define STM32G4_FAST_H
 
@@ -8,9 +9,30 @@
 #include "stm32g4_iwdg.h"
 #include "stm32g4_tim.h"
 
-/* Hot-path accessors.  Configuration remains in the checked module APIs.
- * Callers must pass an initialized, clocked CMSIS instance.  "Fast" makes
- * the direct MMIO access visible at the call site. */
+/* Hot-path accessors (G4 counterpart of eSPL G0 stm32g0_fast.h).
+ * Scope: single register reads / writes and flag clears for GPIO, TIM, DAC, IWDG, FDCAN, DMA1
+ * and EXTI, all static inline. Configuration (Init, Config) stays in the checked module APIs.
+ * Usage: configure the instance with its module API, then call the Fast accessor in loops and
+ * interrupt handlers.
+ * Common rules: "Fast" in the name makes the direct, unchecked MMIO access visible at the call
+ * site; scalar arguments with a fixed range are checked at compile time with SPL_DIAG
+ * (stm32g4_diag.h) when they are constants. Never removed: hardware state (lost capture) and
+ * the read-back after a flag clear. DAC value / DMA state and the DMA channel range are checked
+ * at FULL only (SPL_REQUIRE). Accessors without a status return their value directly. No
+ * function waits; no static state.
+ * Caller duties (all APIs): Y1..Y6 below; none of them is checked at run time.
+ *  Y1. The instance (GPIOx, TIMx, DAC1, FDCANx) is set up with the checked Init / Config API and
+ *      its clock is on.
+ *  Y2. The instance pointer is a CMSIS constant used directly (GPIOA, TIM1), not taken from a
+ *      table or a variable.
+ *  Y3. TIM_FastSetCompareN: the value fits the timer width (TIM2 / TIM5 32 bit, others 16 bit);
+ *      excess bits are silently truncated.
+ *  Y4. TIM_FastGetCounter: CR1.UIFREMAP = 0 (else bit 31 is the UIF copy, not the counter).
+ *  Y5. Channel and line arguments (DMA1_Fast*, EXTI_Fast*) are constants; SPL_DIAG can check
+ *      constants only.
+ *  Y6. TIM_FastSetCompareN / TIM_FastGetCaptureN: the channel exists on that timer (TIM15 has
+ *      two, TIM16 / TIM17 one, TIM6 / TIM7 none).
+ * Contract: none of its own; the module contracts of the accessed peripherals apply. */
 
 #ifdef __cplusplus
 extern "C"
@@ -66,6 +88,7 @@ extern "C"
         return (uint8_t)(((tim->CR1 & TIM_CR1_DIR) != 0U) ? 1U : 0U);
     }
 
+    /* Caller: internal helper of TIM_FastGetCaptureN; none beyond the file-header duties. */
     /* Level: PARAM[F] HW[r] WOULD_BLOCK[r] */
     static inline SPL_Status Tim_FastCapture(const TIM_TypeDef *tim, uint32_t flag,
                                              const volatile uint32_t *ccr, uint32_t *value)
@@ -86,21 +109,29 @@ extern "C"
         return SPL_OK;
     }
 
+    /* Caller: the channel is an input capture channel (CCxS != 00, not checked); after SPL_ERR_HW
+     * clear CCxOF with TIM_FastClearFlags; one reader per channel (Y1, Y6). */
     /* Level: PARAM[F] HW[r] WOULD_BLOCK[r] */
     static inline SPL_Status TIM_FastGetCapture1(const TIM_TypeDef *tim, uint32_t *value)
     {
         return Tim_FastCapture(tim, TIM_SR_CC1IF, &tim->CCR1, value);
     }
+    /* Caller: the channel is an input capture channel (CCxS != 00, not checked); after SPL_ERR_HW
+     * clear CCxOF with TIM_FastClearFlags; one reader per channel (Y1, Y6). */
     /* Level: PARAM[F] HW[r] WOULD_BLOCK[r] */
     static inline SPL_Status TIM_FastGetCapture2(const TIM_TypeDef *tim, uint32_t *value)
     {
         return Tim_FastCapture(tim, TIM_SR_CC2IF, &tim->CCR2, value);
     }
+    /* Caller: the channel is an input capture channel (CCxS != 00, not checked); after SPL_ERR_HW
+     * clear CCxOF with TIM_FastClearFlags; one reader per channel (Y1, Y6). */
     /* Level: PARAM[F] HW[r] WOULD_BLOCK[r] */
     static inline SPL_Status TIM_FastGetCapture3(const TIM_TypeDef *tim, uint32_t *value)
     {
         return Tim_FastCapture(tim, TIM_SR_CC3IF, &tim->CCR3, value);
     }
+    /* Caller: the channel is an input capture channel (CCxS != 00, not checked); after SPL_ERR_HW
+     * clear CCxOF with TIM_FastClearFlags; one reader per channel (Y1, Y6). */
     /* Level: PARAM[F] HW[r] WOULD_BLOCK[r] */
     static inline SPL_Status TIM_FastGetCapture4(const TIM_TypeDef *tim, uint32_t *value)
     {
@@ -187,11 +218,14 @@ static inline uint32_t Tim_FastFlagMask(const TIM_TypeDef *tim)
     }
 
 #if defined(DAC1)
+    /* Caller: none beyond the file-header duties (Y1: channel configured and enabled). */
     static inline SPL_Status DAC_FastWrite12R1(DAC_TypeDef *dac, uint32_t value)
         SPL_DIAG(value > 0xFFFU, "DAC_FastWrite12R1: value must fit 12 bits");
+    /* Caller: none beyond the file-header duties (Y1: channel configured and enabled). */
     static inline SPL_Status DAC_FastWrite12R2(DAC_TypeDef *dac, uint32_t value)
         SPL_DIAG(value > 0xFFFU, "DAC_FastWrite12R2: value must fit 12 bits");
 
+    /* Caller: none beyond the file-header duties (Y1: channel configured and enabled). */
     /* Level: PARAM[F] STATE[F] */
     static inline SPL_Status DAC_FastWrite12R1(DAC_TypeDef *dac, uint32_t value)
     {
@@ -201,6 +235,7 @@ static inline uint32_t Tim_FastFlagMask(const TIM_TypeDef *tim)
         return SPL_OK;
     }
 
+    /* Caller: none beyond the file-header duties (Y1: channel configured and enabled). */
     /* Level: PARAM[F] STATE[F] */
     static inline SPL_Status DAC_FastWrite12R2(DAC_TypeDef *dac, uint32_t value)
     {
@@ -265,6 +300,7 @@ typedef char Dma1_FastChannelCheck[(((DMA1_Channel2_BASE - DMA1_Channel1_BASE) =
     static inline uint32_t DMA1_FastFlags(uint32_t channel)
         SPL_DIAG((channel < 1U) || (channel > DMA1_FAST_CHANNELS),
                  "DMA1_FastFlags: channel outside SKU");
+    /* Caller: none beyond the file-header duties (Y5: channel and flags constant). */
     static inline SPL_Status DMA1_FastClearFlags(uint32_t channel, uint32_t flags)
         SPL_DIAG((channel < 1U) || (channel > DMA1_FAST_CHANNELS),
                  "DMA1_FastClearFlags: channel outside SKU")
@@ -275,6 +311,9 @@ typedef char Dma1_FastChannelCheck[(((DMA1_Channel2_BASE - DMA1_Channel1_BASE) =
         return (DMA1->ISR >> ((channel - 1U) * 4U)) & 0xFU;
     }
 
+    /* GIF (bit0) with the channel enabled -> SPL_ERR_STATE, nothing written (DMA errata, see
+     * DMA_ClearFlags). */
+    /* Caller: none beyond the file-header duties (Y5: channel and flags constant). */
     /* Level: PARAM[F] STATE[F] */
     static inline SPL_Status DMA1_FastClearFlags(uint32_t channel, uint32_t flags)
     {

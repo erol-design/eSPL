@@ -1,7 +1,8 @@
+/* SPDX-License-Identifier: MIT */
+/* Low-power timer (LPTIM1) driver, RM0440 Rev 9 section 33.
+ * Public contract: stm32g4_lptim.h. */
 #define SPL_LIBRARY_BUILD 1
 #include "stm32g4_lptim.h"
-
-/* RM0440 Rev 9 section 33. */
 
 #define LPTIM_CKPOL_MAX LPTIM_CKPOL_BOTH
 #define LPTIM_FILTER_MAX 3U

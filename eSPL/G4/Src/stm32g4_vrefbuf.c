@@ -1,7 +1,10 @@
+/* SPDX-License-Identifier: MIT */
 #define SPL_LIBRARY_BUILD 1
 #include "stm32g4_vrefbuf.h"
 
-/* RM0440 Rev 9 section 23. */
+/* Voltage reference buffer driver (RM0440 Rev 9 section 23). SKUs without VREFBUF in CMSIS
+ * (G411xB, G414) build the SPL_ERR_UNSUPPORTED stubs at the end of this file.
+ * Public contract: stm32g4_vrefbuf.h. */
 
 #if defined(VREFBUF)
 

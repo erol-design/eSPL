@@ -1,28 +1,34 @@
+/* SPDX-License-Identifier: MIT */
 #ifndef STM32G4_SYSCFG_H
 #define STM32G4_SYSCFG_H
 #include <stdint.h>
 #include "stm32g4xx.h"
 #include "stm32g4_status.h"
 
-/* v0.12 SYSCFG extras (RM0440 Rev 9 chapter 10): memory remap, flash bank swap,
- * CCM SRAM erase / write protection, FPU interrupt enables, analog switch
- * supply, Fast-mode Plus, CFGR2 break-input locks and the SRAM parity flag.
- * Contract: Docs/v0.12_SYSCFG_CONTRACT.md.
- * ERRATA ES0431 2.2.6 / ES0430 2.2.6 / ES0523 2.2.4: the first SRAM access after a system
- * reset may be a lost write: startup code dummy-reads each SRAM instance used (G431:
- * 0x20000000, 0x20004000, 0x10000000; G47x/48x and G491/G4A1: 0x20000000, 0x20008000,
- * 0x20010000, 0x20014000, 0x10000000); with parity enabled use a variable initialisation
- * instead (caller).
- * EXTICR (GPIO port -> EXTI line) is NOT here: use EXTI_SetGpioSource.
- *
+/* System configuration controller extras for STM32G4 (RM0440 Rev 9 chapter 10).
+ * Scope (v0.12): memory remap, flash bank swap, CCM SRAM erase / write protection, FPU interrupt
+ * enables, analog switch supply, Fast-mode Plus, CFGR2 break-input locks and the SRAM parity
+ * flag. EXTICR (GPIO port -> EXTI line) is NOT here: use EXTI_SetGpioSource.
+ * Usage: enable the SYSCFG clock (RCC), then call the setters from start-up code; locks
+ * (SYSCFG_Lock, SYSCFG_CcmWriteProtect) last, after the protected function is configured.
  * Common rules:
+ *  - No dynamic memory, no static state; only SYSCFG_CcmEraseStart starts a background
+ *    operation (poll SYSCFG_CcmEraseStatus), no function waits. Output parameters are written
+ *    only on OK.
  *  - SYSCFG clock (RCC_APB2ENR.SYSCFGEN) off -> SPL_ERR_STATE, no write
  *    (the bus ignores writes and reads return 0 with the clock off).
  *  - Invalid argument -> SPL_ERR_PARAM, feature missing on the SKU ->
  *    SPL_ERR_UNSUPPORTED; both before any register write.
- *  - CFGR1/MEMRMP read-modify-write: one context (start-up code).
  *  - Write-once bits (SWPR PxWP, CFGR2 CLL/SPL/PVDL/ECCL; "rs", cleared only by
- *    a system reset) have no unlock API. */
+ *    a system reset) have no unlock API.
+ * Caller duties (all APIs): CFGR1 / MEMRMP are read-modify-written: call the setters from one
+ * context (start-up code) or serialise them.
+ * ERRATA ES0431 2.2.6 / ES0430 2.2.6 / ES0523 2.2.4 (CALLER): the first SRAM access after a
+ * system reset may be a lost write: startup code dummy-reads each SRAM instance used (G431:
+ * 0x20000000, 0x20004000, 0x10000000; G47x/48x and G491/G4A1: 0x20000000, 0x20008000,
+ * 0x20010000, 0x20014000, 0x10000000); with parity enabled use a variable initialisation
+ * instead. SYSCFG_CcmEraseStart is not a substitute.
+ * Contract: Docs/v0.12_SYSCFG_CONTRACT.md. */
 
 #ifdef __cplusplus
 extern "C"
@@ -102,9 +108,12 @@ extern "C"
 
     /* Changes what is aliased at 0x00000000 (also the vector table when VTOR=0).
      * MEM_MODE only; FB_MODE kept. */
+    /* Caller: relocate VTOR and the code consistently before remapping address 0 (not checked);
+     * the FMC / QUADSPI memory must be configured and readable before it is aliased. */
     /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status SYSCFG_SetMemoryMode(SYSCFG_MemoryModeTypeDef mode);
     /* Raw MEM_MODE (0..7); after reset it reflects BOOT0/nBOOT0/BOOT1. */
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status SYSCFG_GetMemoryMode(uint32_t *mode);
 
@@ -112,8 +121,11 @@ extern "C"
      * UNSUPPORTED). DANGER: swaps the banks under the running code and changes
      * which bank the WRP/PCROP registers protect (RM0440 3.5.2/3.5.3); call only from code
      * running in RAM, or when both banks hold matching images. swap 0/1. */
+    /* Caller: run this from RAM-resident code, or only when both banks hold matching images; WRP /
+     * PCROP protection then applies to the swapped bank (not checked). */
     /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status SYSCFG_SetFlashBankSwap(uint8_t swap);
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status SYSCFG_GetFlashBankSwap(uint8_t *swapped);
 
@@ -121,50 +133,69 @@ extern "C"
      * (RM0440 10.2.7/10.2.10). CCMBSY or CCMER set -> BUSY, no write. Destroys
      * all CCM SRAM content (and the SRAM2-end alias): never while stack, data
      * or code live there. Non-blocking: poll SYSCFG_CcmEraseStatus. */
+    /* Caller: no stack, data or code may live in CCM SRAM (or its SRAM2-end alias) during the
+     * erase; no interrupt may write SYSCFG_SKR during the call (it re-locks CCMER); poll
+     * SYSCFG_CcmEraseStatus (bounded) before using CCM SRAM again. */
     /* Level: STATE[r] BUSY[r] */
     SPL_Status SYSCFG_CcmEraseStart(void);
     /* BUSY while CCMBSY or CCMER is set, OK when no erase is running. */
+    /* Caller: bound the BUSY retries. */
     /* Level: STATE[r] BUSY[r] */
     SPL_Status SYSCFG_CcmEraseStatus(void);
 
     /* Sets PxWP for each page in 'pages' (subset of SYSCFG_CCM_PAGES_ALL, non-zero).
      * Write-once: protection is removed only by a system reset. Pages already
      * protected are accepted; if all are, nothing is written. */
+    /* Caller: Irreversible until system reset: fill the protected pages first. */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status SYSCFG_CcmWriteProtect(uint32_t pages);
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status SYSCFG_GetCcmWriteProtect(uint32_t *pages);
 
     /* Sets CFGR1.FPU_IE[5:0] to exactly 'mask' (subset of SYSCFG_FPU_IE_ALL).
      * The FPU interrupt also needs NVIC_Enable(FPU_IRQn). */
+    /* Caller: enable the line with NVIC_Enable(FPU_IRQn) and clear the FPSCR exception flags in the
+     * handler (else the interrupt repeats). */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status SYSCFG_SetFpuInterrupts(uint32_t mask);
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status SYSCFG_GetFpuInterrupts(uint32_t *mask);
 
     /* Writes BOOSTEN/ANASWVDD for the I/O analog switch supply. */
+    /* Caller: choose the value from the actual VDD / VDDA levels (RM0440 Table 60; the driver
+     * cannot measure them; mapping still an open item in the contract). */
     /* Level: PARAM[r] STATE[r] */
     SPL_Status SYSCFG_SetAnalogSwitchSupply(SYSCFG_AnalogSwitchTypeDef supply);
 
     /* Sets (enable=1) or clears (enable=0) the given Fm+ bits (subset of
      * SYSCFG_FMP_ALL, non-zero). Program after the GPIO AF selection; with Fm+
      * the pin OSPEEDR setting is ignored (RM0440 10.2.2). */
+    /* Caller: select the GPIO alternate function (open drain) first; the I2C timing for Fast-mode
+     * Plus is the I2C driver's. */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status SYSCFG_SetFastModePlus(uint32_t mask, uint8_t enable);
 
     /* Sets the given CFGR2 lock bits (subset of SYSCFG_LOCK_ALL, non-zero).
      * Write-once until system reset. Never writes SPF=1. If all requested
      * locks are already set, nothing is written. */
+    /* Caller: Irreversible until system reset: configure PVD (PWR_ConfigPVD) before
+     * SYSCFG_LOCK_PVD, and the timer / HRTIM break inputs before any lock (a fault then stops the
+     * PWM outputs). */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status SYSCFG_Lock(uint32_t locks);
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status SYSCFG_GetLocks(uint32_t *locks);
 
     /* SRAM1/CCM SRAM parity error flag SPF (rc_w1). Not cleared by Get. */
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status SYSCFG_GetParityError(uint8_t *flag);
     /* Writes SPF=1 (clear); lock bits are written back as read (no effect,
      * rs bits), so no lock is set or lost. */
+    /* Caller: none beyond the file-header duties. */
     /* Level: STATE[r] */
     SPL_Status SYSCFG_ClearParityError(void);
 

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 #ifndef STM32G4_CRS_H
 #define STM32G4_CRS_H
 #include <stdint.h>
@@ -9,16 +10,19 @@ extern "C"
 {
 #endif
 
-/* Clock recovery system (CRS, RM0440 Rev 9 section 8): HSI48 trimming
- * against a SYNC signal (USB SOF, LSE or the CRS_SYNC pin). Single instance,
- * no static state, no waits.
- * Caller duties (RCC / GPIO modules, not done here):
- *  - APB1 clock: RCC_EnablePeriphClock(RCC_PERIPH_CRS) (RCC_APB1ENR1.CRSEN).
- *  - HSI48 started and ready (RCC_StartOsc(RCC_OSC_HSI48)).
- *  - SYNC source running: USB SOF (USB enabled and enumerated), LSE on, or
- *    the CRS_SYNC alternate-function pin configured.
- * CR writes never copy SWSYNC back (self-clearing command, RM0440 8.7.1).
- * Serialize callers (task vs ISR): CR updates are read-modify-write.
+/* Clock recovery system driver (CRS, RM0440 Rev 9 section 8): HSI48 trimming against a SYNC
+ * signal (USB SOF, LSE or the CRS_SYNC pin).
+ * Scope: the single CRS instance; RELOAD / FELIM helpers without register access.
+ * Usage: CRS_CalcReload / CRS_CalcErrorLimit, CRS_Config (CEN=0), optional CRS_InterruptConfig,
+ * CRS_Enable, then CRS_TrySyncOk / CRS_GetStatus; CRS_ClearFlags for the sticky flags.
+ * Common rules: no function waits; no static state; no clock is enabled here. CR writes never
+ * copy SWSYNC back (self-clearing command, RM0440 8.7.1).
+ * Caller duties (all APIs):
+ *  - Clock: RCC_EnablePeriphClock(RCC_PERIPH_CRS) (RCC_APB1ENR1.CRSEN); HSI48 started and ready
+ *    (RCC_StartOsc(RCC_OSC_HSI48)).
+ *  - SYNC source running: USB SOF (USB enabled and enumerated), LSE on, or the CRS_SYNC
+ *    alternate-function pin configured (GPIO module).
+ *  - Concurrency: serialize callers (task vs ISR); CR updates are read-modify-write.
  * Contract: Docs/v0.13_CRS_CONTRACT.md. */
 
 /* SYNCSRC values (RM0440 Table 54 + CFGR reset value 0x2022 BB7F). */
@@ -64,6 +68,7 @@ extern "C"
     /* RELOAD = (target_hz / sync_hz) - 1 (RM0440 8.4.6, integer division).
      * sync_hz is the SYNC frequency AFTER the SYNCDIV divider. PARAM: NULL,
      * sync_hz = 0, target_hz < sync_hz, result > 0xFFFF. No register access. */
+    /* Caller: pass the SYNC frequency after the SYNCDIV divider. */
     /* Level: PARAM[F,r] */
     SPL_Status CRS_CalcReload(uint32_t target_hz, uint32_t sync_hz, uint32_t *reload);
     /* FELIM = (target_hz / sync_hz) * STEP[%] / 100 % / 2, rounded up
@@ -71,6 +76,8 @@ extern "C"
      * the datasheet (14 = 0.14 %, the step the reset value assumes). PARAM:
      * NULL, sync_hz = 0, target_hz < sync_hz, step 0 or > 10000, result > 255.
      * No register access. */
+    /* Caller: pass the SYNC frequency after SYNCDIV and the HSI48 trim step of the device datasheet
+     * (the value is not checked against the part). */
     /* Level: PARAM[F,r] */
     SPL_Status CRS_CalcErrorLimit(uint32_t target_hz, uint32_t sync_hz, uint32_t step_centi_pct,
                                   uint32_t *error_limit);
@@ -78,45 +85,57 @@ extern "C"
      * CR interrupt enables kept. STATE: CEN=1 (CFGR write-protected, RM0440
      * 8.7.2). UNSUPPORTED: USB SOF source on an SKU without USB. PARAM: NULL,
      * field out of range, reload <= 128 * error_limit (RM0440 8.4.6). */
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status CRS_Config(const CRS_InitTypeDef *init);
     /* CEN=1 / CEN=0 (frequency error counter). Other CR bits kept. */
+    /* Caller: CRS_Config first (CFGR is write-protected once CEN=1); the SYNC source must already
+     * be running (file header). */
     /* Level: - */
     SPL_Status CRS_Enable(void);
+    /* Caller: none beyond the file-header duties. */
     /* Level: - */
     SPL_Status CRS_Disable(void);
     /* Sets SWSYNC once (software SYNC event). STATE: CEN=0. BUSY: the
      * previous SWSYNC has not self-cleared yet. */
+    /* Caller: none beyond the file-header duties. */
     /* Level: STATE[r] BUSY[r] */
     SPL_Status CRS_GenerateSwSync(void);
     /* enable=1: AUTOTRIMEN=1 (TRIM read-only, hardware-controlled);
      * enable=0: manual trimming. Allowed with CEN=0 or 1. */
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] */
     SPL_Status CRS_SetAutoTrim(uint8_t enable);
     /* CR.TRIM = trim (0..127). STATE: AUTOTRIMEN=1 (TRIM read-only, RM0440
      * 8.7.1). */
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status CRS_SetTrim(uint32_t trim);
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] */
     SPL_Status CRS_GetTrim(uint32_t *trim);
     /* Sets (enable=1) or clears (enable=0) the CR bits in mask (non-zero
      * subset of CRS_IT_ALL). One CRS interrupt line (CRS_IRQn). */
+    /* Caller: NVIC priority / enable of CRS_IRQn and its handler (the handler clears the flags it
+     * handled with CRS_ClearFlags); clear stale flags before enabling. */
     /* Level: PARAM[F] */
     SPL_Status CRS_InterruptConfig(uint32_t mask, uint8_t enable);
     /* Writes ICR = flags (non-zero subset of CRS_CLEAR_ALL). W1C: one plain
      * write, no read-modify-write. */
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] */
     SPL_Status CRS_ClearFlags(uint32_t flags);
     /* One ISR read (+ CR for trim). OK, or ERR_HW when a CRS_ERRORS_ALL bit
      * is set (status filled in both cases; clear with CRS_ICR_ERRC). */
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] HW[r] */
     SPL_Status CRS_GetStatus(CRS_StatusTypeDef *status);
     /* Poll for a SYNC result. OK: SYNCOKF=1 and no error; ERR_HW: error bit
      * set; WOULD_BLOCK: CEN=1 and no SYNCOKF yet (SYNCWARNF alone = still
      * converging); STATE: CEN=0 (counter stopped, no SYNC will be evaluated).
-     * Flags are sticky: clear SYNCOKC/SYNCWARNC first for a fresh result.
-     * *status filled on every return except PARAM. Bound the poll: a missing
-     * external SYNC is not visible in any register. */
+     * *status filled on every return except PARAM. */
+    /* Caller: the flags are sticky: clear SYNCOKC / SYNCWARNC first for a fresh result; bound
+     * the poll (a missing external SYNC is not visible in any register). */
     /* Level: PARAM[F] STATE[r] HW[r] WOULD_BLOCK[r] */
     SPL_Status CRS_TrySyncOk(CRS_StatusTypeDef *status);
 

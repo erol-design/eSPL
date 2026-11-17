@@ -1,7 +1,10 @@
+/* SPDX-License-Identifier: MIT */
 #define SPL_LIBRARY_BUILD 1
 #include "stm32g4_crc.h"
 
-/* RM0440 Rev 9 section 16. */
+/* CRC calculation unit driver (RM0440 Rev 9 section 16). Same register layout on every
+ * supported G4 SKU (single instance), no variant code. Public contract: stm32g4_crc.h,
+ * Docs/v0.11_CRC_CONTRACT.md. */
 
 #define CRC_CR_CONFIG_BITS (CRC_CR_REV_OUT | CRC_CR_REV_IN | CRC_CR_POLYSIZE)
 

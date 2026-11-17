@@ -1,8 +1,8 @@
+/* SPDX-License-Identifier: MIT */
+/* FMAC driver. RM0440 Rev 9 section 18 (FMAC). Public contract: stm32g4_fmac.h. */
 #define SPL_LIBRARY_BUILD 1
 #include <stddef.h>
 #include "stm32g4_fmac.h"
-
-/* RM0440 Rev 9 section 18 (FMAC). Contract: Docs/v0.13_FMAC_CONTRACT.md. */
 
 #if !defined(FMAC)
 #error "FMAC is not defined by the CMSIS device header (every STM32G4 SKU has one)"

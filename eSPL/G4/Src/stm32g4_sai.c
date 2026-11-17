@@ -1,7 +1,8 @@
+/* SPDX-License-Identifier: MIT */
+/* SAI1 driver (blocks A / B, PDM). RM0440 Rev 9 chapter 43. Without SAI1 in CMSIS
+ * (G411 / G414) only SAI_CheckSupport is compiled. Public contract: stm32g4_sai.h. */
 #define SPL_LIBRARY_BUILD 1
 #include "stm32g4_sai.h"
-
-/* RM0440 Rev 9 chapter 43 (SAI). Contract: Docs/v0.12_SAI_CONTRACT.md. */
 
 #if defined(SAI1)
 

@@ -1,10 +1,11 @@
+/* SPDX-License-Identifier: MIT */
 /**
  * @file    stm32g4_usart.c
- * @brief   STM32G4 USART/UART/LPUART surucu uygulamasi.
+ * @brief   STM32G4 USART/UART/LPUART driver implementation.
  *
- * Degisken dosya kapsamli durum yok. Gecerli ornekleri ve ozellikleri etkin STM32G4 CMSIS
- * basligindaki yetenek makrolari (IS_*_INSTANCE) secer. Genisletilmis servisler
- * (#if USART_CR1_M0) host mock basliginda derlenmez.
+ * No mutable file-scope state. The valid instances and their features are selected by the
+ * capability macros (IS_*_INSTANCE) of the active STM32G4 CMSIS header. The extended services
+ * (#if USART_CR1_M0) are not compiled with the host mock header.
  *
  * @see ../Inc/stm32g4_usart.h
  */
@@ -864,7 +865,7 @@ SPL_Status USART_LinConfig(USART_TypeDef *instance, uint8_t enable, uint8_t brea
 SPL_Status USART_SendBreak(USART_TypeDef *instance)
 {
     SPL_REQUIRE(Usart_AnyValid(instance) != 0U, SPL_ERR_PARAM); /* Invalid MMIO base */
-    /* UE / TE kapaliyken break istegi sessizce kaybolur. */
+    /* With UE / TE cleared the break request would be lost silently. */
     SPL_REQUIRE((instance->CR1 & (USART_CR1_UE | USART_CR1_TE)) == (USART_CR1_UE | USART_CR1_TE),
                 SPL_ERR_STATE);
     if ((instance->ISR & USART_ISR_SBKF) != 0U)

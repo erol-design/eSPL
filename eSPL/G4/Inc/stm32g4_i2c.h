@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 #ifndef STM32G4_I2C_H
 #define STM32G4_I2C_H
 #include <stdint.h>
@@ -8,29 +9,51 @@
 extern "C"
 {
 #endif
-    /* Single chunk 1..255 bytes, master, 7-bit address, nonblocking byte service.
-     * ERRATA ES0431 2.11.1 / ES0430 2.15.1 / ES0523 2.11.1: SDA is mis-sampled when tSU;DAT < one
-     * I2CCLK period; for spec-minimum transmitters use I2CCLK >= 4 MHz (Sm),
-     * >= 10 MHz (Fm), >= 20 MHz (Fm+) (caller's RCC kernel clock choice).
-     * ERRATA ES0431 2.11.5 / ES0430 2.15.5 / ES0523 2.11.4: TX may stall after the first byte
-     * when PCLK/I2CCLK is in 1.5..3 (the driver never prefills TXDR): keep the
-     * ratio < 1.5 or > 3 (e.g. I2CCLK = PCLK1).
-     * Target-mode errata are handled by the v0.17 target APIs below. */
-    /* Caller duties (CCL-2 driver-library hand-off). This driver has no device knowledge
-     * and no sleep entry; the device driver or application above it owns:
-     * - Caller duty (CCL-2 I2C-28, I2C-29): after each write to a device with a write
-     *   cycle (e.g. EEPROM) poll its address for ACK with a bounded retry count, or wait a
-     *   fixed time, before the next command; split writes at the device page boundary.
-     * - Caller duty (CCL-2 I2C-27): verify any checksum/CRC field the device sends before
-     *   using the data. With PEC, I2C_StopDetected, I2C_TransferComplete and the target
-     *   byte services return ERR_HW while PECERR is set (flag kept: read I2C_GetErrors,
-     *   then clear); a DMA transfer reads I2C_GetErrors itself at the end.
-     * - Caller duty (CCL-2 I2C-30): this driver never enters a low-power mode; before
-     *   WFI/WFE make sure no transfer runs (ISR.BUSY=0, STOP sent and detected).
-     * - Caller duty (CCL-2 I2C-24): target mode is polled and enables no interrupt; handle
-     *   every ADDR (I2C_TargetPollAddress, I2C_TargetAckAddress), STOPF (I2C_ClearStop)
-     *   and NACKF (I2C_ClearErrorFlags) event and reset the buffer index and direction on
-     *   every STOP or NACK. */
+/* I2C driver for STM32G4 (RM0440 Rev 9 chapter 39): controller (master) transfers, long and
+ * 10-bit transfers (v0.10), target (slave) mode and SMBus/PEC (v0.17, last section).
+ * Scope: I2C1..I2C3 (I2C4 is not handled); the base API is a single chunk of 1..255 bytes,
+ * master, 7-bit address, nonblocking byte service; I2C_StartLong / I2C_RestartLong extend it to
+ * longer and 10-bit transfers. SMBus/PMBus, TIMEOUTR and Stop wake-up exist on I2C1 only.
+ * Usage: I2C_MasterInit, then per transfer I2C_Start (or I2C_StartNoStop / I2C_Restart),
+ * I2C_TryWrite / I2C_TryRead per byte, end with I2C_StopDetected / I2C_ClearStop (AUTOEND) or
+ * I2C_TransferComplete and I2C_Stop / I2C_Restart (software end).
+ * Common rules: no dynamic memory, no static state (long-transfer bookkeeping is caller-owned);
+ * no function waits for a flag (I2C_SoftwareReset reads PE back, I2C_TargetTimeoutRecover holds
+ * PE = 0 for three CR1 reads); output parameters are unchanged unless SPL_OK (METHOD 1.8).
+ * ERRATA ES0431 2.11.1 / ES0430 2.15.1 / ES0523 2.11.1: SDA is mis-sampled when tSU;DAT < one
+ * I2CCLK period; for spec-minimum transmitters use I2CCLK >= 4 MHz (Sm),
+ * >= 10 MHz (Fm), >= 20 MHz (Fm+) (caller's RCC kernel clock choice).
+ * ERRATA ES0431 2.11.5 / ES0430 2.15.5 / ES0523 2.11.4: TX may stall after the first byte
+ * when PCLK/I2CCLK is in 1.5..3 (the driver never prefills TXDR): keep the
+ * ratio < 1.5 or > 3 (e.g. I2CCLK = PCLK1).
+ * Target-mode errata are handled by the v0.17 target APIs below.
+ * Caller duties (all APIs; not done by the driver):
+ *  - Clock: RCC bus clock of the instance (RCC_PERIPH_I2Cx) and the kernel clock
+ *    (RCC_KERNEL_I2Cx); timingr and timeoutr values are computed for that I2CCLK frequency.
+ *  - Pins: SCL / SDA (SMBA with I2C_SMBUS_ALERT) in alternate function, open drain, with external
+ *    pull-ups; bus recovery of a stuck SDA is the board layer (see I2C_SoftwareReset).
+ *  - Retry bounds: WOULD_BLOCK / BUSY on a stuck bus repeat forever; the caller bounds them.
+ *  - No interrupt or DMA API: NVIC, handler and DMA setup are the caller's if used.
+ *  - Serialize all calls per instance (ISR included).
+ * Device-layer duties (CCL-2 driver-library hand-off; no device knowledge, no sleep entry here):
+ *  - Caller duty (CCL-2 I2C-28, I2C-29): after each write to a device with a write
+ *    cycle (e.g. EEPROM) poll its address for ACK with a bounded retry count, or wait a
+ *    fixed time, before the next command; split writes at the device page boundary.
+ *  - Caller duty (CCL-2 I2C-27): verify any checksum/CRC field the device sends before
+ *    using the data. With PEC, I2C_StopDetected, I2C_TransferComplete and the target
+ *    byte services return ERR_HW while PECERR is set (flag kept: read I2C_GetErrors,
+ *    then clear); a DMA transfer reads I2C_GetErrors itself at the end.
+ *  - Caller duty (CCL-2 I2C-30): this driver never enters a low-power mode; before
+ *    WFI/WFE make sure no transfer runs (ISR.BUSY=0, STOP sent and detected).
+ *  - Caller duty (CCL-2 I2C-24): target mode is polled and enables no interrupt; handle
+ *    every ADDR (I2C_TargetPollAddress, I2C_TargetAckAddress), STOPF (I2C_ClearStop)
+ *    and NACKF (I2C_ClearErrorFlags) event and reset the buffer index and direction on
+ *    every STOP or NACK.
+ * Contract: Docs/v0.10_I2C_CONTRACT.md; target mode and SMBus:
+ * Docs/v0.17_I2C_TARGET_SMBUS_CONTRACT.md. */
+    /* PE = 1 -> STATE. Writes TIMINGR, then CR1 = PE (all other CR1 options cleared).
+     * Caller: none beyond the file-header duties (timingr for the selected I2CCLK, errata ratios
+     * above). */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status I2C_MasterInit(I2C_TypeDef *i2c, uint32_t timingr);
     /* Start/StartNoStop/StartLong: TC=1 or TCR=1 (bus still held by the
@@ -45,26 +68,36 @@ extern "C"
      * clears START and sets ISR.TIMEOUT (I2C_GetErrors; ERR_HW from the
      * *Long APIs only). SDA held low with SCL high needs the retry bound. */
     /* address7 0..127; reserved addresses (0x00-0x07, 0x78-0x7F) are not refused: 0x00 is
-     * the general call (v0.13.5 decision, contract LEG-I2C-02). */
+     * the general call (v0.13.5 decision, contract LEG-I2C-02).
+     * Caller: bound the BUSY retries, then I2C_SoftwareReset and bus recovery; transfer exactly
+     * length bytes with I2C_TryWrite / I2C_TryRead (STOP is automatic, AUTOEND). */
     /* Level: PARAM[F] STATE[r] HW[r] BUSY[r] */
     SPL_Status I2C_Start(I2C_TypeDef *i2c, uint8_t address7, uint8_t length, uint8_t read);
     /* Software-end first phase: complete NBYTES then wait for TC.
-     * AUTOEND=0, no automatic STOP. 1..255 bytes. */
+     * AUTOEND=0, no automatic STOP. 1..255 bytes.
+     * Caller: bound the BUSY retries as for I2C_Start; after TC end the bus with I2C_Restart or
+     * I2C_Stop (the bus stays held until then). */
     /* Level: PARAM[F] STATE[r] HW[r] BUSY[r] */
     SPL_Status I2C_StartNoStop(I2C_TypeDef *i2c, uint8_t address7, uint8_t length, uint8_t read);
     /* Repeated START allowed only after TC. Does not block. TC=0: WOULD_BLOCK
      * while a software-end transfer runs (BUSY=1) or START is pending; STATE
      * when TC cannot set (BUSY=0, STOPF=1 or TCR=1; RM0440 39.9.7).
      * CR2.START is read before ISR (v0.11.1 I2C-M1). A START pending on a
-     * stuck bus gives WOULD_BLOCK indefinitely: bound the poll as for Start. */
+     * stuck bus gives WOULD_BLOCK indefinitely.
+     * Caller: bound the WOULD_BLOCK poll (stuck bus); autoend = 0 needs a later I2C_Stop or
+     * I2C_Restart. */
     /* Level: PARAM[F] STATE[r] HW[r] WOULD_BLOCK[r] */
     SPL_Status I2C_Restart(I2C_TypeDef *i2c, uint8_t address7, uint8_t length, uint8_t read,
                            uint8_t autoend);
+    /* *complete = ISR.TC. NACKF/ARLO (PECERR) -> ERR_HW; BERR alone is not reported
+     * (ERRATA 2.11.2, at the byte services).
+     * Caller: after ERR_HW capture ISR (I2C_GetErrors), then I2C_ClearErrors. */
     /* Level: PARAM[F] HW[r] */
     SPL_Status I2C_TransferComplete(I2C_TypeDef *i2c, uint8_t *complete);
     /* *detected = ISR.STOPF (not acknowledged). v0.13.3: NACKF or ARLO set ->
      * SPL_ERR_HW, *detected untouched (a target NACK in an AUTOEND transfer
-     * also ends with STOPF). */
+     * also ends with STOPF).
+     * Caller: acknowledge STOPF with I2C_ClearStop; after ERR_HW diagnose, then I2C_ClearErrors. */
     /* Level: PARAM[F] HW[r] */
     SPL_Status I2C_StopDetected(I2C_TypeDef *i2c, uint8_t *detected);
     /* Byte services require PE=1; otherwise ERR_STATE without register writes
@@ -75,20 +108,32 @@ extern "C"
      * BERR may be spurious and the transfer continues. BERR stays visible
      * (I2C_GetErrors / I2C_Status); clear it with I2C_ClearErrorFlags(BERR)
      * before the next fresh START (Start/StartNoStop/StartLong still return
-     * ERR_HW while BERR=1). */
+     * ERR_HW while BERR=1).
+     * Caller: write exactly the programmed byte count; clear a left BERR with
+     * I2C_ClearErrorFlags(I2C_ISR_BERR) before the next fresh START (errata above). */
     /* Level: PARAM[F] STATE[r] HW[r] WOULD_BLOCK[r] */
     SPL_Status I2C_TryWrite(I2C_TypeDef *i2c, uint8_t byte);
+    /* Caller: read exactly the programmed byte count; clear a left BERR with
+     * I2C_ClearErrorFlags(I2C_ISR_BERR) before the next fresh START (errata above). */
     /* Level: PARAM[F] STATE[r] HW[r] WOULD_BLOCK[r] */
     SPL_Status I2C_TryRead(I2C_TypeDef *i2c, uint8_t *byte);
+    /* Requests STOP (CR2.STOP), no state gate.
+     * Caller: not gated on TC: call only after TC of a software-end transfer
+     * (I2C_TransferComplete), else the running byte transfer is cut by the STOP. */
     /* Level: PARAM[F] */
     SPL_Status I2C_Stop(I2C_TypeDef *i2c);
     /* Clears NACK/BERR/ARLO/OVR only; does NOT acknowledge STOPF.
-     * Capture ISR and diagnose the error before clearing. */
+     * Also flushes TXDR (ISR.TXE = 1).
+     * Caller: capture ISR and diagnose before clearing; acknowledge STOPF separately
+     * (I2C_ClearStop). */
     /* Level: PARAM[F] */
     SPL_Status I2C_ClearErrors(I2C_TypeDef *i2c);
-    /* Acknowledge STOPF explicitly; does not clear error flags. */
+    /* Acknowledge STOPF explicitly; does not clear error flags.
+     * Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] */
     SPL_Status I2C_ClearStop(I2C_TypeDef *i2c);
+    /* *status = raw I2C_ISR (no side effect).
+     * Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] */
     SPL_Status I2C_Status(I2C_TypeDef *i2c, uint32_t *status);
 
@@ -116,29 +161,36 @@ extern "C"
 
     /* Fresh START for 1..0xFFFFFFFF bytes. Chunks of up to 255 bytes; RELOAD
      * on every chunk but the last; AUTOEND only on the last chunk. Requires
-     * PE=1, no error flags, BUSY=0 and START=0. Clears a stale STOPF. */
+     * PE=1, no error flags, BUSY=0 and START=0. Clears a stale STOPF.
+     * Caller: keep *xfer alive and unchanged until the last chunk (or I2C_SoftwareReset); call
+     * I2C_ReloadService on each TCR (SCL is stretched meanwhile); bound the BUSY retries. */
     /* Level: PARAM[F] STATE[r] HW[r] BUSY[r] */
     SPL_Status I2C_StartLong(I2C_TypeDef *i2c, I2C_LongTransferTypeDef *xfer, uint16_t address,
                              uint32_t options, uint32_t length);
     /* Repeated START after TC (software end). Same chunking as I2C_StartLong.
      * TC=0 handling as I2C_Restart (WOULD_BLOCK or STATE).
-     * HEAD10R is accepted here only, with ADDR10 and READ. */
+     * HEAD10R is accepted here only, with ADDR10 and READ.
+     * Caller: as I2C_StartLong; bound the WOULD_BLOCK poll (stuck bus). */
     /* Level: PARAM[F] STATE[r] HW[r] WOULD_BLOCK[r] */
     SPL_Status I2C_RestartLong(I2C_TypeDef *i2c, I2C_LongTransferTypeDef *xfer, uint16_t address,
                                uint32_t options, uint32_t length);
     /* Nonblocking: call when TCR may be set. Programs the next chunk, clears
      * RELOAD and applies AUTOEND on the last chunk, decrements remaining.
-     * WOULD_BLOCK while TCR=0; STATE when nothing remains. */
+     * WOULD_BLOCK while TCR=0; STATE when nothing remains.
+     * Caller: pass the same *xfer used by I2C_StartLong / I2C_RestartLong for this transfer. */
     /* Level: PARAM[F] STATE[r] HW[r] WOULD_BLOCK[r] */
     SPL_Status I2C_ReloadService(I2C_TypeDef *i2c, I2C_LongTransferTypeDef *xfer);
 
-    /* Reads ISR & I2C_ERRORS_ALL (no side effects). */
+    /* Reads ISR & I2C_ERRORS_ALL (no side effects).
+     * Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] */
     SPL_Status I2C_GetErrors(I2C_TypeDef *i2c, uint32_t *errors);
     /* Clears the given ISR error flags (subset of I2C_ERRORS_ALL, non-zero)
      * by writing their ICR bits. Never touches STOPF or ADDR. When NACKF, BERR,
      * ARLO, PECERR or TIMEOUT is cleared, TXDR is also flushed (ISR.TXE = 1); OVR alone keeps
-     * TXDR (CCL-2 I2C-02c). */
+     * TXDR (CCL-2 I2C-02c).
+     * Caller: capture and diagnose the flags first; a TXDR byte flushed here must be sent again by
+     * the next transfer if still needed. */
     /* Level: PARAM[F] */
     SPL_Status I2C_ClearErrorFlags(I2C_TypeDef *i2c, uint32_t errors);
 
@@ -149,14 +201,17 @@ extern "C"
      * void afterwards.
      * Bus recovery (SDA held low by a target) is NOT done here: the board layer
      * must switch SCL to GPIO open-drain, clock up to 9 pulses until SDA is
-     * high, generate a STOP, restore the AF mapping, then call this reset. */
+     * high, generate a STOP, restore the AF mapping, then call this reset.
+     * Caller: recover a stuck bus first (board layer, see above); discard any
+     * I2C_LongTransferTypeDef in flight. */
     /* Level: PARAM[F] HW[r] */
     SPL_Status I2C_SoftwareReset(I2C_TypeDef *i2c, uint8_t reenable);
 
     /* Writes I2C_TIMEOUTR (TIMEOUTA, TIDLE, TIMOUTEN, TIMEOUTB, TEXTEN).
      * RM0440 Table 352 exposes timeout/SMBus only on I2C1. Reserved bits must
      * be zero. Rejected with BUSY while ISR.BUSY=1. The enables are cleared
-     * before the fields are written, as the RM requires. */
+     * before the fields are written, as the RM requires.
+     * Caller: none beyond the file-header duties (timeoutr for the selected I2CCLK). */
     /* Level: PARAM[F] UNSUPPORTED[F] BUSY[r] */
     SPL_Status I2C_TimeoutConfig(I2C_TypeDef *i2c, uint32_t timeoutr);
 
@@ -184,32 +239,47 @@ extern "C"
      * as I2C1 kernel clock before entering Stop mode.
      * ERRATA ES0431 2.11.4 / ES0430 2.15.4 / ES0523 2.11.3 (no software workaround, caller): with
      * no_stretch=1 a transmit underrun may not set OVR; keep clock stretching enabled unless the
-     * target byte service latency is bounded tightly enough. */
+     * target byte service latency is bounded tightly enough.
+     * Caller: with wakeup = 1 select HSI16 as I2C1 kernel clock before Stop mode; then serve
+     * each transfer (poll address, acknowledge, bytes, STOP / NACK events). */
     /* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
     SPL_Status I2C_TargetInit(I2C_TypeDef *i2c, const I2C_TargetConfigTypeDef *cfg);
-    /* ADDR=0 -> WOULD_BLOCK. Returns ADDCODE and DIR without clearing ADDR. */
+    /* ADDR=0 -> WOULD_BLOCK. Returns ADDCODE and DIR without clearing ADDR.
+     * Caller: then I2C_TargetAckAddress (SCL stretched until ADDRCF); SBC = 1:
+     * I2C_TargetSetBytes first; controller read: I2C_TargetFlushTx first. */
     /* Level: PARAM[F] WOULD_BLOCK[r] */
     SPL_Status I2C_TargetPollAddress(I2C_TypeDef *i2c, uint8_t *addcode, uint8_t *controller_reads);
-    /* SBC=1 and PE=1 required. Programs NBYTES/RELOAD with START low. */
+    /* SBC=1 and PE=1 required. Programs NBYTES/RELOAD with START low.
+     * Caller: call before I2C_TargetAckAddress of the transfer it applies to. */
     /* Level: PARAM[F] STATE[F] */
     SPL_Status I2C_TargetSetBytes(I2C_TypeDef *i2c, uint8_t nbytes, uint8_t reload);
-    /* Clears ADDR, then rewrites CR2 with START low (G4 own-address errata). */
+    /* ADDR=0 -> STATE. Clears ADDR, then rewrites CR2 with START low
+     * (ERRATA ES0431 2.11.3 / ES0430 2.15.3 own-address workaround, applied by the driver).
+     * Caller: controller read: flush a stale TXDR (I2C_TargetFlushTx) first. */
     /* Level: PARAM[F] STATE[F] */
     SPL_Status I2C_TargetAckAddress(I2C_TypeDef *i2c);
-    /* Requests NACK for the next target-receiver byte. PE=1 required. */
+    /* Requests NACK for the next target-receiver byte. PE=1 required.
+     * Caller: set before the ACK phase of the byte to be refused (RM0440 39.9.2). */
     /* Level: PARAM[F] STATE[F] */
     SPL_Status I2C_TargetNack(I2C_TypeDef *i2c);
-    /* Flushes a stale target-transmitter TXDR by writing ISR.TXE. */
+    /* Flushes a stale target-transmitter TXDR by writing ISR.TXE.
+     * Caller: none beyond the file-header duties (use before acknowledging a read address). */
     /* Level: PARAM[F] */
     SPL_Status I2C_TargetFlushTx(I2C_TypeDef *i2c);
     /* Nonblocking target byte services. BERR/OVR -> ERR_HW; a controller
-     * NACK ending a target transmission -> STATE. */
+     * NACK ending a target transmission -> STATE.
+     * Caller: after STATE (NACKF) clear NACKF with I2C_ClearErrorFlags, then I2C_StopDetected /
+     * I2C_ClearStop; NOSTRETCH = 1: write TXDR in time (errata at I2C_TargetInit). */
     /* Level: PARAM[F] STATE[r] HW[r] WOULD_BLOCK[r] */
     SPL_Status I2C_TargetTryWrite(I2C_TypeDef *i2c, uint8_t byte);
+    /* Caller: NOSTRETCH = 1: read before the next byte completes, else OVR; after ERR_HW clear
+     * the flags with I2C_ClearErrorFlags. */
     /* Level: PARAM[F] HW[r] WOULD_BLOCK[r] */
     SPL_Status I2C_TargetTryRead(I2C_TypeDef *i2c, uint8_t *byte);
     /* G4 errata recovery after target-mode SMBus TIMEOUT: if STOPF is absent,
-     * cycle PE low for at least three APB clocks. I2C1 only. */
+     * cycle PE low for at least three APB clocks. I2C1 only. TIMEOUT=0 -> STATE.
+     * Caller: call once the frame should have ended; then clear TIMEOUT with
+     * I2C_ClearErrorFlags. */
     /* Level: PARAM[F] STATE[r] UNSUPPORTED[F] */
     SPL_Status I2C_TargetTimeoutRecover(I2C_TypeDef *i2c);
 
@@ -218,13 +288,17 @@ extern "C"
 #define I2C_SMBUS_ALERT I2C_CR1_ALERTEN
 #define I2C_SMBUS_PEC I2C_CR1_PECEN
 #define I2C_SMBUS_ALL (I2C_SMBUS_HOST | I2C_SMBUS_DEVICE | I2C_SMBUS_ALERT | I2C_SMBUS_PEC)
-    /* I2C1 only; PE must be zero. Replaces the four SMBus CR1 option bits. */
+    /* I2C1 only; PE must be zero. Replaces the four SMBus CR1 option bits.
+     * Caller: target-mode PEC needs byte_control = 1 in I2C_TargetInit; SMBA pin set up when
+     * I2C_SMBUS_ALERT is used (file header). */
     /* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
     SPL_Status I2C_SmbusConfig(I2C_TypeDef *i2c, uint32_t options);
-    /* I2C1 only. PE and PECEN required. Programs PECBYTE with START low. */
+    /* I2C1 only. PE and PECEN required. Programs PECBYTE with START low.
+     * Caller: NBYTES of the transfer includes the PEC byte. */
     /* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
     SPL_Status I2C_SetPecByte(I2C_TypeDef *i2c);
-    /* I2C1 only. Returns PECR.PEC; PECEN required. */
+    /* I2C1 only. Returns PECR.PEC; PECEN required.
+     * Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
     SPL_Status I2C_GetPec(I2C_TypeDef *i2c, uint8_t *pec);
 

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 #ifndef STM32G4_RCC_H
 #define STM32G4_RCC_H
 #include "stm32g4xx.h"
@@ -7,7 +8,38 @@
 extern "C"
 {
 #endif
-    /* Enables and read-backs a GPIO port bus clock. Does not configure PLL/system clock. */
+/* Reset and clock control driver for STM32G4 (RM0440 Rev 9 chapter 7).
+ * Scope: oscillators (HSI16, HSE, LSI, HSI48; LSE is in the RTC module), PLL, SYSCLK source,
+ * AHB/APB prescalers, peripheral bus clocks and resets, kernel clock selectors, MCO, CSS, reset
+ * cause, and read-only frequency queries. Not here: PWR voltage range, FLASH latency, GPIO
+ * alternate functions (MCO and OSC pins); the RCC module does not hide any of these steps.
+ * Usage (bring-up to 170 MHz, contract section 3): enable PWR clock, RCC_SetAhbPrescaler(2),
+ * voltage range and FLASH latency (other modules), RCC_SetHseBypass / RCC_StartOsc /
+ * RCC_GetOscReady, RCC_ConfigPll / RCC_EnablePll / RCC_GetPllReady, RCC_SetSysclkSource /
+ * RCC_GetSysclkSource, wait >= 1 us, final prescalers, then per peripheral RCC_SetKernelClock
+ * and RCC_EnablePeriphClock.
+ * Common rules: no static state, no function waits on a hardware flag (start + poll); a rejected
+ * call writes no register; output parameters are written only on SPL_OK, except
+ * RCC_GetOscReady / RCC_GetPllReady (always write *ready). Frequencies are in Hz and derived from
+ * the register configuration (oscillator readiness is not checked).
+ * Caller duties (all APIs; not done by the driver):
+ *  - Serialize RCC calls with every ISR or context that also writes RCC (CR, CFGR, PLLCFGR, CSR,
+ *    CCIPR, ENR, RSTR writes are read-modify-write); Get* APIs are single reads (ISR-safe).
+ *  - hse_hz is the real HSE frequency (crystal or bypass clock; 0 = HSE unused): the driver
+ *    cannot measure it.
+ *  - Poll timeouts: the wait for every oscillator / PLL / SYSCLK switch and its timeout
+ *    (e.g. HSE start-up per datasheet) belong to the caller.
+ *  - Sequencing with PWR voltage scaling, FLASH latency and the HPRE /2 transition
+ *    (contract section 3); the driver does not check them.
+ * Errata CALLER items (ES0431 / ES0430 / ES0523, contract "Errata"): 2.2.9 Standby with HSE
+ * bypass as SYSCLK (at RCC_SetHseBypass); ES0431 2.2.3 / ES0430 2.2.4 LSI as RTCCLK (at
+ * RCC_GetResetFlags); ES0431 2.2.7 / ES0430 2.2.7 / ES0523 2.2.5 keep FLASHSMEN = 1 for Sleep with
+ * debug, or ISB after WFI/WFE; ES0431 2.2.8 / ES0430 2.2.8 / ES0523 2.2.6 keep PC13 static with
+ * an LSE crystal (board).
+ * Contract: Docs/v0.11_RCC_CONTRACT.md. */
+
+    /* Enables and read-backs a GPIO port bus clock. Does not configure PLL/system clock.
+     * Caller: none beyond the file-header duties. */
     /* Level: PARAM[r] */
     SPL_Status RCC_GpioClockEnable(GPIO_TypeDef *port);
 
@@ -25,14 +57,14 @@ extern "C"
      * hse_hz must match actual oscillator; 0 is accepted only if HSE is unused.
      * Does not configure PLL, Flash latency or voltage scaling.
      * Returns SPL_ERR_UNSUPPORTED for unrecognized clock settings.
-     */
+     * Caller: none beyond the file-header duties (real hse_hz). */
     /* Level: PARAM[F,r] UNSUPPORTED[r] */
     SPL_Status RCC_GetClocks(uint32_t hse_hz, RCC_ClocksTypeDef *clocks);
     /* Read selected USART/UART kernel clock from RCC_CCIPR.
      * LSE source is nominally 32768 Hz; caller must ensure it is running.
      * An instance that is not USART1/2/3 or UART4/5 present on this SKU returns
      * SPL_ERR_PARAM (an absent instance has no CMSIS macro and cannot be named).
-     */
+     * Caller: LSE running when it is the selected source (not checked); real hse_hz. */
     /* Level: PARAM[F,r] UNSUPPORTED[r] */
     SPL_Status RCC_GetUsartKernelClock(const USART_TypeDef *instance, uint32_t hse_hz,
                                        uint32_t *kernel_hz);
@@ -234,37 +266,49 @@ extern "C"
      RCC_CSR_PINRSTF | RCC_CSR_OBLRSTF)
 
     /* --- Oscillators (non-blocking: start, then poll RCC_GetOscReady) --- */
-    /* Sets the ON bit; idempotent. */
+    /* Sets the ON bit; idempotent.
+     * Caller: HSE: RCC_SetHseBypass first; poll RCC_GetOscReady with a timeout. */
     /* Level: PARAM[r] */
     SPL_Status RCC_StartOsc(RCC_OscTypeDef osc);
     /* Clears the ON bit. HSI16/HSE: STATE if selected (SW or SWS) as SYSCLK or the
      * PLL source while the PLL is on (PLLON or PLLRDY). LSI: OK means LSION=0 only;
-     * IWDG, RTC or LSE CSS keep LSI running (LSIRDY stays 1, RM0440 7.4.28). */
+     * IWDG, RTC or LSE CSS keep LSI running (LSIRDY stays 1, RM0440 7.4.28).
+     * Kernel clocks of clocked peripherals and the RTC clock are checked (STATE).
+     * Caller: MCO and CRS users are not checked: stop them first; LSI: confirm with
+     * RCC_GetOscReady more than 3 LSI cycles later. */
     /* Level: PARAM[r] STATE[r] */
     SPL_Status RCC_StopOsc(RCC_OscTypeDef osc);
     /* *ready = RDY bit (always written). STATE when the oscillator is off and not
-     * ready (polling will not help); OK otherwise. */
+     * ready (polling will not help); OK otherwise.
+     * Caller: bound the poll. */
     /* Level: PARAM[F,r] STATE[r] */
     SPL_Status RCC_GetOscReady(RCC_OscTypeDef osc, uint8_t *ready);
     /* CR.HSEBYP = bypass (0 crystal, 1 external clock). Only while HSE is off:
      * HSEON=1 with a different value -> STATE; HSEON=0 but HSERDY=1 -> BUSY.
      * ERRATA ES0431 2.2.9 / ES0430 2.2.9 / ES0523 2.2.7: bypass HSE as SYSCLK blocks Standby entry:
-     * select HSI16 as SYSCLK before entering Standby (caller). */
+     * select HSI16 as SYSCLK before entering Standby.
+     * Caller: switch SYSCLK to HSI16 before Standby when HSE bypass drives SYSCLK (errata). */
     /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status RCC_SetHseBypass(uint8_t bypass);
 
     /* --- PLL --- */
     /* Validates and writes the whole PLLCFGR while the PLL is off. hse_hz is used
-     * only for the HSE source. PLLON=1 -> STATE; PLLON=0, PLLRDY=1 -> BUSY. */
+     * only for the HSE source. PLLON=1 -> STATE; PLLON=0, PLLRDY=1 -> BUSY.
+     * Caller: real hse_hz; VCO limits are from the G431/G474 datasheet (confirm for the part). */
     /* Level: PARAM[F,r] STATE[r] BUSY[r] */
     SPL_Status RCC_ConfigPll(const RCC_PllConfigTypeDef *config, uint32_t hse_hz);
-    /* Sets PLLON; source oscillator must be ready (on, not ready -> BUSY; off -> STATE). */
+    /* Sets PLLON; source oscillator must be ready (on, not ready -> BUSY; off -> STATE).
+     * Caller: RCC_ConfigPll first; poll RCC_GetPllReady with a timeout. */
     /* Level: STATE[r] BUSY[r] */
     SPL_Status RCC_EnablePll(void);
-    /* Clears PLLON; STATE while the PLL is SYSCLK (SW or SWS). */
+    /* Clears PLLON; STATE while the PLL is SYSCLK (SW or SWS), or while PLLP/PLLQ is the kernel
+     * clock of a peripheral whose bus clock is enabled.
+     * Caller: wait for RCC_GetPllReady = 0 before RCC_ConfigPll (else BUSY); MCO from the PLL
+     * is not checked. */
     /* Level: STATE[r] */
     SPL_Status RCC_DisablePll(void);
-    /* *ready = PLLRDY (always written). STATE when PLLON=0 and PLLRDY=0. */
+    /* *ready = PLLRDY (always written). STATE when PLLON=0 and PLLRDY=0.
+     * Caller: bound the poll. */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status RCC_GetPllReady(uint8_t *ready);
 
@@ -277,59 +321,83 @@ extern "C"
     /* Writes CFGR.SW. Target must be ready (PLL: PLLRDY and PLLREN). A previous
      * switch still pending (SW != SWS): its target on -> BUSY, off (PLL: PLLON=0
      * or PLLREN=0) -> STATE (it never completes; start that target). Confirm
-     * with RCC_GetSysclkSource. */
+     * with RCC_GetSysclkSource.
+     * Caller: HPRE /2 transition, FLASH latency and voltage range before the switch (contract
+     * section 3, not checked); poll RCC_GetSysclkSource with a timeout; reconfigure derived
+     * peripherals (CCL-2 CLK-06 above). */
     /* Level: PARAM[r] STATE[r] BUSY[r] */
     SPL_Status RCC_SetSysclkSource(RCC_SysclkTypeDef source);
-    /* *source = CFGR.SWS. Reserved SWS=00 -> UNSUPPORTED. */
+    /* *source = CFGR.SWS. Reserved SWS=00 -> UNSUPPORTED. Hardware may force HSI16 (Stop exit,
+     * CSS).
+     * Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status RCC_GetSysclkSource(RCC_SysclkTypeDef *source);
-    /* HPRE: divider 1, 2, 4, 8, 16, 64, 128, 256 or 512; CFGR read back. */
+    /* HPRE: divider 1, 2, 4, 8, 16, 64, 128, 256 or 512; CFGR read back.
+     * Caller: FLASH latency raised before a higher HCLK, lowered after (RM0440 3.3.4); the
+     * >= 1 us wait after a > 80 MHz switch before HPRE = 1; reconfigure derived peripherals. */
     /* Level: PARAM[r] */
     SPL_Status RCC_SetAhbPrescaler(uint32_t divider);
-    /* PPRE1 / PPRE2: divider 1, 2, 4, 8 or 16 each; CFGR read back. */
+    /* PPRE1 / PPRE2: divider 1, 2, 4, 8 or 16 each; CFGR read back.
+     * Caller: reconfigure peripherals timed from PCLK1 / PCLK2 (CCL-2 CLK-06 above). */
     /* Level: PARAM[r] */
     SPL_Status RCC_SetApbPrescalers(uint32_t apb1_divider, uint32_t apb2_divider);
 
     /* --- Peripheral bus clocks and resets --- */
-    /* Sets the ENR bit and reads the register back (clock propagation). */
+    /* Sets the ENR bit and reads the register back (clock propagation).
+     * Caller: select the kernel clock (RCC_SetKernelClock) first where the peripheral has one. */
     /* Level: PARAM[r] UNSUPPORTED[r] */
     SPL_Status RCC_EnablePeriphClock(RCC_PeriphTypeDef periph);
-    /* Clears the ENR bit. RCC_PERIPH_FLASH -> PARAM (RM: flash power-down only). */
+    /* Clears the ENR bit. RCC_PERIPH_FLASH -> PARAM (RM: flash power-down only).
+     * Caller: the peripheral is idle (no transfer, DMA or interrupt pending). */
     /* Level: PARAM[r] UNSUPPORTED[r] */
     SPL_Status RCC_DisablePeriphClock(RCC_PeriphTypeDef periph);
-    /* *enabled = ENR bit. */
+    /* *enabled = ENR bit.
+     * Caller: none beyond the file-header duties. */
     /* Level: PARAM[F,r] UNSUPPORTED[r] */
     SPL_Status RCC_GetPeriphClock(RCC_PeriphTypeDef periph, uint8_t *enabled);
     /* Sets / clears the RSTR bit. No reset bit (RTCAPB, WWDG) -> UNSUPPORTED;
-     * RCC_PERIPH_FLASH -> PARAM. */
+     * RCC_PERIPH_FLASH -> PARAM.
+     * Caller: release with RCC_ReleasePeriphReset (no automatic pulse); ADC12 / ADC345 reset
+     * every ADC of the pair and its common block. */
     /* Level: PARAM[r] UNSUPPORTED[r] */
     SPL_Status RCC_AssertPeriphReset(RCC_PeriphTypeDef periph);
+    /* Clears the RSTR bit; same identifier rules as RCC_AssertPeriphReset.
+     * Caller: reconfigure the peripheral afterwards (registers are at reset values). */
     /* Level: PARAM[r] UNSUPPORTED[r] */
     SPL_Status RCC_ReleasePeriphReset(RCC_PeriphTypeDef periph);
 
     /* --- Kernel clocks --- */
-    /* Selector absent on this SKU -> UNSUPPORTED; source not offered -> PARAM. */
+    /* Selector absent on this SKU -> UNSUPPORTED; source not offered -> PARAM.
+     * Caller: change only while the peripheral is disabled (not checked); the source
+     * oscillator / PLL output running; reconfigure derived timing (CCL-2 CLK-06 above). */
     /* Level: PARAM[r] UNSUPPORTED[r] */
     SPL_Status RCC_SetKernelClock(RCC_KernelTypeDef kernel, RCC_KernelSrcTypeDef source);
-    /* Reserved encoding read back -> UNSUPPORTED. */
+    /* Reserved encoding read back -> UNSUPPORTED.
+     * Caller: none beyond the file-header duties. */
     /* Level: PARAM[F,r] UNSUPPORTED[r] */
     SPL_Status RCC_GetKernelSource(RCC_KernelTypeDef kernel, RCC_KernelSrcTypeDef *source);
     /* Configuration-derived frequency (oscillator readiness is not checked).
-     * NONE or a disabled PLL output -> STATE; I2S_CKIN -> UNSUPPORTED. */
+     * NONE or a disabled PLL output -> STATE; I2S_CKIN -> UNSUPPORTED.
+     * Caller: real hse_hz; source oscillator running (not checked). */
     /* Level: PARAM[F,r] STATE[r] UNSUPPORTED[r] */
     SPL_Status RCC_GetKernelClock(RCC_KernelTypeDef kernel, uint32_t hse_hz, uint32_t *hz);
 
     /* --- MCO, CSS, reset cause --- */
-    /* MCOSEL / MCOPRE (divider 1, 2, 4, 8, 16). Pin AF setup is the caller's duty. */
+    /* MCOSEL / MCOPRE (divider 1, 2, 4, 8, 16).
+     * Caller: MCO pin alternate function (GPIO module); source oscillator running. */
     /* Level: PARAM[r] */
     SPL_Status RCC_ConfigMco(RCC_McoSourceTypeDef source, uint32_t divider);
-    /* Sets CR.CSSON (set-only; cleared by reset only). CSS failure raises NMI. */
+    /* Irreversible until reset: sets CR.CSSON (set-only). CSS failure raises NMI.
+     * Caller: HSE ready first (not checked); the NMI handler calls RCC_ClearCssFlag and
+     * restores the clock tree (hardware switches SYSCLK to HSI16). */
     /* Level: - */
     SPL_Status RCC_EnableCss(void);
-    /* *set = CIFR.CSSF. */
+    /* *set = CIFR.CSSF.
+     * Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] */
     SPL_Status RCC_GetCssFlag(uint8_t *set);
-    /* Writes CICR.CSSC only (write-1-to-clear register). */
+    /* Writes CICR.CSSC only (write-1-to-clear register); single store, NMI handler safe.
+     * Caller: none beyond the file-header duties. */
     /* Level: - */
     SPL_Status RCC_ClearCssFlag(void);
     /* *flags = CSR & RCC_RESET_FLAGS (test with RCC_CSR_xxxRSTF).
@@ -338,10 +406,12 @@ extern "C"
      * (RTC_BackupDomainFullReset), then RCC_ClearResetFlags; sequence in
      * Docs/v0.10_RTC_CONTRACT.md.
      * Caller duty (CCL-2 WDG-06): the boot code reads these flags and branches on
-     * IWDGRSTF/WWDGRSTF (count, log, keep state or safe mode) before RCC_ClearResetFlags. */
+     * IWDGRSTF/WWDGRSTF (count, log, keep state or safe mode) before RCC_ClearResetFlags.
+     * Caller: with LSI as RTCCLK reset the backup domain on each BORRSTF power-up (errata). */
     /* Level: PARAM[F] */
     SPL_Status RCC_GetResetFlags(uint32_t *flags);
-    /* Sets CSR.RMVF (LSION preserved). */
+    /* Sets CSR.RMVF (LSION preserved).
+     * Caller: read and act on the flags (RCC_GetResetFlags) first. */
     /* Level: - */
     SPL_Status RCC_ClearResetFlags(void);
 

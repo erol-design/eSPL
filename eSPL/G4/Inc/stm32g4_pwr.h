@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 #ifndef STM32G4_PWR_H
 #define STM32G4_PWR_H
 #include <stdint.h>
@@ -9,9 +10,20 @@ extern "C"
 {
 #endif
 
-    /* PWR (RM0440 section 6). PWR clock (RCC APB1ENR1 PWREN) is the caller's duty.
-     * Rejected calls write nothing. RMW APIs must be serialised by the caller.
-     * See Docs/v0.10_PWR_CONTRACT.md for the voltage-scaling sequence. */
+    /* Power controller driver (PWR, RM0440 section 6).
+     * Scope: backup-domain access, voltage scaling start / status, PVD, wakeup pins and flags,
+     * low-power mode selection. Entering a low-power mode (SLEEPDEEP + WFI/WFE) is not provided.
+     * Usage: voltage scaling per the contract sequence (FLASH latency, SYSCLK and AHB prescaler
+     * are changed by the caller around PWR_StartVoltageScaling); low power: wakeup pins and
+     * flags, PWR_SetLowPowerMode, then the caller's own SLEEPDEEP + WFI/WFE.
+     * Common rules: no function waits; no static state; no clock is enabled here. Rejected
+     * calls write nothing. PWR_ClearWakeupFlags and the Get* APIs are single accesses and
+     * ISR-safe.
+     * Caller duties (all APIs):
+     *  - Clock: RCC_APB1ENR1.PWREN (with the clock off writes are ignored; only the read-back
+     *    APIs report SPL_ERR_STATE).
+     *  - Concurrency: CR1..CR5 updates are read-modify-write; serialise callers.
+     * Contract: Docs/v0.10_PWR_CONTRACT.md (voltage-scaling sequence). */
 
     typedef enum
     {
@@ -48,37 +60,52 @@ extern "C"
 #define PWR_WAKEUP_PIN_ALL PWR_CR3_EWUP
 
     /* CR1.DBP = enable (0/1) with read-back; mismatch (PWR clock off) -> STATE. */
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status PWR_SetBackupAccess(uint8_t enable);
-    /* Starts a range change (CR5.R1MODE, then CR1.VOS) and returns. Caller handles
-     * FLASH latency, SYSCLK and AHB prescaler per RM0440 6.1.5. VOSF/REGLPF set ->
+    /* Starts a range change (CR5.R1MODE, then CR1.VOS) and returns. VOSF/REGLPF set ->
      * BUSY; LPR set -> STATE. */
+    /* Caller: FLASH latency, SYSCLK and AHB prescaler before / after this call per RM0440 6.1.5
+     * (order in the contract); going to a higher range, wait for PWR_GetVoltageScalingStatus
+     * ready before raising SYSCLK. */
     /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status PWR_StartVoltageScaling(PWR_RangeTypeDef range);
     /* *ready = 1 when SR2.VOSF = 0. */
+    /* Caller: bound the poll. */
     /* Level: PARAM[F] */
     SPL_Status PWR_GetVoltageScalingStatus(uint8_t *ready);
     /* CR2.PLS/PVDE with read-back; SYSCFG_CFGR2.PVDL lock -> STATE. */
+    /* Caller: PWR_PVD_EXT_INPUT needs the PVD_IN pin in analog mode; a PVD interrupt goes
+     * through EXTI (EXTI module, NVIC). */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status PWR_ConfigPVD(PWR_PvdLevelTypeDef level, uint8_t enable);
     /* *below = SR2.PVDO (1: VDD below the PVD threshold). */
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] */
     SPL_Status PWR_GetPVDOutput(uint8_t *below);
-    /* enable=1: CR4.WPx = falling, then CR3.EWUPx = 1. enable=0: CR3.EWUPx = 0. */
+    /* enable=1: CR4.WPx = falling, then CR3.EWUPx = 1. enable=0: CR3.EWUPx = 0.
+     * Wakeup flags are not cleared. */
+    /* Caller: clear the flags of the selected pins (PWR_ClearWakeupFlags) after a polarity
+     * change and before low-power entry. */
     /* Level: PARAM[F] */
     SPL_Status PWR_ConfigWakeupPins(uint32_t pins, uint8_t enable, uint8_t falling);
     /* *flags = SR1.WUF1..5 in PWR_WAKEUP_PINx layout. */
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] */
     SPL_Status PWR_GetWakeupFlags(uint32_t *flags);
     /* SCR = pins (write-1-to-clear, only the requested CWUFx). ISR-safe. */
+    /* Caller: none. */
     /* Level: PARAM[F] */
     SPL_Status PWR_ClearWakeupFlags(uint32_t pins);
     /* CR1.LPMS for the next deep sleep. Does not set SLEEPDEEP or execute WFI/WFE.
      * ERRATA ES0431 2.2.9 / ES0430 2.2.9 / ES0523 2.2.7: Standby cannot be entered with HSE
-     * bypass as SYSCLK: caller switches SYSCLK to HSI16 before WFI.
-     * ERRATA ES0431 2.2.7 / ES0430 2.2.7 / ES0523 2.2.5: with DBG_SLEEP/DBG_STOP set, put an ISB
-     * right after the caller's WFI/WFE.
-     * Caller duties around the caller's own sleep entry and wakeup path (the driver does none):
+     * bypass as SYSCLK.
+     * ERRATA ES0431 2.2.7 / ES0430 2.2.7 / ES0523 2.2.5: wrong flash fetch after Sleep/Stop with
+     * DBG_SLEEP/DBG_STOP set. */
+    /* Caller: SLEEPDEEP + WFI/WFE are the caller's, after clearing EXTI_PR1 and the wakeup
+     * flags; switch SYSCLK to HSI16 before Standby entry with HSE bypass (ERRATA 2.2.9 above);
+     * with DBG_SLEEP/DBG_STOP set put an ISB right after WFI/WFE (ERRATA 2.2.7 above).
+     * Duties around the caller's own sleep entry and wakeup path (the driver does none):
      * Caller duty (CCL-2 PWR-04): before WFI/WFE confirm that every UART transmission (TC),
      * flash operation (FLASH_SR.BSY) and DMA transfer in use has completed.
      * Caller duty (CCL-2 PWR-05): if the IWDG runs, either freeze it in Stop/Standby with the

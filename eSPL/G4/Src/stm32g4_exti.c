@@ -1,3 +1,7 @@
+/* SPDX-License-Identifier: MIT */
+/* EXTI driver (RM0440 section 15) and SYSCFG_EXTICR GPIO routing. Line masks are built from the
+ * per-SKU CMSIS bit macros, so absent lines are rejected per SKU at compile time.
+ * Public contract: stm32g4_exti.h, Docs/v0.10_EXTI_CONTRACT.md. */
 #include <stddef.h>
 #include "stm32g4_exti.h"
 
@@ -215,7 +219,7 @@ SPL_Status EXTI_SetGpioSource(GPIO_TypeDef *port, uint8_t line)
     uint32_t index;
     uint32_t value;
 
-    /* Gecersiz port veya EXTI hattinda yanlis EXTICR yazimi. */
+    /* An invalid port or EXTI line would write the wrong EXTICR field. */
     SPL_REQUIRE(valid != 0U, SPL_ERR_PARAM);
     SPL_REQUIRE(line <= 15U, SPL_ERR_PARAM);
     SPL_REQUIRE((code != EXTI_PORT_CODE_G) || (line <= EXTI_PORT_G_MAX_LINE), SPL_ERR_PARAM);
@@ -256,11 +260,11 @@ SPL_Status EXTI_LineConfig(uint8_t line, EXTI_TriggerTypeDef trigger, uint32_t m
     {
         return status;
     }
-    /* Tetik/mode bitleri komsu register alanlarini bozabilir. */
+    /* Invalid trigger / mode bits would corrupt neighbouring register fields. */
     SPL_REQUIRE(trig <= (uint32_t)EXTI_TRIGGER_BOTH, SPL_ERR_PARAM);
-    SPL_REQUIRE(mode != 0U, SPL_ERR_PARAM); /* Normal: maske kapali kalir. */
+    SPL_REQUIRE(mode != 0U, SPL_ERR_PARAM); /* Mode 0 would leave the line masked. */
     SPL_REQUIRE((mode & ~(EXTI_MODE_INTERRUPT | EXTI_MODE_EVENT)) == 0U, SPL_ERR_PARAM);
-    /* Direct hatta trigger yazma istegi sessizce yok sayilir. */
+    /* A trigger request on a direct line would be silently ignored. */
     SPL_REQUIRE((cls != EXTI_CLASS_DIRECT) || (trig == (uint32_t)EXTI_TRIGGER_NONE), SPL_ERR_PARAM);
 
     /* Triggers first, masks last: never unmask with a stale edge selection. */
@@ -351,7 +355,7 @@ SPL_Status EXTI_GetPending(uint8_t line, uint8_t *pending)
     {
         return status;
     }
-    /* Gecersiz cikti pointer'i belirsiz sonuc uretir. */
+    /* An invalid output pointer gives an undefined result. */
     SPL_REQUIRE(pending != NULL, SPL_ERR_PARAM);
     if (line < 32U)
     {

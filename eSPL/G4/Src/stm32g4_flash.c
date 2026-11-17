@@ -1,8 +1,10 @@
+/* SPDX-License-Identifier: MIT */
+/* Embedded flash interface driver. RM0440 Rev 9: section 3 (category 3), 4 (category 4),
+ * 5 (category 2); dual-bank code only where CMSIS defines FLASH_OPTR_DBANK.
+ * Public contract: stm32g4_flash.h. */
 #define SPL_LIBRARY_BUILD 1
 #include <stddef.h>
 #include "stm32g4_flash.h"
-
-/* RM0440 Rev 9: section 3 (category 3), 4 (category 4), 5 (category 2). */
 
 #if defined(FLASH_CR_MER2)
 #define FLASH_CR_MER_ALL (FLASH_CR_MER1 | FLASH_CR_MER2)

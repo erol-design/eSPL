@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: MIT */
+/* G4 family status header: library version, library-wide caller duties, and the shared
+ * SPL_Status and check-level headers. Included by every G4 module header; declares no API. */
 #ifndef STM32G4_STATUS_H
 #define STM32G4_STATUS_H
 
@@ -19,6 +22,7 @@
 /* SPL_Status is shared by every family (METHOD section 9 option (b)); never defined here.
  * Relative path: no extra include directory in Keil projects or host scripts. */
 #include "../../Common/Inc/spl_status.h"
+/* Check level (SPL_CHECK_LEVEL, SPL_REQUIRE*): METHOD 1.11. */
 #include "../../Common/Inc/spl_check.h"
 
 #endif /* STM32G4_STATUS_H */

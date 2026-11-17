@@ -26,12 +26,13 @@ Requires the `Keil.STM32G4xx_DFP` pack; CMSIS Core comes from `../../CMSIS/Core`
 **Arm GCC + CMake:**
 
 ```sh
-cmake -S . -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=arm-none-eabi.cmake
+cmake -S . -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=../../cmake/arm-none-eabi-gcc.cmake
 cmake --build build
 ```
 
 Output: `build/G431_Template.elf`, `.hex`, `.bin`. Flash with STM32CubeProgrammer or any
-SWD tool. Validation level: `-DSPL_CHECK_LEVEL=0|2` (FULL / FAST).
+SWD tool. Validation level: `-DESPL_G4_CHECK_LEVEL=0|2` (FULL / FAST). The template links the
+library target `espl::g4` (`../../CMakeLists.txt`).
 
 ## Files
 
@@ -39,13 +40,13 @@ SWD tool. Validation level: `-DSPL_CHECK_LEVEL=0|2` (FULL / FAST).
 |---|---|
 | `main.c` | Clock, LED, VCP and main loop |
 | `G431_Template.uvprojx` | Keil MDK project |
-| `CMakeLists.txt`, `arm-none-eabi.cmake` | GCC build |
+| `CMakeLists.txt` | GCC build (toolchain file `../../cmake/arm-none-eabi-gcc.cmake`) |
 | `STM32G431xB_FLASH.ld` | GNU linker script (128 KB flash, 32 KB SRAM) |
 
 ## Using it for your own project
 
 1. Copy the folder and keep the relative paths to `eSPL/G4` and `eSPL/Common`, or adjust them.
-2. Add the eSPL modules you use to the project (`Src/stm32g4_<module>.c`).
+2. Keil: add the eSPL modules you use (`Src/stm32g4_<module>.c`); CMake builds all of `Src/`.
    `stm32g4_check.c` must stay in the build.
 3. For another board, change `BOARD_HSE_HZ`, the PLL values, LED and VCP pins in `main.c`.
 4. For another device, change the device define (`STM32G431xx`), the startup file and the linker

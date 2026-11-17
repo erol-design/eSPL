@@ -1,8 +1,9 @@
+/* SPDX-License-Identifier: MIT */
+/* System window watchdog (WWDG) driver, RM0440 Rev 9 section 36.
+ * Public contract: stm32g4_wwdg.h. */
 #define SPL_LIBRARY_BUILD 1
 #include <stddef.h>
 #include "stm32g4_wwdg.h"
-
-/* RM0440 Rev 9 section 36. */
 
 static inline uint8_t Wwdg_ValidCounter(uint32_t counter)
 {

@@ -1,3 +1,7 @@
+/* SPDX-License-Identifier: MIT */
+/* RTC + backup-domain clock + TAMP driver (RM0440 Rev 9 sections 37, 38, 7.4.27). One source
+ * for every G4 SKU; SKU differences come from the CMSIS device header (RTC_BKP_COUNT).
+ * Public contract: stm32g4_rtc.h. */
 #define SPL_LIBRARY_BUILD 1
 #include <stddef.h>
 #include "stm32g4_rtc.h"
@@ -542,11 +546,11 @@ static SPL_Status Rtc_AlarmConfig(uint32_t b, const RTC_AlarmTypeDef *alarm)
 
     SPL_REQUIRE(alarm != NULL, SPL_ERR_PARAM);
     day_max = (alarm->weekday_sel != 0U) ? 7U : 31U;
-    /* BCD / alan tasmasi. */
+    /* BCD / field overflow. */
     SPL_REQUIRE((alarm->minutes <= 59U) && (alarm->seconds <= 59U) && (alarm->day >= 1U) &&
                     (alarm->day <= day_max),
                 SPL_ERR_PARAM);
-    /* Pm / weekday_sel 1 gibi; tanimsiz maske bitleri kullanilmaz. */
+    /* pm / weekday_sel act as 1; undefined mask bits are not used. */
     SPL_REQUIRE((alarm->pm <= 1U) && (alarm->weekday_sel <= 1U) &&
                     ((alarm->mask & (uint8_t)~RTC_ALARM_MASK_ALL) == 0U),
                 SPL_ERR_PARAM);
@@ -554,9 +558,9 @@ static SPL_Status Rtc_AlarmConfig(uint32_t b, const RTC_AlarmTypeDef *alarm)
     {
         return SPL_ERR_STATE;
     }
-    SPL_REQUIRE((RTC->CR & r.enable) == 0U, SPL_ERR_STATE); /* ALRMxR yazimi yok sayilir */
+    SPL_REQUIRE((RTC->CR & r.enable) == 0U, SPL_ERR_STATE); /* ALRMxR write would be ignored */
     SPL_REQUIRE(Rtc_HoursValid(alarm->hours, alarm->pm) != 0U, SPL_ERR_PARAM);
-    /* (RM0440 37.3.6) saniye karsilastirmasi PREDIV_S < 3 ile sessizce calismaz. */
+    /* (RM0440 37.3.6) seconds comparison silently fails with PREDIV_S < 3. */
     SPL_REQUIRE(((alarm->mask & RTC_ALARM_MASK_SECONDS) != 0U) ||
                     (((RTC->PRER & RTC_PRER_PREDIV_S_Msk) >> RTC_PRER_PREDIV_S_Pos) >=
                      RTC_ALARM_MIN_PREDIV_S),
@@ -609,8 +613,8 @@ static SPL_Status Rtc_AlarmEnable(uint32_t b, uint8_t interrupt)
     SPL_REQUIRE(interrupt <= 1U, SPL_ERR_PARAM);
     /* A stale ALRxF would fire the new alarm at once: the caller clears it with
      * RTC_AlarmxClearFlag (diagnostic flags are not cleared silently). */
-    SPL_REQUIRE(Rtc_DbpSet() != 0U, SPL_ERR_STATE);       /* DBP = 0 yazim kaybolur */
-    SPL_REQUIRE((RTC->SR & r.flag) == 0U, SPL_ERR_STATE); /* Eski ALRxF hemen tetikler */
+    SPL_REQUIRE(Rtc_DbpSet() != 0U, SPL_ERR_STATE);       /* DBP = 0: write lost */
+    SPL_REQUIRE((RTC->SR & r.flag) == 0U, SPL_ERR_STATE); /* Stale ALRxF fires at once */
     cr = (Rtc_CrBase() & (uint32_t)~r.irq) | r.enable;
     if (interrupt != 0U)
     {
@@ -651,7 +655,7 @@ static SPL_Status Rtc_AlarmClearFlag(uint32_t b)
     }
     /* RTC_SCR is write-1-to-clear (RM0440 37.6.20). */
     RTC->SCR = r.clear;
-    /* Geri okuma: temizleme donmeden once cevre birimine ulasir (METHOD 1.7, issue #23). */
+    /* Read back: the clear reaches the peripheral before return (METHOD 1.7, issue #23). */
     (void)RTC->SR;
     return SPL_OK;
 }
@@ -710,8 +714,8 @@ SPL_Status RTC_AlarmSetSubsecond(uint8_t alarm_b, uint32_t subsecond, uint8_t co
 {
     const Rtc_AlarmRegs r = Rtc_Alarm((alarm_b != 0U) ? 1U : 0U);
 
-    SPL_REQUIRE(alarm_b <= 1U, SPL_ERR_PARAM); /* 1 gibi */
-    /* SS / MASKSS tasmasi. */
+    SPL_REQUIRE(alarm_b <= 1U, SPL_ERR_PARAM); /* acts as 1 */
+    /* SS / MASKSS overflow. */
     SPL_REQUIRE((subsecond <= (RTC_ALRMASSR_SS_Msk >> RTC_ALRMASSR_SS_Pos)) &&
                     (compare_bits <= 15U),
                 SPL_ERR_PARAM);
@@ -719,7 +723,7 @@ SPL_Status RTC_AlarmSetSubsecond(uint8_t alarm_b, uint32_t subsecond, uint8_t co
     {
         return SPL_ERR_STATE;
     }
-    SPL_REQUIRE((RTC->CR & r.enable) == 0U, SPL_ERR_STATE); /* ALRMxR yazimi yok sayilir */
+    SPL_REQUIRE((RTC->CR & r.enable) == 0U, SPL_ERR_STATE); /* ALRMxR write would be ignored */
     if (((RTC->ICSR & r.writeable) == 0U) && (Rtc_InitReadyFlag() == 0U))
     {
         return Rtc_WaitStatus();
@@ -803,16 +807,17 @@ SPL_Status RTC_WakeupClearFlag(void)
         return SPL_ERR_STATE;
     }
     RTC->SCR = RTC_SCR_CWUTF;
-    /* Geri okuma: temizleme donmeden once cevre birimine ulasir (METHOD 1.7, issue #23). */
+    /* Read back: the clear reaches the peripheral before return (METHOD 1.7, issue #23). */
     (void)RTC->SR;
     return SPL_OK;
 }
 
-/* Compile-time check (CCL-2 YAP-03): RTC_BACKUP_NB words from TAMP->BKP0R stay inside the
- * CMSIS TAMP register block (BKP0R..BKP(RTC_BACKUP_NB-1)R are its last members). */
+/* Compile-time check (CCL-2 YAP-03): RTC_BKP_COUNT words from TAMP->BKP0R stay inside the
+ * CMSIS TAMP register block, and RTC_BKP_COUNT never exceeds RTC_BACKUP_NB (HW-007). */
 typedef char
     Rtc_BackupCountCheck[((offsetof(TAMP_TypeDef, BKP0R) +
-                           ((size_t)RTC_BACKUP_NB * sizeof(uint32_t))) <= sizeof(TAMP_TypeDef))
+                           ((size_t)RTC_BKP_COUNT * sizeof(uint32_t))) <= sizeof(TAMP_TypeDef)) &&
+                          (RTC_BKP_COUNT <= (uint32_t)RTC_BACKUP_NB)
                              ? 1
                              : -1];
 
@@ -821,7 +826,7 @@ SPL_Status RTC_BackupWrite(uint32_t index, uint32_t value)
     volatile uint32_t *bkp = &TAMP->BKP0R;
 
     /* Prevent access outside backup-register array. */
-    SPL_REQUIRE(!(index >= RTC_BACKUP_NB), SPL_ERR_PARAM);
+    SPL_REQUIRE(!(index >= RTC_BKP_COUNT), SPL_ERR_PARAM);
     /* RM0440 38.3.3: backup registers are write-protected by DBP. */
     if (Rtc_DbpSet() == 0U)
     {
@@ -836,7 +841,7 @@ SPL_Status RTC_BackupRead(uint32_t index, uint32_t *value)
     const volatile uint32_t *bkp = &TAMP->BKP0R;
 
     /* Prevent out-of-range or invalid output pointer. */
-    SPL_REQUIRE(!((index >= RTC_BACKUP_NB) || (value == NULL)), SPL_ERR_PARAM);
+    SPL_REQUIRE(!((index >= RTC_BKP_COUNT) || (value == NULL)), SPL_ERR_PARAM);
     *value = bkp[index];
     return SPL_OK;
 }
@@ -915,12 +920,12 @@ SPL_Status RTC_SetCalibration(uint8_t add_512, uint32_t minus_pulses, uint32_t p
     uint32_t calr;
 
     SPL_REQUIRE(add_512 <= 1U, SPL_ERR_PARAM);
-    /* CALM tasmasi; gecersiz periyot sessizce 32 s. */
+    /* CALM overflow; an invalid period would silently be 32 s. */
     SPL_REQUIRE((minus_pulses <= (RTC_CALR_CALM_Msk >> RTC_CALR_CALM_Pos)) &&
                     ((period == 32U) || (period == 16U) || (period == 8U)),
                 SPL_ERR_PARAM);
     /* RM0440 37.3.12: 16 s / 8 s periods drop CALM LSBs (CALW16: bit 0, CALW8: bits 1:0 = 0).
-     * bitler sessizce duser. */
+     * The bits would be dropped silently. */
     SPL_REQUIRE(((period != 16U) || ((minus_pulses & 1U) == 0U)) &&
                     ((period != 8U) || ((minus_pulses & 3U) == 0U)),
                 SPL_ERR_PARAM);
@@ -955,7 +960,7 @@ SPL_Status RTC_OutputConfig(const RTC_OutputTypeDef *out)
     uint32_t cr;
 
     SPL_REQUIRE(out != NULL, SPL_ERR_PARAM);
-    /* OSEL tasmasi; open_drain_pullup 3 sessizce cekmesiz acik savak. */
+    /* OSEL overflow; open_drain_pullup 3 would be open drain without pull-up. */
     SPL_REQUIRE((out->select <= 3U) && (out->open_drain_pullup <= 2U), SPL_ERR_PARAM);
     SPL_REQUIRE((out->calib_out <= 1U) && (out->calib_1hz <= 1U) && (out->polarity_low <= 1U) &&
                     (out->out2 <= 1U),
@@ -1003,7 +1008,7 @@ SPL_Status RTC_DaylightSaving(int8_t hour_step, uint8_t backup_bit)
     return SPL_OK;
 }
 
-/* ---- TAMP (RM0444 31) ---- */
+/* ---- TAMP (RM0440 38) ---- */
 
 #define TAMP_INPUTS 3U /* RM0440 38: supported G4 profiles expose TAMP1..3. */
 
@@ -1013,7 +1018,7 @@ SPL_Status TAMP_InputConfig(uint8_t input, const TAMP_InputTypeDef *cfg)
     uint32_t cr2;
     uint32_t ier;
 
-    SPL_REQUIRE((input >= 1U) && (input <= TAMP_INPUTS), SPL_ERR_PARAM); /* Baska giris */
+    SPL_REQUIRE((input >= 1U) && (input <= TAMP_INPUTS), SPL_ERR_PARAM); /* Other input */
     SPL_REQUIRE(cfg != NULL, SPL_ERR_PARAM);
     SPL_REQUIRE((cfg->enable <= 1U) && (cfg->active_high <= 1U) && (cfg->no_erase <= 1U) &&
                     (cfg->masked <= 1U) && (cfg->irq <= 1U),
@@ -1051,8 +1056,8 @@ SPL_Status TAMP_FilterConfig(uint8_t frequency, uint8_t filter, uint8_t precharg
     {
         return SPL_ERR_STATE;
     }
-    /* Shared by every external input: change it with the inputs disabled. sahte kurcalama
-     * yedek register'lari siler. */
+    /* Shared by every external input: change it with the inputs disabled. A false
+     * tamper event would erase the backup registers. */
     SPL_REQUIRE((TAMP->CR1 & TAMP_EXTERNAL_ENABLES) == 0U, SPL_ERR_STATE);
     TAMP->FLTCR = ((uint32_t)frequency << TAMP_FLTCR_TAMPFREQ_Pos) |
                   ((uint32_t)filter << TAMP_FLTCR_TAMPFLT_Pos) |
@@ -1063,7 +1068,7 @@ SPL_Status TAMP_FilterConfig(uint8_t frequency, uint8_t filter, uint8_t precharg
 
 SPL_Status TAMP_InternalConfig(uint32_t enable_mask, uint32_t irq_mask)
 {
-    /* CR1'de dis giris etkinlestirmeleri degisirdi. */
+    /* The external input enables in CR1 would change. */
     SPL_REQUIRE(((enable_mask & ~TAMP_INTERNAL_ALL) == 0U) &&
                     ((irq_mask & ~TAMP_INTERNAL_ALL) == 0U),
                 SPL_ERR_PARAM);
@@ -1086,8 +1091,8 @@ SPL_Status TAMP_GetFlags(uint32_t *flags)
 
 SPL_Status TAMP_ClearFlags(uint32_t flags)
 {
-    SPL_REQUIRE(flags != 0U, SPL_ERR_PARAM); /* Etkisiz */
-    /* (EDR-003) ayrilmis bite yazim. */
+    SPL_REQUIRE(flags != 0U, SPL_ERR_PARAM); /* No effect */
+    /* (EDR-003) write to a reserved bit. */
     SPL_REQUIRE((flags & ~TAMP_FLAGS_ALL) == 0U, SPL_ERR_PARAM);
     if (Rtc_DbpSet() == 0U)
     {

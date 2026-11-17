@@ -1,24 +1,21 @@
-/* eSPL STM32G4 proje sablonu, NUCLEO-G431RB.
+/* SPDX-License-Identifier: MIT */
+/* eSPL STM32G4 project template, NUCLEO-G431RB.
  *
- * - SYSCLK = HCLK = PCLK1 = PCLK2 = 170 MHz; kaynak 24 MHz HSE kristali (PLL, Range 1 boost)
- * - SysTick 1 ms kesmesi
- * - LD2 (PA5) 1 Hz yanip soner
- * - LPUART1 PA2/PA3 = ST-LINK sanal COM portu, 115200 8N1: baslik yazar, gelen karakteri geri yollar
+ * - SYSCLK = HCLK = PCLK1 = PCLK2 = 170 MHz from the 24 MHz HSE crystal (PLL, Range 1 boost)
+ * - SysTick 1 ms interrupt
+ * - LD2 (PA5) blinks at 1 Hz
+ * - LPUART1 PA2/PA3 = ST-LINK virtual COM port, 115200 8N1: prints a banner, echoes input
  *
- * Her eSPL cagrisi SPL_Status dondurur. Beklenmeyen her durum error_trap()e gider; orada LD2
- * hizli yanip soner. Hata gorunur kalir, sessizce tekrar denenmez ya da "duzeltilmez".
+ * Every eSPL call returns SPL_Status. Any unexpected status goes to error_trap(), where LD2
+ * blinks fast. Errors stay visible: nothing is silently retried or "corrected".
  *
- * Kart degerleri (HSE, pinler, alternatif fonksiyonlar) NUCLEO-G431RB icindir (UM2505). Baska
- * kartta once bunlari kontrol edin. */
-#include "stm32g4_flash.h"
-#include "stm32g4_gpio.h"
-#include "stm32g4_pwr.h"
-#include "stm32g4_rcc.h"
-#include "stm32g4_usart.h"
+ * Board values (HSE, pins, alternate functions) are for NUCLEO-G431RB (UM2505). Check them first
+ * on another board. */
+#include "stm32g4_spl.h"
 
-#define BOARD_HSE_HZ 24000000UL /* X3 kristali */
+#define BOARD_HSE_HZ 24000000UL /* X3 crystal */
 #define BOARD_SYSCLK_HZ 170000000UL
-#define BOARD_PLL_M 6U  /* 24 MHz / 6 = 4 MHz VCO girisi */
+#define BOARD_PLL_M 6U  /* 24 MHz / 6 = 4 MHz VCO input */
 #define BOARD_PLL_N 85U /* 4 MHz * 85 = 340 MHz VCO */
 #define BOARD_PLL_R 2U  /* 340 MHz / 2 = 170 MHz SYSCLK */
 
@@ -27,7 +24,7 @@
 #define VCP_PORT GPIOA
 #define VCP_TX_PIN 2U
 #define VCP_RX_PIN 3U
-#define VCP_AF 12U /* AF12 = PA2/PA3 uzerinde LPUART1 */
+#define VCP_AF 12U /* AF12 = LPUART1 on PA2/PA3 */
 #define VCP_BAUD 115200UL
 
 #define TX_TIMEOUT_MS 10U
@@ -44,7 +41,7 @@ static uint32_t now_ms(void)
     return s_ms;
 }
 
-/* Verilen HCLK ile 1 ms SysTick. Her HCLK degisiminden sonra yeniden cagrilir. */
+/* 1 ms SysTick at the given HCLK. Called again after every HCLK change. */
 static void tick_start(uint32_t hclk_hz)
 {
     (void)SysTick_Config(hclk_hz / 1000UL);
@@ -53,13 +50,13 @@ static void tick_start(uint32_t hclk_hz)
 static void delay_ms(uint32_t ms)
 {
     uint32_t start = now_ms();
-    while ((now_ms() - start) <= ms) /* "<=": yarim ilk tik bekleme suresini kisaltmaz */
+    while ((now_ms() - start) <= ms) /* "<=": a partial first tick does not shorten the delay */
     {
         __NOP();
     }
 }
 
-/* Olumcul hata: LD2 surekli ~5 Hz yanip soner. Saat bilinmeyebilecegi icin bos dongu kullanir. */
+/* Fatal error: LD2 blinks at about 5 Hz forever. Busy loop, the clock may be unknown here. */
 static void error_trap(void)
 {
     volatile uint32_t i;
@@ -82,7 +79,7 @@ static void check(SPL_Status status)
     }
 }
 
-/* Hazir bayragini 1 olana ya da timeout_ms dolana kadar yoklar. */
+/* Polls the ready flag until it is 1 or timeout_ms has elapsed. */
 static void wait_ready(SPL_Status (*get)(uint8_t *), uint32_t timeout_ms)
 {
     uint32_t start = now_ms();
@@ -118,8 +115,8 @@ static void wait_sysclk_pll(uint32_t timeout_ms)
     }
 }
 
-/* Reset saati (HSI16) -> 170 MHz. Sira RM0440 6.1.5 ve 7.2.7: boost oncesi AHB /2, Range 1
- * boost, flash bekleme durumu, HSE, PLL, gecis, >= 1 us bekleme, AHB /1. */
+/* Reset clock (HSI16) -> 170 MHz. Order per RM0440 6.1.5 and 7.2.7: AHB /2 before boost, Range 1
+ * boost, flash wait states, HSE, PLL, switch, >= 1 us wait, AHB /1. */
 static void clock_init_170mhz(void)
 {
     RCC_PllConfigTypeDef pll;
@@ -134,9 +131,9 @@ static void clock_init_170mhz(void)
 
     check(FLASH_CalcLatency(BOARD_SYSCLK_HZ, FLASH_RANGE1_BOOST, &ws));
     check(FLASH_SetLatency(ws));
-    check(FLASH_ConfigAccelerator(1U, 1U, 1U)); /* on getirme, komut ve veri onbellegi */
+    check(FLASH_ConfigAccelerator(1U, 1U, 1U)); /* prefetch, instruction and data cache */
 
-    check(RCC_SetHseBypass(0U)); /* kristal; dis saat girisi degil */
+    check(RCC_SetHseBypass(0U)); /* crystal, not an external clock input */
     check(RCC_StartOsc(RCC_OSC_HSE));
     wait_ready(get_hse_ready, 200U);
 
@@ -157,7 +154,7 @@ static void clock_init_170mhz(void)
     check(RCC_SetSysclkSource(RCC_SYSCLK_PLL));
     wait_sysclk_pll(10U);
     tick_start(BOARD_SYSCLK_HZ / 2UL);
-    delay_ms(1U); /* HCLK = 170 MHz oncesi 85 MHz de >= 1 us */
+    delay_ms(1U); /* >= 1 us at 85 MHz before HCLK = 170 MHz */
 
     check(RCC_SetAhbPrescaler(1U));
     check(RCC_SetApbPrescalers(1U, 1U));
@@ -176,7 +173,7 @@ static void led_init(void)
     check(GPIO_Init(LED_PORT, &pin));
 }
 
-/* LPUART1 HSI16 ile calisir; baud hizi SYSCLK a bagli degildir. */
+/* LPUART1 runs from HSI16; the baud rate does not depend on SYSCLK. */
 static void vcp_init(void)
 {
     GPIO_InitTypeDef pin;
@@ -211,7 +208,7 @@ static void vcp_init(void)
     check(USART_InitEx(LPUART1, &cfg));
     check(USART_Enable(LPUART1));
 
-    /* Verici ve alici acilis onayini (TEACK/REACK) bekle. */
+    /* Wait for the transmitter and receiver enable acknowledge (TEACK/REACK). */
     start = now_ms();
     do
     {
@@ -223,7 +220,7 @@ static void vcp_init(void)
     }
 }
 
-/* Sinirli tekrarli bloklamayan yazma: SPL_WOULD_BLOCK = "verici mesgul, tekrar dene". */
+/* Non-blocking write with bounded retry: SPL_WOULD_BLOCK = "transmitter busy, try again". */
 static void vcp_putc(char c)
 {
     uint32_t start = now_ms();
@@ -271,7 +268,7 @@ int main(void)
     uint8_t rx;
     SPL_Status st;
 
-    tick_start(RCC_HSI16_HZ); /* reset saati: HSI16 */
+    tick_start(RCC_HSI16_HZ); /* reset clock: HSI16 */
     led_init();
     clock_init_170mhz();
     vcp_init();
@@ -298,13 +295,13 @@ int main(void)
         }
         else if (st != SPL_WOULD_BLOCK)
         {
-            /* SPL_ERR_HW: cerceve, gurultu, parite ya da tasma. Gercek uygulama USART_ErrorFlags()
-             * okuyup karar verir; sablon hatayi gorunur birakmak icin durur. */
+            /* SPL_ERR_HW: framing, noise, parity or overrun. A real application reads
+             * USART_ErrorFlags() and decides; the template stops to keep the error visible. */
             error_trap();
         }
         else
         {
-            /* veri yok */
+            /* no data */
         }
     }
 }

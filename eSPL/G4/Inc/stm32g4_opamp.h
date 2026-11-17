@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 #ifndef STM32G4_OPAMP_H
 #define STM32G4_OPAMP_H
 #include <stdint.h>
@@ -9,20 +10,24 @@ extern "C"
 {
 #endif
 
-    /* Operational amplifiers OPAMP1..OPAMP6 as present in CMSIS (RM0440 section 25).
-     * G431: OPAMP1..3; G411xB: OPAMP1; G491/G4A1: OPAMP1..3 and OPAMP6; G474: OPAMP1..6;
-     * G414: no OPAMP (this API is not declared). Contract: Docs/v0.11_OPAMP_CONTRACT.md.
-     *
-     * Caller duties (not done by the driver):
-     * - Clock: SYSCFG clock in RCC (OPAMP has no own enable bit, RM0440 25.3.2).
-     * - GPIO VINP/VINM/VOUT pins in analog mode (RM0440 25.3.3).
-     * - Start-up / settling time from the datasheet after OPAMP_Enable.
-     * - Calibration timing: wait tOFFTRIM (max 2 ms, datasheet) after every trim write before
-     *   reading CALOUT (RM0440 25.3.7). The driver never waits.
-     * LOCK: once CSR.LOCK is set the CSR is read-only until system reset (RM0440 25.5.1);
-     * every API that would write CSR then returns SPL_ERR_STATE and writes nothing.
-     * OPAMPx_TCMR (timer-controlled mux) is not handled by this driver.
-     * Not reentrant per instance: serialize calls (ISR included). */
+    /* Operational amplifier driver (RM0440 section 25).
+     * Scope: OPAMP1..OPAMP6 as present in CMSIS. G431: OPAMP1..3; G411xB: OPAMP1; G491/G4A1:
+     * OPAMP1..3 and OPAMP6; G474: OPAMP1..6; G414: no OPAMP (this API is not declared).
+     * OPAMPx_TCMR (timer-controlled mux) and FORCE_VP are not handled.
+     * Usage: OPAMP_Config (OPAEN=0), OPAMP_Enable; optional calibration (CalibrationEnter,
+     * SetUserTrim + CalibrationOutput per step, CalibrationExit; sequence in the contract);
+     * optional OPAMP_Lock last.
+     * Common rules: no function waits; no static state; no clock is enabled here. LOCK: once
+     * CSR.LOCK is set the CSR is read-only until system reset (RM0440 25.5.1); every API that
+     * would write CSR then returns SPL_ERR_STATE and writes nothing.
+     * Caller duties (all APIs):
+     *  - Clock: SYSCFG clock in RCC (OPAMP has no own enable bit, RM0440 25.3.2).
+     *  - Pins: VINP / VINM / VOUT pins in analog mode (RM0440 25.3.3). With OPAINTOEN=0 the
+     *    amplifier drives its VOUT pin: nothing else may drive that pin.
+     *  - Timing: start-up / settling time from the datasheet after OPAMP_Enable; tOFFTRIM (max
+     *    2 ms, datasheet) after every trim or CALSEL write before reading CALOUT (RM0440 25.3.7).
+     *  - Concurrency: not reentrant per instance; serialize calls (ISR included).
+     * Contract: Docs/v0.11_OPAMP_CONTRACT.md. */
 
 #if defined(OPAMP1)
 
@@ -68,7 +73,8 @@ extern "C"
         uint8_t vm_sel;          /* standalone: 0..1; other modes must be 0 */
         uint8_t pga_gain;        /* PGA: OPAMP_PGA_GAIN_*; other modes must be 0 */
         uint8_t pga_topology;    /* PGA: OPAMP_PGA_*; other modes must be 0 */
-        uint8_t internal_output; /* OPAINTOEN: 1 = output to ADC channel, VOUT pin free */
+        uint8_t internal_output; /* OPAINTOEN: 1 = output to ADC channel, VOUT pin free;
+                                  * 0 = output drives the VOUT pin (no other driver on it) */
         uint8_t high_speed;      /* OPAHSM: 1 = high-speed mode */
     } OPAMP_ConfigTypeDef;
 
@@ -76,23 +82,31 @@ extern "C"
      * FORCE_VP=0, CALON=0, CALSEL=00, OPAEN=0; USERTRIM and trim values preserved. */
     /* ERRATA ES0431 2.7.1 / ES0430 2.10.1 / ES0523 2.7.1: in non-inverting PGA mode fast edges on
      * the VINM0 pin are amplified at the output; keep VINM0 static/slow (pins: contract). */
+    /* Caller: non-inverting PGA mode: keep the VINM0 pin static or slow-edged (ERRATA above). When
+     * OPAHSM changes, re-apply the user trim stored for that speed mode (one shared trim set,
+     * contract open item). */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status OPAMP_Config(OPAMP_TypeDef *opamp, const OPAMP_ConfigTypeDef *config);
     /* LOCK=1: STATE. Sets OPAEN. */
+    /* Caller: wait the datasheet start-up time before using the output. */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status OPAMP_Enable(OPAMP_TypeDef *opamp);
     /* LOCK=1: STATE; CALON=1: STATE (exit calibration first). Clears OPAEN. */
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status OPAMP_Disable(OPAMP_TypeDef *opamp);
 
     /* User trimming. LOCK=1: STATE. Sets USERTRIM (separate write if it was 0), then writes
      * TRIMOFFSETP/TRIMOFFSETN (RM0440 25.5.1: modifiable only with USERTRIM=1). */
+    /* Caller: during calibration wait tOFFTRIM after this call before OPAMP_CalibrationOutput. */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status OPAMP_SetUserTrim(OPAMP_TypeDef *opamp, uint32_t trim_p, uint32_t trim_n);
     /* Reads TRIMOFFSETP/N (factory values after reset while USERTRIM=0). */
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] */
     SPL_Status OPAMP_GetTrim(const OPAMP_TypeDef *opamp, uint32_t *trim_p, uint32_t *trim_n);
     /* LOCK=1: STATE; CALON=1: STATE. Clears USERTRIM: factory trim used again. */
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status OPAMP_UseFactoryTrim(OPAMP_TypeDef *opamp);
 
@@ -100,21 +114,28 @@ extern "C"
      * Enter: OPAEN=1 required (STATE). Sets USERTRIM, CALSEL for pair, then CALON=1.
      * CALOUT is a valid indicator only with OPAINTOEN=0 (output on the VOUT pin, RM 25.3.8);
      * with OPAINTOEN=1 use the ADC reading of the internal output instead (contract). */
+    /* Caller: OPAINTOEN=0 for a valid CALOUT (else read the internal output with the ADC); follow
+     * the contract calibration sequence. */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status OPAMP_CalibrationEnter(OPAMP_TypeDef *opamp, uint32_t pair);
     /* CALON=1 required (STATE). Changes CALSEL to the other pair. */
+    /* Caller: wait tOFFTRIM after the CALSEL change before OPAMP_CalibrationOutput. */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status OPAMP_CalibrationSelect(OPAMP_TypeDef *opamp, uint32_t pair);
     /* CALON=1 required (STATE). Reads CALOUT; valid only tOFFTRIM after the last trim write. */
+    /* Caller: read only tOFFTRIM after the last trim or CALSEL write (the driver cannot tell). */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status OPAMP_CalibrationOutput(const OPAMP_TypeDef *opamp, uint8_t *calout);
     /* CALON=1 required (STATE). Clears CALON and CALSEL; USERTRIM and trims kept. */
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status OPAMP_CalibrationExit(OPAMP_TypeDef *opamp);
 
     /* Sets LOCK (irreversible until system reset). Already locked: STATE. CALON=1: STATE. */
+    /* Caller: call only after the final configuration and trim (CSR read-only until reset). */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status OPAMP_Lock(OPAMP_TypeDef *opamp);
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] */
     SPL_Status OPAMP_GetLockState(const OPAMP_TypeDef *opamp, uint8_t *locked);
 

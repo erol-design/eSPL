@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 #ifndef STM32G4_VREFBUF_H
 #define STM32G4_VREFBUF_H
 #include <stdint.h>
@@ -13,7 +14,10 @@ extern "C"
  * instance, no static state, no waits. CMSIS defines VREFBUF on G431, G474,
  * G491 and G4A1 but not on G411xB or G414: there every function returns
  * SPL_ERR_UNSUPPORTED without any access.
- * Caller duties:
+ * Usage: RCC SYSCFGEN on -> VREFBUF_SetScale (ENVR = 0) -> VREFBUF_SetMode(INTERNAL) -> poll
+ *   VREFBUF_ReadyStatus until OK. VREFBUF_GetTrim reads the factory trim at any time.
+ * Common rules: CSR writes are read-modify-write of the rw fields only; not concurrency-safe.
+ * Caller duties (all APIs):
  *  - APB2 clock: RCC_APB2ENR.SYSCFGEN (SYSCFG + COMP + VREFBUF + OPAMP).
  *  - VREF+ pin conflicts, per mode that acts on the pin (CCL-2 ANL-09; the
  *    driver cannot detect the package or the board):
@@ -34,28 +38,36 @@ extern "C"
 
 /* ENVR/HIZ combinations (RM0440 Table 197). The zero code is the harmless
  * reset mode (EXTERNAL): a zero-initialised variable never pulls VREF+ down.
- * Pull-down needs its explicit non-zero code. */
+ * Pull-down needs its explicit non-zero code.
+ * INTERNAL (drives VREF+) and OFF_PULLDOWN (loads VREF+): never with VREF+ double-bonded to
+ * VDDA or driven by an external reference; see the file header. */
 #define VREFBUF_MODE_EXTERNAL 0U     /* ENVR=0 HIZ=1: VREF+ input (reset). */
 #define VREFBUF_MODE_INTERNAL 1U     /* ENVR=1 HIZ=0: buffer drives VREF+. */
 #define VREFBUF_MODE_HOLD 2U         /* ENVR=1 HIZ=1: hold mode, VRR frozen. */
 #define VREFBUF_MODE_OFF_PULLDOWN 3U /* ENVR=0 HIZ=0: buffer off, VREF+ to VSSA. */
 
     /* VRS write. PARAM: scale > 2. STATE: ENVR=1 (RM0440 23.4.1 note).
-     * Hardware reloads the factory TRIM for the new scale (RM0440 23.3). */
+     * Hardware reloads the factory TRIM for the new scale (RM0440 23.3).
+     * Caller: VDDA must meet the minimum for the new scale (datasheet); serialise CSR writers. */
     /* Level: PARAM[F] STATE[r] UNSUPPORTED[r] */
     SPL_Status VREFBUF_SetScale(uint32_t scale);
     /* Writes ENVR and HIZ in one CSR write, VRS kept. Enable = INTERNAL,
-     * disable = EXTERNAL. After INTERNAL poll VREFBUF_ReadyStatus. */
+     * disable = EXTERNAL. After INTERNAL poll VREFBUF_ReadyStatus.
+     * Caller: INTERNAL and OFF_PULLDOWN only where the file-header VREF+ pin rules allow them
+     * (package and board are not readable; CCL-2 ANL-09); poll VREFBUF_ReadyStatus before using
+     * the reference; serialise CSR writers. */
     /* ERRATA ES0430 2.8.1 (G47x/G48x only; removed for G491/G4A1 in ES0523 Rev 2): GPIO toggling on
      * PB10/PB11/PB13/PB14/PD14 (Rev Z/Y) or PB10/PB13 (Rev X) disturbs VREF+ in INTERNAL mode; keep
      * them low. */
     /* Level: PARAM[r] UNSUPPORTED[r] */
     SPL_Status VREFBUF_SetMode(uint32_t mode);
     /* OK: VRR=1 in INTERNAL mode. BUSY: INTERNAL mode, VRR=0 (poll again).
-     * STATE: ENVR=0 (never ready) or HOLD mode (VRR detection disabled). */
+     * STATE: ENVR=0 (never ready) or HOLD mode (VRR detection disabled).
+     * Caller: bound the polling loop; the settling time is in the datasheet. */
     /* Level: STATE[r] UNSUPPORTED[r] BUSY[r] */
     SPL_Status VREFBUF_ReadyStatus(void);
-    /* *trim = VREFBUF_CCR.TRIM (read only; the driver never writes TRIM). */
+    /* *trim = VREFBUF_CCR.TRIM (read only; the driver never writes TRIM).
+     * Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] UNSUPPORTED[r] */
     SPL_Status VREFBUF_GetTrim(uint32_t *trim);
 

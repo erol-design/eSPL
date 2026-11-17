@@ -1,3 +1,7 @@
+/* SPDX-License-Identifier: MIT */
+/* DMA controller channel driver, RM0440 section 12. Channel count per controller (6 or 8)
+ * comes from CMSIS through Private/stm32g4_dma_priv.h, shared with DMAMUX.
+ * Public contract: stm32g4_dma.h. */
 #include "stm32g4_dma.h"
 #include "stm32g4_dma_priv.h"
 

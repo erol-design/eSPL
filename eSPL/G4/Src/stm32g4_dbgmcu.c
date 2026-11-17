@@ -1,8 +1,10 @@
+/* SPDX-License-Identifier: MIT */
 #include <stddef.h>
 #include "stm32g4_dbgmcu.h"
 
-/* Contract: Docs/v0.12_DBGMCU_CONTRACT.md. Bits from the CMSIS device header of
- * the build SKU; a freeze source without a CMSIS macro has mask 0 (UNSUPPORTED). */
+/* DBGMCU driver (RM0440 Rev 9 section 47.16). Bits come from the CMSIS device header of the
+ * build SKU; a freeze source without a CMSIS macro has mask 0 (UNSUPPORTED).
+ * Public contract: stm32g4_dbgmcu.h, Docs/v0.12_DBGMCU_CONTRACT.md. */
 
 #define DBGMCU_REG_APB1FZR1 0U
 #define DBGMCU_REG_APB1FZR2 1U
@@ -112,7 +114,7 @@ SPL_Status DBGMCU_SetFreeze(DBGMCU_FreezeTypeDef id, uint8_t freeze)
     volatile uint32_t *reg;
     SPL_Status st;
 
-    /* Normal: sifir disindaki degerler etkinlestirme gibi davranir. */
+    /* Normal: any nonzero value would act as enable. */
     SPL_REQUIRE(freeze <= 1U, SPL_ERR_PARAM);
     st = Dbgmcu_Lookup(id, &bit);
     if (st != SPL_OK)
@@ -136,7 +138,7 @@ SPL_Status DBGMCU_GetFreeze(DBGMCU_FreezeTypeDef id, uint8_t *frozen)
     const Dbgmcu_FreezeBit *bit = NULL;
     SPL_Status st;
 
-    /* Gecersiz cikti isaretcisi. */
+    /* Invalid output pointer. */
     SPL_REQUIRE(frozen != NULL, SPL_ERR_PARAM);
     st = Dbgmcu_Lookup(id, &bit);
     if (st != SPL_OK)
@@ -149,7 +151,7 @@ SPL_Status DBGMCU_GetFreeze(DBGMCU_FreezeTypeDef id, uint8_t *frozen)
 
 SPL_Status DBGMCU_SetLowPowerDebug(uint32_t modes)
 {
-    /* Baska CR alanlarina tasma. */
+    /* Overflow into other CR fields. */
     SPL_REQUIRE((modes & ~DBGMCU_LP_ALL) == 0U, SPL_ERR_PARAM);
     DBGMCU->CR = (DBGMCU->CR & ~DBGMCU_LP_ALL) | modes;
     return SPL_OK;
@@ -157,7 +159,7 @@ SPL_Status DBGMCU_SetLowPowerDebug(uint32_t modes)
 
 SPL_Status DBGMCU_GetLowPowerDebug(uint32_t *modes)
 {
-    SPL_REQUIRE(modes != NULL, SPL_ERR_PARAM); /* Cikti isaretcisi */
+    SPL_REQUIRE(modes != NULL, SPL_ERR_PARAM); /* Output pointer */
     *modes = DBGMCU->CR & DBGMCU_LP_ALL;
     return SPL_OK;
 }
@@ -166,7 +168,7 @@ SPL_Status DBGMCU_GetIdCode(uint16_t *devId, uint16_t *revId)
 {
     uint32_t idcode;
 
-    /* Normal: iki cikti da yoksa etkisiz okuma. */
+    /* Normal: with both outputs absent the read would have no effect. */
     SPL_REQUIRE((devId != NULL) || (revId != NULL), SPL_ERR_PARAM);
     idcode = DBGMCU->IDCODE;
     if (devId != NULL)

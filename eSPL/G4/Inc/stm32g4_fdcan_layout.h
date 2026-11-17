@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 #ifndef STM32G4_FDCAN_LAYOUT_H
 #define STM32G4_FDCAN_LAYOUT_H
 
@@ -9,6 +10,14 @@ extern "C"
 {
 #endif
 
+/* FDCAN Message RAM layout calculator (FD-01; RM0440 Rev 9 44.3.6, Figure 670). Pure
+ * computation: no register or Message RAM access, no static state. The G4 Message RAM has
+ * fixed sections per instance (212 words, stride 0x350 bytes); the calculator reports and
+ * validates that canonical layout, which matches the fixed offsets in stm32g4_fdcan.c (the host
+ * test asserts equality).
+ * Usage: FDCAN_LayoutCalculate per instance, FDCAN_LayoutValidatePair to check two instances.
+ * Caller duties (all APIs): none (no hardware access).
+ * Contract: Docs/FD-01_API_CONTRACT.md. */
 #define FDCAN_MESSAGE_RAM_WORDS_PER_INSTANCE 212U
 #define FDCAN_STANDARD_FILTER_MAX 28U
 #define FDCAN_EXTENDED_FILTER_MAX 8U
@@ -70,12 +79,16 @@ extern "C"
         uint32_t free_words;
     } FDCAN_MessageRamLayoutTypeDef;
 
+    /* Fills *layout for instance (1-based) of sku from config: section start words, element
+     * counts and sizes (result codes: Docs/FD-01_API_CONTRACT.md).
+     * Caller: none. */
     SPL_Status FDCAN_LayoutCalculate(FDCAN_SkuTypeDef sku, uint32_t instance,
                                      const FDCAN_MessageRamConfigTypeDef *config,
                                      FDCAN_MessageRamLayoutTypeDef *layout);
 
     /* Validates canonical fixed sections, bases and distinct instance
-     * reservations. Both layouts must describe the same SKU profile. */
+     * reservations. Both layouts must describe the same SKU profile.
+     * Caller: none. */
     SPL_Status FDCAN_LayoutValidatePair(const FDCAN_MessageRamLayoutTypeDef *first,
                                         const FDCAN_MessageRamLayoutTypeDef *second);
 

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* Bare-metal example: LD2 (PA5) on NUCLEO-G431RB blinks at 1 Hz (500 ms on, 500 ms off).
  * Clock: reset state, HSI16 = 16 MHz (SystemInit leaves the clock tree alone).
  * Delay: SysTick polled on COUNTFLAG, 1 ms per reload (no interrupt). */

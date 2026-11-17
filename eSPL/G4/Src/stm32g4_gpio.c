@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: MIT */
+/* GPIO driver (RM0440 Rev 9 section 9). Same GPIO IP on every G4 SKU; GPIOG only where CMSIS
+ * defines it. Public contract: stm32g4_gpio.h. */
 #include <stddef.h>
 #include "stm32g4_gpio.h"
 #if SPL_CHECK_LEVEL == SPL_CHECK_FULL
@@ -30,23 +33,23 @@ SPL_Status GPIO_Init(GPIO_TypeDef *port, const GPIO_InitTypeDef *cfg)
 {
     uint32_t pin;
 #if SPL_CHECK_LEVEL == SPL_CHECK_FULL
-    SPL_REQUIRE(Gpio_PortValid(port) != 0U, SPL_ERR_PARAM); /* Gecersiz MMIO taban adresi */
+    SPL_REQUIRE(Gpio_PortValid(port) != 0U, SPL_ERR_PARAM); /* Invalid MMIO base address */
 #endif
-    SPL_REQUIRE(cfg != NULL, SPL_ERR_PARAM);     /* Gecersiz konfigurasyon isaretcisi */
-    SPL_REQUIRE(cfg->pins != 0U, SPL_ERR_PARAM); /* Secili pin yok */
-    SPL_REQUIRE((cfg->pins & 0xFFFF0000UL) == 0U, SPL_ERR_PARAM); /* 16 bit disinda pin maskesi */
-    SPL_REQUIRE(cfg->mode <= 3U, SPL_ERR_PARAM);                  /* Alan kodlamasi */
-    SPL_REQUIRE(cfg->output_type <= 1U, SPL_ERR_PARAM);           /* Komsu pin alanlari */
-    SPL_REQUIRE(cfg->speed <= 3U, SPL_ERR_PARAM);                 /* Alan kodlamasi */
-    SPL_REQUIRE(cfg->pull <= 2U, SPL_ERR_PARAM);                  /* Ayrilmis PUPDR kodu */
-    SPL_REQUIRE(cfg->alternate <= 15U, SPL_ERR_PARAM);            /* Alternatif fonksiyon alani */
-    SPL_REQUIRE(cfg->initial_level <= 1U, SPL_ERR_PARAM);         /* Ikili deger */
+    SPL_REQUIRE(cfg != NULL, SPL_ERR_PARAM);     /* Invalid configuration pointer */
+    SPL_REQUIRE(cfg->pins != 0U, SPL_ERR_PARAM); /* No pin selected */
+    SPL_REQUIRE((cfg->pins & 0xFFFF0000UL) == 0U, SPL_ERR_PARAM); /* Pin mask outside 16 bits */
+    SPL_REQUIRE(cfg->mode <= 3U, SPL_ERR_PARAM);                  /* Field encoding */
+    SPL_REQUIRE(cfg->output_type <= 1U, SPL_ERR_PARAM);           /* Neighbour pin fields */
+    SPL_REQUIRE(cfg->speed <= 3U, SPL_ERR_PARAM);                 /* Field encoding */
+    SPL_REQUIRE(cfg->pull <= 2U, SPL_ERR_PARAM);                  /* Reserved PUPDR code */
+    SPL_REQUIRE(cfg->alternate <= 15U, SPL_ERR_PARAM);            /* Alternate function field */
+    SPL_REQUIRE(cfg->initial_level <= 1U, SPL_ERR_PARAM);         /* Binary value */
     /* Analog + pull-up is "Reserved" in RM0440 Table 58: the weak pull-up is
      * disabled by hardware in analog mode (9.3.12). Analog + pull-down is valid. */
     SPL_REQUIRE(
         !((cfg->mode == (uint32_t)GPIO_MODE_ANALOG) && (cfg->pull == (uint32_t)GPIO_PULL_UP)),
         SPL_ERR_PARAM);
-    /* LCKK yeniden yapilandirmayi engeller; aksi halde yanlis basari donulur. */
+    /* LCKK blocks reconfiguration; otherwise a false success would be returned. */
     SPL_REQUIRE(
         !(((port->LCKR & GPIO_LCKR_LCKK) != 0U) && ((port->LCKR & cfg->pins & 0xFFFFUL) != 0U)),
         SPL_ERR_STATE);
@@ -82,20 +85,20 @@ SPL_Status GPIO_Init(GPIO_TypeDef *port, const GPIO_InitTypeDef *cfg)
 SPL_Status GPIO_Write(GPIO_TypeDef *port, uint16_t pins, uint8_t high)
 {
 #if SPL_CHECK_LEVEL == SPL_CHECK_FULL
-    SPL_REQUIRE(Gpio_PortValid(port) != 0U, SPL_ERR_PARAM); /* Gecersiz MMIO taban adresi */
+    SPL_REQUIRE(Gpio_PortValid(port) != 0U, SPL_ERR_PARAM); /* Invalid MMIO base address */
 #endif
-    SPL_REQUIRE(pins != 0U, SPL_ERR_PARAM); /* Secili pin yok */
-    SPL_REQUIRE(high <= 1U, SPL_ERR_PARAM); /* Ikili deger */
+    SPL_REQUIRE(pins != 0U, SPL_ERR_PARAM); /* No pin selected */
+    SPL_REQUIRE(high <= 1U, SPL_ERR_PARAM); /* Binary value */
     port->BSRR = (high != 0U) ? (uint32_t)pins : ((uint32_t)pins << 16U);
     return SPL_OK;
 }
 SPL_Status GPIO_Read(GPIO_TypeDef *port, uint16_t pins, uint16_t *value)
 {
 #if SPL_CHECK_LEVEL == SPL_CHECK_FULL
-    SPL_REQUIRE(Gpio_PortValid(port) != 0U, SPL_ERR_PARAM); /* Gecersiz MMIO taban adresi */
+    SPL_REQUIRE(Gpio_PortValid(port) != 0U, SPL_ERR_PARAM); /* Invalid MMIO base address */
 #endif
-    SPL_REQUIRE(pins != 0U, SPL_ERR_PARAM);    /* Secili pin yok */
-    SPL_REQUIRE(value != NULL, SPL_ERR_PARAM); /* Gecersiz cikti isaretcisi */
+    SPL_REQUIRE(pins != 0U, SPL_ERR_PARAM);    /* No pin selected */
+    SPL_REQUIRE(value != NULL, SPL_ERR_PARAM); /* Invalid output pointer */
     *value = (uint16_t)(port->IDR & (uint32_t)pins);
     return SPL_OK;
 }

@@ -1,7 +1,8 @@
+/* SPDX-License-Identifier: MIT */
+/* SYSCFG extras (memory remap, bank swap, CCM SRAM, FPU IE, analog switch, Fm+, CFGR2 locks,
+ * SRAM parity). RM0440 Rev 9 chapter 10. Public contract: stm32g4_syscfg.h. */
 #include <stddef.h>
 #include "stm32g4_syscfg.h"
-
-/* Contract: Docs/v0.12_SYSCFG_CONTRACT.md. RM0440 Rev 9 chapter 10. */
 
 /* RM0440 10.2.10 SYSCFG_SKR: "Write 0xCA ... Write 0x53" unlocks SCSR.CCMER.
  * CMSIS defines only the KEY field mask, not the key values. */
@@ -19,7 +20,7 @@ SPL_Status SYSCFG_SetMemoryMode(SYSCFG_MemoryModeTypeDef mode)
 {
     uint32_t value;
 
-    /* MEMRMP kodlamasi gecerli aralikta olmali. */
+    /* MEMRMP encoding must be in the valid range. */
     SPL_REQUIRE((uint32_t)mode <= (uint32_t)SYSCFG_MEM_QUADSPI, SPL_ERR_PARAM);
 #if !defined(FMC_BASE)
     if (mode == SYSCFG_MEM_FMC)
@@ -44,7 +45,7 @@ SPL_Status SYSCFG_SetMemoryMode(SYSCFG_MemoryModeTypeDef mode)
 
 SPL_Status SYSCFG_GetMemoryMode(uint32_t *mode)
 {
-    SPL_REQUIRE(mode != NULL, SPL_ERR_PARAM); /* Cikti pointer */
+    SPL_REQUIRE(mode != NULL, SPL_ERR_PARAM); /* Output pointer */
     if (Syscfg_ClockOn() == 0U)
     {
         return SPL_ERR_STATE;
@@ -56,7 +57,7 @@ SPL_Status SYSCFG_GetMemoryMode(uint32_t *mode)
 SPL_Status SYSCFG_SetFlashBankSwap(uint8_t swap)
 {
 #if defined(FLASH_OPTR_DBANK_Msk)
-    SPL_REQUIRE(swap <= 1U, SPL_ERR_PARAM); /* Normal: sifir-disinda true. */
+    SPL_REQUIRE(swap <= 1U, SPL_ERR_PARAM); /* Nonzero boolean acts as true. */
     if (Syscfg_ClockOn() == 0U)
     {
         return SPL_ERR_STATE;
@@ -79,7 +80,7 @@ SPL_Status SYSCFG_SetFlashBankSwap(uint8_t swap)
 SPL_Status SYSCFG_GetFlashBankSwap(uint8_t *swapped)
 {
 #if defined(FLASH_OPTR_DBANK_Msk)
-    SPL_REQUIRE(swapped != NULL, SPL_ERR_PARAM); /* Cikti pointer */
+    SPL_REQUIRE(swapped != NULL, SPL_ERR_PARAM); /* Output pointer */
     if (Syscfg_ClockOn() == 0U)
     {
         return SPL_ERR_STATE;
@@ -126,8 +127,8 @@ SPL_Status SYSCFG_CcmWriteProtect(uint32_t pages)
 {
     uint32_t current;
 
-    SPL_REQUIRE(pages != 0U, SPL_ERR_PARAM); /* Normal: etkisiz yazim. */
-    /* Write-protect alanina tasma kalici korumayi degistirebilir. */
+    SPL_REQUIRE(pages != 0U, SPL_ERR_PARAM); /* Empty mask: no-effect write. */
+    /* Overflow into the write-protect field could change permanent protection. */
     SPL_REQUIRE((pages & ~SYSCFG_CCM_PAGES_ALL) == 0U, SPL_ERR_PARAM);
     if (Syscfg_ClockOn() == 0U)
     {
@@ -145,7 +146,7 @@ SPL_Status SYSCFG_CcmWriteProtect(uint32_t pages)
 
 SPL_Status SYSCFG_GetCcmWriteProtect(uint32_t *pages)
 {
-    SPL_REQUIRE(pages != NULL, SPL_ERR_PARAM); /* Cikti pointer */
+    SPL_REQUIRE(pages != NULL, SPL_ERR_PARAM); /* Output pointer */
     if (Syscfg_ClockOn() == 0U)
     {
         return SPL_ERR_STATE;
@@ -158,7 +159,7 @@ SPL_Status SYSCFG_SetFpuInterrupts(uint32_t mask)
 {
     uint32_t value;
 
-    SPL_REQUIRE((mask & ~(uint32_t)SYSCFG_FPU_IE_ALL) == 0U, SPL_ERR_PARAM); /* Bit tasmasi */
+    SPL_REQUIRE((mask & ~(uint32_t)SYSCFG_FPU_IE_ALL) == 0U, SPL_ERR_PARAM); /* Bit overflow */
     if (Syscfg_ClockOn() == 0U)
     {
         return SPL_ERR_STATE;
@@ -170,7 +171,7 @@ SPL_Status SYSCFG_SetFpuInterrupts(uint32_t mask)
 
 SPL_Status SYSCFG_GetFpuInterrupts(uint32_t *mask)
 {
-    SPL_REQUIRE(mask != NULL, SPL_ERR_PARAM); /* Cikti pointer */
+    SPL_REQUIRE(mask != NULL, SPL_ERR_PARAM); /* Output pointer */
     if (Syscfg_ClockOn() == 0U)
     {
         return SPL_ERR_STATE;
@@ -214,9 +215,9 @@ SPL_Status SYSCFG_SetAnalogSwitchSupply(SYSCFG_AnalogSwitchTypeDef supply)
 
 SPL_Status SYSCFG_SetFastModePlus(uint32_t mask, uint8_t enable)
 {
-    SPL_REQUIRE(mask != 0U, SPL_ERR_PARAM);                     /* Normal: etkisiz secim */
-    SPL_REQUIRE((mask & ~SYSCFG_FMP_ALL) == 0U, SPL_ERR_PARAM); /* Komsu bit */
-    SPL_REQUIRE(enable <= 1U, SPL_ERR_PARAM);                   /* Normal: boolean normalizasyonu */
+    SPL_REQUIRE(mask != 0U, SPL_ERR_PARAM);                     /* Empty selection has no effect */
+    SPL_REQUIRE((mask & ~SYSCFG_FMP_ALL) == 0U, SPL_ERR_PARAM); /* Neighbour bit */
+    SPL_REQUIRE(enable <= 1U, SPL_ERR_PARAM);                   /* Nonzero boolean normalisation */
     if (Syscfg_ClockOn() == 0U)
     {
         return SPL_ERR_STATE;
@@ -236,8 +237,8 @@ SPL_Status SYSCFG_Lock(uint32_t locks)
 {
     uint32_t current;
 
-    SPL_REQUIRE(locks != 0U, SPL_ERR_PARAM);                      /* Normal: etkisiz secim */
-    SPL_REQUIRE((locks & ~SYSCFG_LOCK_ALL) == 0U, SPL_ERR_PARAM); /* Geri alinmaz kilit */
+    SPL_REQUIRE(locks != 0U, SPL_ERR_PARAM);                      /* Empty selection: no-op */
+    SPL_REQUIRE((locks & ~SYSCFG_LOCK_ALL) == 0U, SPL_ERR_PARAM); /* Irreversible lock */
     if (Syscfg_ClockOn() == 0U)
     {
         return SPL_ERR_STATE;
@@ -254,7 +255,7 @@ SPL_Status SYSCFG_Lock(uint32_t locks)
 
 SPL_Status SYSCFG_GetLocks(uint32_t *locks)
 {
-    SPL_REQUIRE(locks != NULL, SPL_ERR_PARAM); /* Cikti pointer */
+    SPL_REQUIRE(locks != NULL, SPL_ERR_PARAM); /* Output pointer */
     if (Syscfg_ClockOn() == 0U)
     {
         return SPL_ERR_STATE;
@@ -265,7 +266,7 @@ SPL_Status SYSCFG_GetLocks(uint32_t *locks)
 
 SPL_Status SYSCFG_GetParityError(uint8_t *flag)
 {
-    SPL_REQUIRE(flag != NULL, SPL_ERR_PARAM); /* Cikti pointer */
+    SPL_REQUIRE(flag != NULL, SPL_ERR_PARAM); /* Output pointer */
     if (Syscfg_ClockOn() == 0U)
     {
         return SPL_ERR_STATE;

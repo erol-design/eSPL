@@ -1,3 +1,7 @@
+/* SPDX-License-Identifier: MIT */
+/* ADC driver (RM0440 Rev 9 chapter 21). Variants: ADC3/ADC4/ADC5 and the ADC345 common block
+ * are compiled only where the CMSIS header defines them; internal-channel checks follow the
+ * instance. Public contract: stm32g4_adc.h, Docs/v0.11_ADC_CONTRACT.md. */
 #define SPL_LIBRARY_BUILD 1
 #include "stm32g4_adc.h"
 

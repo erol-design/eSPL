@@ -1,28 +1,37 @@
+/* SPDX-License-Identifier: MIT */
 /**
  * @file    stm32g4_usart.h
- * @brief   STM32G4 USART, UART ve LPUART yapilandirmasi ve beklemesiz G/C.
+ * @brief   STM32G4 USART, UART and LPUART configuration and nonblocking I/O.
  *
- * Kullanim: eski yol USART_Init() asenkron 8N1 kurar ve UE'yi acar. Genisletilmis yol:
- * USART_InitEx(), UE kapaliyken istege bagli FIFO / DE / iletisim modu ayarlari, sonra
- * USART_Enable(). TEACK/REACK gorulmeden veri aktarilmamasi gerekiyorsa USART_Ready().
+ * Usage: the legacy path USART_Init() sets up asynchronous 8N1 and sets UE. Extended path:
+ * USART_InitEx(), then with UE = 0 the optional FIFO / DE / communication mode settings, then
+ * USART_Enable(). USART_Ready() when no data may move before TEACK/REACK are seen.
  *
- * Kapsam      : Secili CMSIS aygitinin tanimladigi USART1..3, UART4/5 ve LPUART1.
- *               Bazi API'ler daha dar bir kumeyi destekler ve SPL_ERR_UNSUPPORTED doner.
- * Sahiplik    : RCC saatleri, cekirdek saati secimi, GPIO alternatif islevleri, pinler,
- *               NVIC, DMA kanallari ve dis alici-vericiler cagiranindir.
- * Bellek      : Dinamik bellek yok, kullanici isaretcisi saklanmaz, degisken yazilim durumu
- *               yok; durum cevre birimi register'larindadir.
- * Bekleme     : Hicbir API beklemez. Try, durum ve istek servisleri tek adim yapar;
- *               SPL_WOULD_BLOCK ya da SPL_BUSY "sonra tekrar dene" demektir.
- * Eszamanlilik: Ayni ornege cagrilar siralanmaz. Gorev, ISR ve DMA erisimini (ozellikle
- *               CR1/CR3 guncellemeleri ve TDR/RDR veri yolu) cagiran siralar. Farkli
- *               ornekler bagimsizdir.
- * ISR         : Butun API'ler ISR'den cagrilabilir (kilit ve bekleme yok) | Sinir: dongu
- *               yok; USART_InitEx 64 bit bolme kullanir | WCET: olculmedi.
- * Hata cikisi : Reddedilen cagri register yazmaz ve cikti parametrelerini degistirmez.
- * Kurtarma    : ERR_STATE (UE acik) -> USART_Disable ya da USART_Abort, sonra ayarla.
- *               ERR_HW -> USART_ErrorFlags ile bayraklari al, USART_ClearErrorFlags ile
- *               yalniz alinanlari temizle. BUSY / WOULD_BLOCK -> sonra tekrar dene.
+ * Scope       : USART1..3, UART4/5 and LPUART1 as defined by the selected CMSIS device.
+ *               Some APIs support a narrower set and return SPL_ERR_UNSUPPORTED.
+ * Ownership   : RCC clocks, kernel clock selection, GPIO alternate functions, pins, NVIC,
+ *               DMA channels and external transceivers belong to the caller.
+ * Memory      : No dynamic memory, no stored user pointer, no mutable software state; the
+ *               state lives in the peripheral registers.
+ * Blocking    : No API waits. Try, status and request services do one step;
+ *               SPL_WOULD_BLOCK or SPL_BUSY means "retry later".
+ * Concurrency : Calls on the same instance are not serialized. The caller serializes task,
+ *               ISR and DMA access (in particular CR1/CR3 updates and the TDR/RDR data path).
+ *               Different instances are independent.
+ * ISR         : Every API may be called from an ISR (no lock, no wait) | Bound: no loop;
+ *               USART_InitEx uses a 64-bit division | WCET: not measured.
+ * Error exit  : A rejected call writes no register and leaves the output parameters unchanged.
+ * Recovery    : ERR_STATE (UE set) -> USART_Disable or USART_Abort, then configure.
+ *               ERR_HW -> read the flags with USART_ErrorFlags, clear only those with
+ *               USART_ClearErrorFlags. BUSY / WOULD_BLOCK -> retry later.
+ *
+ * Caller duties (all APIs; not done by the driver):
+ *  - Clock: RCC bus clock and kernel clock source of the instance; kernel_hz passed to the
+ *    init APIs must be the real kernel clock frequency (the driver only computes BRR from it).
+ *  - Pins: TX / RX (CK, CTS, RTS / DE when used) in their GPIO alternate function.
+ *  - Interrupts / DMA: NVIC line, priority and handler; DMA channel / DMAMUX setup and buffers.
+ *  - Serialize all calls per instance (ISR and DMA included); CR1 / CR3 are
+ *    read-modify-written.
  *
  * @see ../Docs/v0.11_USART_CONTRACT.md
  * @see ../Docs/v0.16_USART_MODES_CONTRACT.md
@@ -40,63 +49,70 @@ extern "C"
 {
 #endif
     /**
-     * @brief Eski asenkron 8N1 yapilandirmasi (USART_Init).
+     * @brief Legacy asynchronous 8N1 configuration (USART_Init).
      *
-     * Cagri sirasinda okunur, saklanmaz.
+     * Read during the call, not stored.
      */
     typedef struct
     {
-        uint32_t kernel_hz; /**< On bolucu oncesi gercek cekirdek saati, Hz (RCC mux sonrasi). */
-        uint32_t baudrate;  /**< Istenen hat hizi, bit/s; > 0. */
+        uint32_t kernel_hz; /**< Real kernel clock before the prescaler, Hz (after RCC mux). */
+        uint32_t baudrate;  /**< Requested line rate, bit/s; > 0. */
     } USART_InitTypeDef;
     /**
-     * @brief Eski asenkron 8N1 modunu kurar ve acar.
+     * @brief Sets up and enables the legacy asynchronous 8N1 mode.
      *
-     * USART1/2/3, UART4/5 (CMSIS tanimliysa). CR1, CR2, CR3, PRESC ve BRR yeniden yazilir:
-     * 8N1, x16 asiri ornekleme, FIFO / parite / akis kontrolu / kesme yok; alim hata
-     * bayraklari temizlenir, TE, RE ve UE acilir. LPUART1 kabul edilmez (BRR formulu farkli;
-     * USART_InitEx kullanin).
+     * USART1/2/3, UART4/5 (when CMSIS defines them). CR1, CR2, CR3, PRESC and BRR are
+     * rewritten: 8N1, x16 oversampling, no FIFO / parity / flow control / interrupts; the
+     * receive error flags are cleared, TE, RE and UE are set. LPUART1 is not accepted
+     * (different BRR formula; use USART_InitEx).
      *
-     * @param[in] instance USART ornegi.
-     * @param[in] cfg      Yapilandirma; cagri sirasinda okunur.
-     * @retval SPL_OK        Yapilandirma uygulandi, UE acik.
-     * @retval SPL_ERR_PARAM Gecersiz ornek (LPUART1 dahil), NULL cfg, sifir saat ya da hiz,
-     *                       bolen 16..65535 disinda.
-     * @retval SPL_ERR_STATE UE zaten acik.
+     * Caller: none beyond the file-header duties (this API sets UE = 1 itself).
+     *
+     * @param[in] instance USART instance.
+     * @param[in] cfg      Configuration; read during the call.
+     * @retval SPL_OK        Configuration applied, UE set.
+     * @retval SPL_ERR_PARAM Invalid instance (LPUART1 included), NULL cfg, zero clock or rate,
+     *                       divider outside 16..65535.
+     * @retval SPL_ERR_STATE UE already set.
      */
     /* Level: PARAM[F] STATE[F] */
     SPL_Status USART_Init(USART_TypeDef *instance, const USART_InitTypeDef *cfg);
 
     /**
-     * @brief Verici kabul edebiliyorsa bir 8 bit deger yazar.
+     * @brief Writes one 8-bit value if the transmitter can accept it.
      *
-     * Paritesiz 9 bit veri alani, 8. bit kaybolmasin diye reddedilir. OK disinda TDR
-     * yazilmaz.
+     * A 9-bit data field without parity is rejected so that bit 8 is not lost. TDR is not
+     * written unless OK.
      *
-     * @param[in] instance USART ornegi.
-     * @param[in] byte     Gonderilecek deger.
-     * @retval SPL_OK          Deger TDR'ye yazildi (hattan cikis bitti demek degildir).
-     * @retval SPL_WOULD_BLOCK Verici hazir degil (TXE/TXFNF = 0).
-     * @retval SPL_ERR_STATE   UE ya da TE kapali, ya da veri alani 8 bitten genis.
-     * @retval SPL_ERR_PARAM   Gecersiz ornek.
+     * Caller: none beyond the file-header duties.
+     *
+     * @param[in] instance USART instance.
+     * @param[in] byte     Value to send.
+     * @retval SPL_OK          Value written to TDR (does not mean it has left the line).
+     * @retval SPL_WOULD_BLOCK Transmitter not ready (TXE/TXFNF = 0).
+     * @retval SPL_ERR_STATE   UE or TE cleared, or data field wider than 8 bits.
+     * @retval SPL_ERR_PARAM   Invalid instance.
      */
     /* Level: PARAM[F] STATE[F] WOULD_BLOCK[r] */
     SPL_Status USART_TryWrite(USART_TypeDef *instance, uint8_t byte);
 
     /**
-     * @brief Alim verisi varsa bir 8 bit deger okur.
+     * @brief Reads one 8-bit value if receive data is available.
      *
-     * DESTRUCTIVE: OK donuste RDR okunur, alim FIFO'sundan bir eleman cekilir. PE, FE, NE ya
-     * da ORE etkinken RDR okunmaz ve bayraklar korunur; temizlemeden once USART_ErrorFlags
-     * ile alin.
+     * DESTRUCTIVE: on OK RDR is read and one element is popped from the receive FIFO. While
+     * PE, FE, NE or ORE is set RDR is not read and the flags are kept; capture them with
+     * USART_ErrorFlags before clearing.
      *
-     * @param[in]  instance USART ornegi.
-     * @param[out] byte     Okunan deger.
-     * @retval SPL_OK          RDR okundu, byte yazildi.
-     * @retval SPL_WOULD_BLOCK Alim verisi yok (RXNE/RXFNE = 0).
-     * @retval SPL_ERR_HW      Alim hata bayragi etkin; RDR okunmadi.
-     * @retval SPL_ERR_STATE   UE ya da RE kapali, ya da veri alani 8 bitten genis.
-     * @retval SPL_ERR_PARAM   Gecersiz ornek ya da NULL cikti.
+     * Caller: after ERR_HW capture USART_ErrorFlags, then clear (USART_ClearErrorFlags); the
+     * received frame is lost.
+     *
+     * @param[in]  instance USART instance.
+     * @param[out] byte     Value read.
+     * @retval SPL_OK          RDR read, byte written.
+     * @retval SPL_WOULD_BLOCK No receive data (RXNE/RXFNE = 0).
+     * @retval SPL_ERR_HW      Receive error flag set; RDR not read.
+     * @retval SPL_ERR_STATE   UE or RE cleared, or data field wider than 8 bits.
+     * @retval SPL_ERR_PARAM   Invalid instance or NULL output.
      * @note Data only: with parity (PCE=1) or a 7-bit frame the parity bit is masked off (CCL-2
      *       YAP-09). USART_TryWrite: bits above the frame's data width are not sent.
      */
@@ -104,62 +120,73 @@ extern "C"
     SPL_Status USART_TryRead(USART_TypeDef *instance, uint8_t *byte);
 
     /**
-     * @brief PE, FE, NE ve ORE alim hata bayraklarinin hepsini temizler.
+     * @brief Clears all of the PE, FE, NE and ORE receive error flags.
      *
-     * Hatalar eszamanli gelebiliyorsa USART_ErrorFlags + USART_ClearErrorFlags tercih edilir;
-     * bu kolaylik API'si o an kurulu olan butun kumeyi siler (anlik goruntuden sonra gelen
-     * hata da kaybolur).
+     * When errors can arrive concurrently prefer USART_ErrorFlags + USART_ClearErrorFlags;
+     * this convenience API clears the whole set present at that moment (an error arriving
+     * after the snapshot is lost as well).
      *
-     * @param[in] instance USART ornegi.
-     * @retval SPL_OK        ICR yazildi ve ISR geri okundu.
-     * @retval SPL_ERR_PARAM Gecersiz ornek.
+     * Caller: capture USART_ErrorFlags first; an error arriving after the capture is lost
+     * (use USART_ClearErrorFlags to keep it).
+     *
+     * @param[in] instance USART instance.
+     * @retval SPL_OK        ICR written and ISR read back.
+     * @retval SPL_ERR_PARAM Invalid instance.
      */
     /* Level: PARAM[F] */
     SPL_Status USART_ClearErrors(USART_TypeDef *instance);
 
     /**
-     * @brief Verici ve alici etkinlestirme onayinin anlik goruntusunu verir; beklemez.
+     * @brief Gives a snapshot of the transmitter and receiver enable acknowledge; does not wait.
      *
-     * @param[in]  instance USART ornegi.
-     * @param[out] tx_ready TE acik ve TEACK = 1 ise 1, degilse 0.
-     * @param[out] rx_ready RE acik ve REACK = 1 ise 1, degilse 0.
-     * @retval SPL_OK        Iki cikti yazildi.
-     * @retval SPL_ERR_STATE UE kapali.
-     * @retval SPL_ERR_PARAM Gecersiz ornek ya da NULL cikti.
+     * Caller: poll (bounded) until the needed output is 1 before relying on TE / RE.
+     *
+     * @param[in]  instance USART instance.
+     * @param[out] tx_ready 1 if TE is set and TEACK = 1, else 0.
+     * @param[out] rx_ready 1 if RE is set and REACK = 1, else 0.
+     * @retval SPL_OK        Both outputs written.
+     * @retval SPL_ERR_STATE UE cleared.
+     * @retval SPL_ERR_PARAM Invalid instance or NULL output.
      */
     /* Level: PARAM[F] STATE[F] */
     SPL_Status USART_Ready(USART_TypeDef *instance, uint8_t *tx_ready, uint8_t *rx_ready);
 
     /**
-     * @brief Ham PE, FE, NE ve ORE hata bayraklarinin anlik goruntusunu verir.
+     * @brief Gives a snapshot of the raw PE, FE, NE and ORE error flags.
      *
-     * @param[in]  instance USART ornegi.
+     * Caller: none beyond the file-header duties.
+     *
+     * @param[in]  instance USART instance.
      * @param[out] errors   ISR & USART_ERRORS_ALL.
-     * @retval SPL_OK        Goruntu yazildi.
-     * @retval SPL_ERR_PARAM Gecersiz ornek ya da NULL cikti.
+     * @retval SPL_OK        Snapshot written.
+     * @retval SPL_ERR_PARAM Invalid instance or NULL output.
      */
     /* Level: PARAM[F] */
     SPL_Status USART_ErrorFlags(USART_TypeDef *instance, uint32_t *errors);
 
     /**
-     * @brief Son cercevenin hattan tamamen cikip cikmadigini bildirir.
+     * @brief Reports whether the last frame has completely left the line.
      *
-     * @param[in]  instance USART ornegi.
-     * @param[out] complete TC = 1 ise 1, degilse 0.
-     * @retval SPL_OK        Durum yazildi.
-     * @retval SPL_ERR_PARAM Gecersiz ornek ya da NULL cikti.
+     * Caller: TC stays set until USART_ClearTxComplete; clear it after use so the next check
+     * sees only the new transmission.
+     *
+     * @param[in]  instance USART instance.
+     * @param[out] complete 1 if TC = 1, else 0.
+     * @retval SPL_OK        Status written.
+     * @retval SPL_ERR_PARAM Invalid instance or NULL output.
      */
     /* Level: PARAM[F] */
     SPL_Status USART_TxComplete(USART_TypeDef *instance, uint8_t *complete);
 
 /* ---- v0.11: extended configuration, LPUART1, FIFO, RS485, IRQ/DMA ---- */
-/* @see ../Docs/v0.11_USART_CONTRACT.md. Asagidaki yapilandirma API'leri "yalniz UE=0" alanlarina
- * dokunur (RM0440 40.8 / 41.7); UE=1 iken SPL_ERR_STATE doner.
- * ERRATA ES0431 2.12.2 / ES0430 2.16.2 / ES0523 2.12.2: durma bitinin ikinci yarisindaki
- * (yarim bitten kisa) bir parazit RX verisini bozabilir; RX hatti temiz tutulur ya da
- * filtrelenir (kart gorevi).
- * ES0431 2.12.4 / ES0430 2.16.4 / ES0523 2.12.4: uygulanmaz (ONEBIT bu API'de yok).
- * 2.12.1 (senkron slave) ve 2.12.3 (ABREN) icin USART_SyncConfig ve USART_AutoBaudConfig. */
+/* @see ../Docs/v0.11_USART_CONTRACT.md. The configuration APIs below touch "UE = 0 only"
+ * fields (RM0440 40.8 / 41.7); with UE = 1 they return SPL_ERR_STATE.
+ * ERRATA ES0431 2.12.2 / ES0430 2.16.2 / ES0523 2.12.2: a glitch in the second half of the
+ * stop bit (shorter than half a bit) can corrupt RX data; keep the RX line clean or filter it
+ * (board duty).
+ * ES0431 2.12.4 / ES0430 2.16.4 / ES0523 2.12.4: not applicable (ONEBIT is not in this API).
+ * For 2.12.1 (synchronous slave) and 2.12.3 (ABREN) see USART_SyncConfig and
+ * USART_AutoBaudConfig. */
 
 /* USART_InitExTypeDef.word_length: data bits including the parity bit. */
 #define USART_WORDLENGTH_7B 7U
@@ -212,10 +239,10 @@ extern "C"
  * transmitting), and release a GPIO direction pin only after USART_TxComplete reports 1. */
 
     /**
-     * @brief Genisletilmis asenkron cerceve yapilandirmasi (USART_InitEx).
+     * @brief Extended asynchronous frame configuration (USART_InitEx).
      *
-     * USART_InitEx sirasinda kopyalanir, adresi saklanmaz. Desteklenen hedeflerde 16 bayt,
-     * dolgu yok.
+     * Copied during USART_InitEx, its address is not stored. 16 bytes without padding on the
+     * supported targets.
      */
     typedef struct
     {
@@ -232,69 +259,79 @@ extern "C"
     } USART_InitExTypeDef;
 
     /**
-     * @brief Genisletilmis asenkron cerceveyi kurar, cevre birimini kapali birakir.
+     * @brief Sets up the extended asynchronous frame and leaves the peripheral disabled.
      *
-     * UE kapali olmali. CR1 (M, PCE, PS, OVER8, TE, RE; FIFOEN, DEAT/DEDT ve kesme izinleri
-     * dahil geri kalan 0), CR2 (STOP + secenekler; geri kalan 0), CR3 (RTSE/CTSE/HDSEL;
-     * geri kalan 0), PRESC ve BRR yazilir; daha once kurulan mod ayarlari silinir. UE=0
-     * kalir: gerekiyorsa USART_FifoConfig / USART_DriverEnableConfig / mod ayarlari, sonra
-     * USART_Enable. LPUART1 kabul edilir (BRR = round(256*f/baud), 0x300..0xFFFFF).
-     * Sinir: BRR hesabi 64 bit bolme kullanir (Cortex-M4'te kutuphane cagrisi).
+     * UE must be 0. CR1 (M, PCE, PS, OVER8, TE, RE; the rest, FIFOEN, DEAT/DEDT and interrupt
+     * enables included, 0), CR2 (STOP + options; the rest 0), CR3 (RTSE/CTSE/HDSEL; the rest
+     * 0), PRESC and BRR are written; mode settings made earlier are erased. UE stays 0: if
+     * needed USART_FifoConfig / USART_DriverEnableConfig / mode settings, then USART_Enable.
+     * LPUART1 is accepted (BRR = round(256*f/baud), 0x300..0xFFFFF).
+     * Bound: the BRR computation uses a 64-bit division (a library call on Cortex-M4).
      *
-     * ERRATA ES0431 2.13.1 / ES0430 2.17.1 / ES0523 2.13.1: LPUART1'de BRR 0x301..0x3FF ve
-     * BRR & 0xFF != 0 (cekirdek/hiz orani 3..4 arasinda ve tam sayi degil, ornegin
-     * 32768 Hz / 9600 Bd) reddedilir; cekirdek saatini artirin ya da hizi dusurun.
+     * ERRATA ES0431 2.13.1 / ES0430 2.17.1 / ES0523 2.13.1: on LPUART1, BRR 0x301..0x3FF with
+     * BRR & 0xFF != 0 (kernel/rate ratio between 3 and 4 and not an integer, e.g.
+     * 32768 Hz / 9600 Bd) is rejected; raise the kernel clock or lower the rate.
      *
-     * @param[in] instance USART, UART ya da LPUART ornegi.
-     * @param[in] cfg      Yapilandirma; cagri sirasinda okunur.
-     * @retval SPL_OK              Yapilandirma uygulandi; UE kapali.
-     * @retval SPL_ERR_PARAM       Gecersiz arguman ya da ulasilamayan hiz (BRR araligi,
+     * Caller: none beyond the file-header duties (kernel_hz is the kernel clock before PRESC).
+     *
+     * @param[in] instance USART, UART or LPUART instance.
+     * @param[in] cfg      Configuration; read during the call.
+     * @retval SPL_OK              Configuration applied; UE cleared.
+     * @retval SPL_ERR_PARAM       Invalid argument or unreachable rate (BRR range,
      *                             errata 2.13.1).
-     * @retval SPL_ERR_UNSUPPORTED Ornekte olmayan ozellik (0.5/1.5 durma biti, LPUART x8).
-     * @retval SPL_ERR_STATE       UE acik.
+     * @retval SPL_ERR_UNSUPPORTED Feature not on the instance (0.5/1.5 stop bits, LPUART x8).
+     * @retval SPL_ERR_STATE       UE set.
      */
     /* Level: PARAM[F,r] STATE[F] UNSUPPORTED[r] */
     SPL_Status USART_InitEx(USART_TypeDef *instance, const USART_InitExTypeDef *cfg);
 
     /**
-     * @brief Yapilandirilmis cevre birimini acar (CR1.UE = 1).
+     * @brief Enables the configured peripheral (CR1.UE = 1).
      *
-     * Zaten acik ornek yazma yapmadan OK doner. BRR ornegin alt sinirini saglamalidir:
-     * once USART_InitEx; TEACK/REACK onayi gerekiyorsa sonra USART_Ready.
+     * An instance that is already enabled returns OK without a write. BRR must meet the
+     * instance minimum: USART_InitEx first; USART_Ready afterwards if TEACK/REACK
+     * acknowledge is needed.
      *
-     * @param[in] instance USART ornegi.
-     * @retval SPL_OK        UE acildi ya da zaten acikti.
-     * @retval SPL_ERR_STATE BRR gecerli bir baslatilmis deger degil (USART < 0x10,
-     *                       LPUART < 0x300); USART_InitEx ile duzeltin.
-     * @retval SPL_ERR_PARAM Gecersiz ornek.
+     * Caller: poll USART_Ready for TEACK / REACK before the first transfer.
+     *
+     * @param[in] instance USART instance.
+     * @retval SPL_OK        UE set, or already set.
+     * @retval SPL_ERR_STATE BRR is not a valid initialized value (USART < 0x10,
+     *                       LPUART < 0x300); fix with USART_InitEx.
+     * @retval SPL_ERR_PARAM Invalid instance.
      */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status USART_Enable(USART_TypeDef *instance);
 
     /**
-     * @brief Bekleyen iletim bittikten sonra cevre birimini kapatir.
+     * @brief Disables the peripheral after the pending transmission has finished.
      *
-     * UE=1, TE=1 ve TC=0 iken UE'ye dokunmadan SPL_BUSY doner (RM0440 40.5.5 adim 8).
-     * UE'yi kapatmak DMA isteklerini de sifirlar; DMA kanalini bu cagridan once kapatin.
+     * With UE=1, TE=1 and TC=0 returns SPL_BUSY without touching UE (RM0440 40.5.5 step 8).
+     * Clearing UE also resets the DMA requests; disable the DMA channel before this call.
      *
-     * @param[in] instance USART ornegi.
-     * @retval SPL_OK        UE kapatildi ya da zaten kapaliydi.
-     * @retval SPL_BUSY      Son cerceve hattan tamamen cikmadi; sonra tekrar deneyin (CTS
-     *                       vericiyi tutuyorsa USART_Abort).
-     * @retval SPL_ERR_PARAM Gecersiz ornek.
+     * Caller: disable the DMA channel first; bound the BUSY poll (a transmitter held by CTS
+     * never completes: USART_Abort).
+     *
+     * @param[in] instance USART instance.
+     * @retval SPL_OK        UE cleared, or already cleared.
+     * @retval SPL_BUSY      The last frame has not completely left the line; retry later
+     *                       (USART_Abort if CTS holds the transmitter).
+     * @retval SPL_ERR_PARAM Invalid instance.
      */
     /* Level: PARAM[F] BUSY[r] */
     SPL_Status USART_Disable(USART_TypeDef *instance);
 
     /**
-     * @brief UE'yi hemen kapatir.
+     * @brief Clears UE at once.
      *
-     * DESTRUCTIVE: suren cerceve atilir; gonderilen ya da alinan veri kaybolabilir. TC
-     * beklenmez. Zorunlu kurtarma icindir (CTS ile tutulan verici dahil).
+     * DESTRUCTIVE: the frame in progress is dropped; sent or received data can be lost. TC is
+     * not awaited. Meant for forced recovery (transmitter held by CTS included).
      *
-     * @param[in] instance USART ornegi.
-     * @retval SPL_OK        UE kapatildi.
-     * @retval SPL_ERR_PARAM Gecersiz ornek.
+     * Caller: disable the DMA channel first (UE = 0 resets the DMA requests).
+     *
+     * @param[in] instance USART instance.
+     * @retval SPL_OK        UE cleared.
+     * @retval SPL_ERR_PARAM Invalid instance.
      */
     /* Level: PARAM[F] */
     SPL_Status USART_Abort(USART_TypeDef *instance);
@@ -307,69 +344,81 @@ extern "C"
 #define USART_FIFO_THRESHOLD_7_8 4U
 #define USART_FIFO_THRESHOLD_EMPTY_FULL 5U
     /**
-     * @brief FIFO modunu ve gonderim/alim esiklerini ayarlar.
+     * @brief Sets the FIFO mode and the transmit/receive thresholds.
      *
-     * UE kapali olmali. Uc deger tek yapilandirma olarak uygulanir.
+     * UE must be 0. The three values are applied as one configuration.
      *
-     * @param[in] instance     USART ornegi.
-     * @param[in] enable       1: FIFOEN = 1, 0: kapali.
+     * Caller: none beyond the file-header duties.
+     *
+     * @param[in] instance     USART instance.
+     * @param[in] enable       1: FIFOEN = 1, 0: disabled.
      * @param[in] tx_threshold USART_FIFO_THRESHOLD_*.
      * @param[in] rx_threshold USART_FIFO_THRESHOLD_*.
-     * @retval SPL_OK        FIFO yapilandirmasi uygulandi.
-     * @retval SPL_ERR_STATE UE acik.
-     * @retval SPL_ERR_PARAM Gecersiz ornek, enable ya da esik.
+     * @retval SPL_OK        FIFO configuration applied.
+     * @retval SPL_ERR_STATE UE set.
+     * @retval SPL_ERR_PARAM Invalid instance, enable or threshold.
      */
     /* Level: PARAM[F] STATE[F] */
     SPL_Status USART_FifoConfig(USART_TypeDef *instance, uint8_t enable, uint8_t tx_threshold,
                                 uint8_t rx_threshold);
 
     /**
-     * @brief RTS/DE pininde RS485 surucu etkinlestirme sinyalini ayarlar.
+     * @brief Sets the RS485 driver enable signal on the RTS/DE pin.
      *
-     * UE kapali olmali. RTS akis kontrolu ayni pini kullanirken DE acmak reddedilir.
+     * UE must be 0. Enabling DE while RTS flow control uses the same pin is rejected.
      *
-     * @param[in] instance      USART ornegi.
+     * Caller: RTS / DE pin in its alternate function; active_low and the DEAT/DEDT times for
+     * the transceiver (datasheet of the board part).
+     *
+     * @param[in] instance      USART instance.
      * @param[in] enable        1: CR3.DEM = 1.
-     * @param[in] active_low    1: CR3.DEP = 1 (DE aktif dusuk).
-     * @param[in] assert_time   DEAT, 0..31 ornekleme zamani (x16'da bit/16, x8'de bit/8).
-     * @param[in] deassert_time DEDT, 0..31, ayni birim.
-     * @retval SPL_OK        DE yapilandirmasi uygulandi.
-     * @retval SPL_ERR_STATE UE acik ya da RTS akis kontrolu DE ile cakisiyor.
-     * @retval SPL_ERR_PARAM Gecersiz ornek, mantiksal deger ya da zaman.
+     * @param[in] active_low    1: CR3.DEP = 1 (DE active low).
+     * @param[in] assert_time   DEAT, 0..31 sample times (bit/16 at x16, bit/8 at x8).
+     * @param[in] deassert_time DEDT, 0..31, same unit.
+     * @retval SPL_OK        DE configuration applied.
+     * @retval SPL_ERR_STATE UE set, or RTS flow control conflicts with DE.
+     * @retval SPL_ERR_PARAM Invalid instance, boolean value or time.
      */
     /* Level: PARAM[F] STATE[F] */
     SPL_Status USART_DriverEnableConfig(USART_TypeDef *instance, uint8_t enable, uint8_t active_low,
                                         uint8_t assert_time, uint8_t deassert_time);
 
     /**
-     * @brief Verici hazirsa 9 bite kadar genis TDR yolundan bir deger yazar.
+     * @brief Writes one value of up to 9 bits through the wide TDR path if the transmitter is
+     * ready.
      *
-     * OK disinda TDR yazilmaz.
+     * TDR is not written unless OK.
      *
-     * @param[in] instance USART ornegi.
-     * @param[in] data     Yapilandirilmis veri alanina sigmali (9/8/7 bit, parite varsa bir
-     *                     bit eksik).
-     * @retval SPL_OK          Deger yazildi.
-     * @retval SPL_WOULD_BLOCK Verici hazir degil.
-     * @retval SPL_ERR_STATE   UE ya da TE kapali.
-     * @retval SPL_ERR_PARAM   Gecersiz ornek ya da data veri alanindan genis.
+     * Caller: none beyond the file-header duties.
+     *
+     * @param[in] instance USART instance.
+     * @param[in] data     Must fit the configured data field (9/8/7 bits, one bit less with
+     *                     parity).
+     * @retval SPL_OK          Value written.
+     * @retval SPL_WOULD_BLOCK Transmitter not ready.
+     * @retval SPL_ERR_STATE   UE or TE cleared.
+     * @retval SPL_ERR_PARAM   Invalid instance or data wider than the data field.
      */
     /* Level: PARAM[F] STATE[F] WOULD_BLOCK[r] */
     SPL_Status USART_TryWrite9(USART_TypeDef *instance, uint16_t data);
 
     /**
-     * @brief Veri varsa 9 bite kadar genis RDR yolundan ham deger okur.
+     * @brief Reads one raw value of up to 9 bits through the wide RDR path if data is
+     * available.
      *
-     * DESTRUCTIVE: OK donuste RDR okunur, alim FIFO'sundan bir eleman cekilir. Alim
-     * hatasinda RDR okunmaz.
+     * DESTRUCTIVE: on OK RDR is read and one element is popped from the receive FIFO. On a
+     * receive error RDR is not read.
      *
-     * @param[in]  instance USART ornegi.
-     * @param[out] data     RDR[8:0]; parite aciksa parite biti dahil.
-     * @retval SPL_OK          Ham deger okundu.
-     * @retval SPL_WOULD_BLOCK Alim verisi yok.
-     * @retval SPL_ERR_HW      PE, FE, NE ya da ORE etkin; RDR okunmadi.
-     * @retval SPL_ERR_STATE   UE ya da RE kapali.
-     * @retval SPL_ERR_PARAM   Gecersiz ornek ya da NULL cikti.
+     * Caller: after ERR_HW capture USART_ErrorFlags, then clear (USART_ClearErrorFlags); the
+     * received frame is lost.
+     *
+     * @param[in]  instance USART instance.
+     * @param[out] data     RDR[8:0]; the parity bit included when parity is enabled.
+     * @retval SPL_OK          Raw value read.
+     * @retval SPL_WOULD_BLOCK No receive data.
+     * @retval SPL_ERR_HW      PE, FE, NE or ORE set; RDR not read.
+     * @retval SPL_ERR_STATE   UE or RE cleared.
+     * @retval SPL_ERR_PARAM   Invalid instance or NULL output.
      */
     /* Level: PARAM[F] STATE[F] HW[r] WOULD_BLOCK[r] */
     SPL_Status USART_TryRead9(USART_TypeDef *instance, uint16_t *data);
@@ -383,16 +432,20 @@ extern "C"
 #define USART_IT_ERR 0x20U  /* CR3.EIE (FE/ORE/NE) */
 #define USART_IT_ALL 0x3FU
     /**
-     * @brief Secili USART kesme kaynaklarini acar ya da kapatir.
+     * @brief Enables or disables the selected USART interrupt sources.
      *
-     * Yalniz secili CR1/CR3 izin bitleri degisir, digerleri korunur. UE acikken izinlidir.
-     * Okuma-degistirme-yazmadir: ayni ornegin diger CR1/CR3 yazicilariyla siralayin.
+     * Only the selected CR1/CR3 enable bits change, the others are kept. Allowed with UE set.
+     * Read-modify-write: serialize with the other CR1/CR3 writers of the same instance.
      *
-     * @param[in] instance USART ornegi.
-     * @param[in] it_mask  USART_IT_* maskesi, bos olamaz.
-     * @param[in] enable   1: ac, 0: kapat.
-     * @retval SPL_OK        Secili izinler guncellendi.
-     * @retval SPL_ERR_PARAM Gecersiz ornek, maske ya da enable.
+     * Caller: clear stale flags (errors, IDLE, TC) before enabling their interrupt; the
+     * handler clears ORE too (USART_IT_RXNE also enables the ORE interrupt), else the
+     * interrupt repeats.
+     *
+     * @param[in] instance USART instance.
+     * @param[in] it_mask  USART_IT_* mask, not empty.
+     * @param[in] enable   1: enable, 0: disable.
+     * @retval SPL_OK        Selected enables updated.
+     * @retval SPL_ERR_PARAM Invalid instance, mask or enable.
      */
     /* Level: PARAM[F] */
     SPL_Status USART_ITConfig(USART_TypeDef *instance, uint32_t it_mask, uint8_t enable);
@@ -402,66 +455,77 @@ extern "C"
 #define USART_DMA_RX 0x02U   /* CR3.DMAR */
 #define USART_DMA_DDRE 0x04U /* CR3.DDRE: DMA disabled on reception error */
     /**
-     * @brief Gonderim, alim ve alim hatasi DMA istek politikasini ayarlar.
+     * @brief Sets the transmit, receive and receive-error DMA request policy.
      *
-     * DMAT ve DMAR UE acikken degisebilir; UE acikken DDRE degisikligi reddedilir.
+     * DMAT and DMAR may change with UE set; a DDRE change with UE set is rejected.
      *
-     * @param[in] instance  USART ornegi.
-     * @param[in] dma_flags Istenen tam USART_DMA_* kumesi (eksik bit kapatilir).
-     * @retval SPL_OK        DMA istek bitleri guncellendi.
-     * @retval SPL_ERR_STATE UE acikken DDRE degisecekti.
-     * @retval SPL_ERR_PARAM Gecersiz ornek ya da maske.
+     * Caller: DMA buffers stay valid until the DMA channel is disabled; disable the channel
+     * before USART_Disable / USART_Abort.
+     *
+     * @param[in] instance  USART instance.
+     * @param[in] dma_flags The complete wanted USART_DMA_* set (missing bits are cleared).
+     * @retval SPL_OK        DMA request bits updated.
+     * @retval SPL_ERR_STATE DDRE would change with UE set.
+     * @retval SPL_ERR_PARAM Invalid instance or mask.
      */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status USART_DmaConfig(USART_TypeDef *instance, uint32_t dma_flags);
 
     /**
-     * @brief IDLE hat algilama bayraginin anlik goruntusunu verir.
+     * @brief Gives a snapshot of the IDLE line detection flag.
      *
-     * @param[in]  instance USART ornegi.
-     * @param[out] idle     ISR.IDLE = 1 ise 1, degilse 0.
-     * @retval SPL_OK        Durum yazildi.
-     * @retval SPL_ERR_PARAM Gecersiz ornek ya da NULL cikti.
+     * Caller: none beyond the file-header duties.
+     *
+     * @param[in]  instance USART instance.
+     * @param[out] idle     1 if ISR.IDLE = 1, else 0.
+     * @retval SPL_OK        Status written.
+     * @retval SPL_ERR_PARAM Invalid instance or NULL output.
      */
     /* Level: PARAM[F] */
     SPL_Status USART_IdleDetected(USART_TypeDef *instance, uint8_t *idle);
 
     /**
-     * @brief IDLE bayragini dogrudan W1C yazimiyla temizler.
+     * @brief Clears the IDLE flag with a direct W1C write.
      *
-     * Yalniz ICR.IDLECF yazilir, donmeden once ISR geri okunur.
+     * Only ICR.IDLECF is written; ISR is read back before return.
      *
-     * @param[in] instance USART ornegi.
-     * @retval SPL_OK        Temizleme yazildi ve geri okundu.
-     * @retval SPL_ERR_PARAM Gecersiz ornek.
+     * Caller: none beyond the file-header duties.
+     *
+     * @param[in] instance USART instance.
+     * @retval SPL_OK        Clear written and read back.
+     * @retval SPL_ERR_PARAM Invalid instance.
      */
     /* Level: PARAM[F] */
     SPL_Status USART_ClearIdle(USART_TypeDef *instance);
 
     /**
-     * @brief Iletim tamam (TC) bayragini dogrudan W1C yazimiyla temizler.
+     * @brief Clears the transmission complete (TC) flag with a direct W1C write.
      *
-     * Yalniz ICR.TCCF yazilir, donmeden once ISR geri okunur.
+     * Only ICR.TCCF is written; ISR is read back before return.
      *
-     * @param[in] instance USART ornegi.
-     * @retval SPL_OK        Temizleme yazildi ve geri okundu.
-     * @retval SPL_ERR_PARAM Gecersiz ornek.
+     * Caller: none beyond the file-header duties.
+     *
+     * @param[in] instance USART instance.
+     * @retval SPL_OK        Clear written and read back.
+     * @retval SPL_ERR_PARAM Invalid instance.
      */
     /* Level: PARAM[F] */
     SPL_Status USART_ClearTxComplete(USART_TypeDef *instance);
 /* Error flags (ISR bit positions) reported by USART_ErrorFlags. */
 #define USART_ERRORS_ALL 0x0FU /* PE | FE | NE | ORE */
     /**
-     * @brief Alinmis bir alim hata bayragi alt kumesini temizler.
+     * @brief Clears a captured subset of the receive error flags.
      *
-     * Dogrudan ICR yazimi yalniz istenen bayraklari siler; anlik goruntuden sonra gelen hata
-     * kaybolmaz.
+     * A direct ICR write clears only the requested flags; an error arriving after the
+     * snapshot is not lost.
      *
-     * @param[in] instance USART ornegi.
-     * @param[in] errors   USART_ERRORS_ALL'in bos olmayan alt kumesi; normalde
-     *                     USART_ErrorFlags'in verdigi deger.
-     * @retval SPL_OK        Secili bayraklar temizlendi, ISR geri okundu.
-     * @retval SPL_ERR_PARAM Gecersiz ornek, bos maske ya da desteklenmeyen bit.
+     * Caller: none beyond the file-header duties.
+     *
+     * @param[in] instance USART instance.
+     * @param[in] errors   Non-empty subset of USART_ERRORS_ALL; normally the value given by
+     *                     USART_ErrorFlags.
+     * @retval SPL_OK        Selected flags cleared, ISR read back.
+     * @retval SPL_ERR_PARAM Invalid instance, empty mask or unsupported bit.
      */
     /* Level: PARAM[F] */
     SPL_Status USART_ClearErrorFlags(USART_TypeDef *instance, uint32_t errors);
@@ -484,22 +548,26 @@ extern "C"
         uint8_t ignore_nss;     /* DIS_NSS: slave select pin ignored */
     } USART_SyncTypeDef;
     /**
-     * @brief UE kapaliyken senkron saat calismasini ayarlar.
+     * @brief Sets synchronous clock operation while UE = 0.
      *
-     * Butun mod alanlari 0 ise asenkron calisma secilir. Yalniz USART1..3. Senkron calisma
-     * LIN, smartcard, yari cift yonlu ve IrDA ile cakisir. Alanlar 0/1'dir.
+     * All mode fields 0 selects asynchronous operation. USART1..3 only. Synchronous operation
+     * conflicts with LIN, smartcard, half-duplex and IrDA. Fields are 0/1.
      *
-     * ERRATA ES0431 2.12.1 / ES0430 2.16.1 / ES0523 2.12.1: senkron slave modda dusuk hizda
-     * TC son bit kaydirilmadan kurulabilir; TC'den sonra USART'i kapatmadan once CK hattinin
-     * yarim saat periyodundan uzun bosta kalmasini bekleyin (cagiranin gorevi).
+     * ERRATA ES0431 2.12.1 / ES0430 2.16.1 / ES0523 2.12.1: in synchronous slave mode at low
+     * rate TC can be set before the last bit is shifted out; after TC wait until the CK line
+     * has been idle for longer than half a clock period before disabling the USART.
      *
-     * @param[in] instance USART ornegi.
-     * @param[in] cfg      Senkron ayarlar; cagri sirasinda okunur.
-     * @retval SPL_OK              Senkron alanlar guncellendi.
-     * @retval SPL_ERR_PARAM       Gecersiz ornek, NULL cfg, alan 1'den buyuk ya da
-     *                             clock_out ile slave birlikte.
-     * @retval SPL_ERR_STATE       UE acik ya da baska mod cakisiyor.
-     * @retval SPL_ERR_UNSUPPORTED Ornekte senkron mod yok.
+     * Caller: CK pin in its alternate function (NSS pin too when ignore_nss = 0); synchronous
+     * slave: after TC wait for an idle CK line longer than half a clock period before
+     * disabling (errata 2.12.1 above).
+     *
+     * @param[in] instance USART instance.
+     * @param[in] cfg      Synchronous settings; read during the call.
+     * @retval SPL_OK              Synchronous fields updated.
+     * @retval SPL_ERR_PARAM       Invalid instance, NULL cfg, field greater than 1, or
+     *                             clock_out together with slave.
+     * @retval SPL_ERR_STATE       UE set or another mode conflicts.
+     * @retval SPL_ERR_UNSUPPORTED No synchronous mode on the instance.
      */
     /* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
     SPL_Status USART_SyncConfig(USART_TypeDef *instance, const USART_SyncTypeDef *cfg);
@@ -514,183 +582,209 @@ extern "C"
         uint8_t clock_out;  /* CLKEN: clock to the card */
     } USART_SmartcardTypeDef;
     /**
-     * @brief UE kapaliyken ISO 7816 smartcard modunu ayarlar.
+     * @brief Sets the ISO 7816 smartcard mode while UE = 0.
      *
-     * Yalniz USART1/2/3. Acmak icin LIN, yari cift yonlu ve IrDA kapali; 8 veri biti +
-     * parite, x16 asiri ornekleme ve 0.5 ya da 1.5 durma biti gerekir. Kapatmak SCEN, NACK
-     * ve tekrar sayisini siler; GTPR ve CLKEN korunur.
+     * USART1/2/3 only. Enabling needs LIN, half-duplex and IrDA disabled; 8 data bits +
+     * parity, x16 oversampling and 0.5 or 1.5 stop bits. Disabling clears SCEN, NACK and the
+     * retry count; GTPR and CLKEN are kept.
      *
-     * @param[in] instance USART ornegi.
-     * @param[in] cfg      Smartcard ayarlari; cagri sirasinda okunur.
-     * @retval SPL_OK              Smartcard ayarlari guncellendi.
-     * @retval SPL_ERR_PARAM       Gecersiz ornek, NULL cfg ya da alan degeri (acikken
-     *                             prescaler 0 dahil).
-     * @retval SPL_ERR_STATE       UE acik ya da cerceve/mod on kosullari saglanmiyor.
-     * @retval SPL_ERR_UNSUPPORTED Ornekte smartcard modu yok.
+     * Caller: TX (card I/O) pin in alternate function open drain and CK pin when
+     * clock_out = 1; the card protocol (ATR, retry policy) is the caller's.
+     *
+     * @param[in] instance USART instance.
+     * @param[in] cfg      Smartcard settings; read during the call.
+     * @retval SPL_OK              Smartcard settings updated.
+     * @retval SPL_ERR_PARAM       Invalid instance, NULL cfg or field value (prescaler 0
+     *                             while enabling included).
+     * @retval SPL_ERR_STATE       UE set or frame/mode preconditions not met.
+     * @retval SPL_ERR_UNSUPPORTED No smartcard mode on the instance.
      */
     /* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
     SPL_Status USART_SmartcardConfig(USART_TypeDef *instance, const USART_SmartcardTypeDef *cfg);
 
     /**
-     * @brief UE kapaliyken IrDA normal ya da dusuk guc modunu ayarlar.
+     * @brief Sets the IrDA normal or low-power mode while UE = 0.
      *
-     * Yalniz USART/UART ornekleri. GTPR.GT korunur. Acmak icin tek durma biti, x16 asiri
-     * ornekleme; LIN, senkron, smartcard ve yari cift yonlu kapali olmali.
+     * USART/UART instances only. GTPR.GT is kept. Enabling needs one stop bit, x16
+     * oversampling; LIN, synchronous, smartcard and half-duplex disabled.
      *
-     * @param[in] instance  USART ornegi.
+     * Caller: low_power: prescaler chosen for the IrDA low-power frequency from the kernel
+     * clock; IR transceiver on the board.
+     *
+     * @param[in] instance  USART instance.
      * @param[in] enable    1: IREN = 1.
      * @param[in] low_power 1: IRLP = 1.
-     * @param[in] prescaler GTPR.PSC, acikken 1..255; kapatirken kullanilmaz.
-     * @retval SPL_OK              IrDA ayarlari guncellendi.
-     * @retval SPL_ERR_PARAM       Gecersiz arguman ya da acikken prescaler 0.
-     * @retval SPL_ERR_STATE       UE acik ya da baska mod / cerceve ayari cakisiyor.
-     * @retval SPL_ERR_UNSUPPORTED Ornekte IrDA modu yok.
+     * @param[in] prescaler GTPR.PSC, 1..255 while enabling; not used when disabling.
+     * @retval SPL_OK              IrDA settings updated.
+     * @retval SPL_ERR_PARAM       Invalid argument or prescaler 0 while enabling.
+     * @retval SPL_ERR_STATE       UE set or another mode / frame setting conflicts.
+     * @retval SPL_ERR_UNSUPPORTED No IrDA mode on the instance.
      */
     /* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
     SPL_Status USART_IrdaConfig(USART_TypeDef *instance, uint8_t enable, uint8_t low_power,
                                 uint8_t prescaler);
 
     /**
-     * @brief UE kapaliyken LIN modunu ve break algilamayi ayarlar.
+     * @brief Sets the LIN mode and break detection while UE = 0.
      *
-     * Yalniz USART/UART ornekleri. Acmak icin tek durma biti, 8 bit x16 calisma; senkron,
-     * smartcard, yari cift yonlu ve IrDA kapali olmali.
+     * USART/UART instances only. Enabling needs one stop bit, 8-bit x16 operation;
+     * synchronous, smartcard, half-duplex and IrDA disabled.
      *
-     * @param[in] instance    USART ornegi.
+     * Caller: break_irq = 1: the handler clears LBDF with USART_ClearModeFlags.
+     *
+     * @param[in] instance    USART instance.
      * @param[in] enable      1: LINEN = 1.
-     * @param[in] break_11bit 1: 11 bit, 0: 10 bit break algilama (LBDL).
+     * @param[in] break_11bit 1: 11-bit, 0: 10-bit break detection (LBDL).
      * @param[in] break_irq   1: LBDIE = 1.
-     * @retval SPL_OK              LIN ayarlari guncellendi.
-     * @retval SPL_ERR_PARAM       Gecersiz arguman.
-     * @retval SPL_ERR_STATE       UE acik ya da baska mod / cerceve ayari cakisiyor.
-     * @retval SPL_ERR_UNSUPPORTED Ornekte LIN modu yok.
+     * @retval SPL_OK              LIN settings updated.
+     * @retval SPL_ERR_PARAM       Invalid argument.
+     * @retval SPL_ERR_STATE       UE set or another mode / frame setting conflicts.
+     * @retval SPL_ERR_UNSUPPORTED No LIN mode on the instance.
      */
     /* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
     SPL_Status USART_LinConfig(USART_TypeDef *instance, uint8_t enable, uint8_t break_11bit,
                                uint8_t break_irq);
 
     /**
-     * @brief Break karakteri gonderimi ister.
+     * @brief Requests transmission of a break character.
      *
-     * LIN modunda break 13 bittir. UE ve TE acik olmali. Tek istek yazar, bitmesini
-     * beklemez.
+     * In LIN mode the break is 13 bits. UE and TE must be set. Writes one request, does not
+     * wait for completion.
      *
-     * @param[in] instance USART ornegi.
-     * @retval SPL_OK        RQR.SBKRQ yazildi.
-     * @retval SPL_BUSY      Onceki break istegi hala bekliyor (SBKF = 1).
-     * @retval SPL_ERR_STATE UE ya da TE kapali.
-     * @retval SPL_ERR_PARAM Gecersiz ornek.
+     * Caller: none beyond the file-header duties.
+     *
+     * @param[in] instance USART instance.
+     * @retval SPL_OK        RQR.SBKRQ written.
+     * @retval SPL_BUSY      The previous break request is still pending (SBKF = 1).
+     * @retval SPL_ERR_STATE UE or TE cleared.
+     * @retval SPL_ERR_PARAM Invalid instance.
      */
     /* Level: PARAM[F] STATE[F] BUSY[r] */
     SPL_Status USART_SendBreak(USART_TypeDef *instance);
 
     /**
-     * @brief UE kapaliyken otomatik hiz algilamayi ayarlar.
+     * @brief Sets automatic baud rate detection while UE = 0.
      *
-     * Yalniz USART/UART ornekleri.
+     * USART/UART instances only.
      *
-     * ERRATA ES0431 2.12.3 / ES0430 2.16.3 / ES0523 2.12.3: alim sirasinda ABREN'i temizlemek
-     * veriyi bozar; burada ABREN yalniz UE = 0 iken degisir (aksi halde STATE), bu yuzden alim
-     * sirasinda hic temizlenmez.
+     * ERRATA ES0431 2.12.3 / ES0430 2.16.3 / ES0523 2.12.3: clearing ABREN during reception
+     * corrupts the data; here ABREN changes only while UE = 0 (else STATE), so it is never
+     * cleared during reception.
      *
-     * @param[in] instance USART ornegi.
+     * Caller: none beyond the file-header duties.
+     *
+     * @param[in] instance USART instance.
      * @param[in] enable   1: ABREN = 1.
-     * @param[in] mode     ABRMODE: 0 baslangic biti, 1 dusen kenar, 2 0x7F cerceve,
-     *                     3 0x55 cerceve.
-     * @retval SPL_OK              Otomatik hiz ayarlari guncellendi.
-     * @retval SPL_ERR_PARAM       Gecersiz ornek, enable ya da mode.
-     * @retval SPL_ERR_STATE       UE acik.
-     * @retval SPL_ERR_UNSUPPORTED Ornekte otomatik hiz algilama yok.
+     * @param[in] mode     ABRMODE: 0 start bit, 1 falling edge, 2 0x7F frame,
+     *                     3 0x55 frame.
+     * @retval SPL_OK              Auto baud settings updated.
+     * @retval SPL_ERR_PARAM       Invalid instance, enable or mode.
+     * @retval SPL_ERR_STATE       UE set.
+     * @retval SPL_ERR_UNSUPPORTED No automatic baud rate detection on the instance.
      */
     /* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
     SPL_Status USART_AutoBaudConfig(USART_TypeDef *instance, uint8_t enable, uint8_t mode);
 
     /**
-     * @brief Acik otomatik hiz algilama dongusunu yeniden baslatir.
+     * @brief Restarts an enabled automatic baud rate detection cycle.
      *
-     * @param[in] instance USART ornegi.
-     * @retval SPL_OK              RQR.ABRRQ yazildi.
-     * @retval SPL_ERR_STATE       Otomatik hiz algilama kapali (USART_AutoBaudConfig).
-     * @retval SPL_ERR_UNSUPPORTED Ornekte otomatik hiz algilama yok.
-     * @retval SPL_ERR_PARAM       Gecersiz ornek.
+     * Caller: none beyond the file-header duties.
+     *
+     * @param[in] instance USART instance.
+     * @retval SPL_OK              RQR.ABRRQ written.
+     * @retval SPL_ERR_STATE       Automatic baud rate detection disabled (USART_AutoBaudConfig).
+     * @retval SPL_ERR_UNSUPPORTED No automatic baud rate detection on the instance.
+     * @retval SPL_ERR_PARAM       Invalid instance.
      */
     /* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
     SPL_Status USART_AutoBaudRequest(USART_TypeDef *instance);
 
     /**
-     * @brief Otomatik hiz algilamanin tamamlanma ve hata durumunun anlik goruntusunu verir.
+     * @brief Gives a snapshot of the automatic baud rate detection completion and error.
      *
-     * @param[in]  instance USART ornegi.
+     * Caller: none beyond the file-header duties.
+     *
+     * @param[in]  instance USART instance.
      * @param[out] done     ABRF (0/1).
      * @param[out] error    ABRE (0/1).
-     * @retval SPL_OK              Iki cikti yazildi.
-     * @retval SPL_ERR_UNSUPPORTED Ornekte otomatik hiz algilama yok.
-     * @retval SPL_ERR_PARAM       Gecersiz ornek ya da NULL cikti.
+     * @retval SPL_OK              Both outputs written.
+     * @retval SPL_ERR_UNSUPPORTED No automatic baud rate detection on the instance.
+     * @retval SPL_ERR_PARAM       Invalid instance or NULL output.
      */
     /* Level: PARAM[F] UNSUPPORTED[F] */
     SPL_Status USART_AutoBaudStatus(USART_TypeDef *instance, uint8_t *done, uint8_t *error);
 
     /**
-     * @brief UE kapaliyken Stop modundan uyandirmayi ayarlar.
+     * @brief Sets wake-up from Stop mode while UE = 0.
      *
-     * G4'teki butun USART/UART/LPUART orneklerinde vardir.
+     * Present on every USART/UART/LPUART instance of the G4.
      *
-     * @param[in] instance USART ornegi.
+     * Caller: kernel clock that keeps running in Stop (HSI16 or LSE source, RCC); EXTI / NVIC
+     * setup for the wake-up and clearing WUF with USART_ClearModeFlags.
+     *
+     * @param[in] instance USART instance.
      * @param[in] enable   1: UESM = 1.
-     * @param[in] source   WUS: 0 adres eslesmesi, 2 baslangic biti, 3 RXNE; 1 ayrilmis.
+     * @param[in] source   WUS: 0 address match, 2 start bit, 3 RXNE; 1 reserved.
      * @param[in] irq      1: WUFIE = 1.
-     * @retval SPL_OK              Uyandirma ayarlari guncellendi.
-     * @retval SPL_ERR_PARAM       Gecersiz ornek, mantiksal deger ya da kaynak.
-     * @retval SPL_ERR_STATE       UE acik.
-     * @retval SPL_ERR_UNSUPPORTED Ornekte Stop modundan uyandirma yok.
+     * @retval SPL_OK              Wake-up settings updated.
+     * @retval SPL_ERR_PARAM       Invalid instance, boolean value or source.
+     * @retval SPL_ERR_STATE       UE set.
+     * @retval SPL_ERR_UNSUPPORTED No wake-up from Stop on the instance.
      */
     /* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
     SPL_Status USART_WakeupConfig(USART_TypeDef *instance, uint8_t enable, uint8_t source,
                                   uint8_t irq);
 
     /**
-     * @brief UE kapaliyken alici zaman asimini ve smartcard blok uzunlugunu ayarlar.
+     * @brief Sets the receiver timeout and the smartcard block length while UE = 0.
      *
-     * Yalniz USART/UART ornekleri. RTOF/EOBF USART_ModeFlags ile izlenir.
+     * USART/UART instances only. RTOF/EOBF are watched with USART_ModeFlags.
      *
-     * @param[in] instance     USART ornegi.
+     * Caller: clear RTOF / EOBF with USART_ClearModeFlags after each event.
+     *
+     * @param[in] instance     USART instance.
      * @param[in] enable       1: RTOEN = 1.
-     * @param[in] timeout      Bit zamani cinsinden, 24 bit ile sinirli.
+     * @param[in] timeout      In bit times, limited to 24 bits.
      * @param[in] block_length RTOR.BLEN.
-     * @retval SPL_OK              Zaman asimi ayarlari guncellendi.
-     * @retval SPL_ERR_PARAM       Gecersiz ornek, enable ya da timeout.
-     * @retval SPL_ERR_STATE       UE acik.
-     * @retval SPL_ERR_UNSUPPORTED Ornekte alici zaman asimi yok (LPUART1).
+     * @retval SPL_OK              Timeout settings updated.
+     * @retval SPL_ERR_PARAM       Invalid instance, enable or timeout.
+     * @retval SPL_ERR_STATE       UE set.
+     * @retval SPL_ERR_UNSUPPORTED No receiver timeout on the instance (LPUART1).
      */
     /* Level: PARAM[F] STATE[F] UNSUPPORTED[F] */
     SPL_Status USART_RxTimeoutConfig(USART_TypeDef *instance, uint8_t enable, uint32_t timeout,
                                      uint8_t block_length);
 
     /**
-     * @brief UE kapaliyken cok islemcili sessiz modu ve adres algilamayi ayarlar.
+     * @brief Sets the multiprocessor mute mode and address detection while UE = 0.
      *
-     * @param[in] instance     USART ornegi.
+     * Caller: none beyond the file-header duties.
+     *
+     * @param[in] instance     USART instance.
      * @param[in] enable       1: MME = 1.
-     * @param[in] address_mark 0: bos hat, 1: adres isareti ile uyanma (WAKE).
-     * @param[in] address      CR2.ADD; 4 bit modda <= 15.
-     * @param[in] addr7        1: 7 bit adres karsilastirma (ADDM7), 0: 4 bit.
-     * @retval SPL_OK        Sessiz mod ve adres ayarlari guncellendi.
-     * @retval SPL_ERR_PARAM Gecersiz ornek, mantiksal deger ya da adres.
-     * @retval SPL_ERR_STATE UE acik.
+     * @param[in] address_mark 0: idle line, 1: wake-up on address mark (WAKE).
+     * @param[in] address      CR2.ADD; <= 15 in 4-bit mode.
+     * @param[in] addr7        1: 7-bit address comparison (ADDM7), 0: 4-bit.
+     * @retval SPL_OK        Mute mode and address settings updated.
+     * @retval SPL_ERR_PARAM Invalid instance, boolean value or address.
+     * @retval SPL_ERR_STATE UE set.
      */
     /* Level: PARAM[F] STATE[F] */
     SPL_Status USART_MuteConfig(USART_TypeDef *instance, uint8_t enable, uint8_t address_mark,
                                 uint8_t address, uint8_t addr7);
 
     /**
-     * @brief Sessiz moda giris ister.
+     * @brief Requests entry into mute mode.
      *
-     * Sessiz mod once USART_MuteConfig ile acilmis olmali. RWU USART_ModeFlags ile izlenir.
+     * Mute mode must have been enabled with USART_MuteConfig. RWU is watched with
+     * USART_ModeFlags.
      *
-     * @param[in] instance USART ornegi.
-     * @retval SPL_OK        RQR.MMRQ yazildi.
-     * @retval SPL_ERR_STATE Cok islemcili sessiz mod kapali.
-     * @retval SPL_ERR_PARAM Gecersiz ornek.
+     * Caller: none beyond the file-header duties.
+     *
+     * @param[in] instance USART instance.
+     * @retval SPL_OK        RQR.MMRQ written.
+     * @retval SPL_ERR_STATE Multiprocessor mute mode disabled.
+     * @retval SPL_ERR_PARAM Invalid instance.
      */
     /* Level: PARAM[F] STATE[F] */
     SPL_Status USART_EnterMute(USART_TypeDef *instance);
@@ -703,28 +797,32 @@ extern "C"
     (USART_MODE_FLAGS_CLEARABLE | USART_ISR_ABRE | USART_ISR_ABRF | USART_ISR_SBKF |               \
      USART_ISR_RWU | USART_ISR_TCBGT)
     /**
-     * @brief Genisletilmis iletisim modlarina ait durum bayraklarinin anlik goruntusunu verir.
+     * @brief Gives a snapshot of the status flags of the extended communication modes.
      *
-     * @param[in]  instance USART ornegi.
+     * Caller: none beyond the file-header duties.
+     *
+     * @param[in]  instance USART instance.
      * @param[out] flags    ISR & USART_MODE_FLAGS.
-     * @retval SPL_OK        Goruntu yazildi.
-     * @retval SPL_ERR_PARAM Gecersiz ornek ya da NULL cikti.
+     * @retval SPL_OK        Snapshot written.
+     * @retval SPL_ERR_PARAM Invalid instance or NULL output.
      */
     /* Level: PARAM[F] */
     SPL_Status USART_ModeFlags(USART_TypeDef *instance, uint32_t *flags);
 
     /**
-     * @brief Secili genisletilmis mod bayraklarini dogrudan W1C yazimiyla temizler.
+     * @brief Clears the selected extended mode flags with a direct W1C write.
      *
-     * ICR bir kez yazilir, donmeden once ISR geri okunur. LBDF/RTOF/EOBF USART/UART'ta, UDR
-     * yalniz USART1..3'te, CMF/WUF butun orneklerde vardir (RM0440 Tablo 370).
+     * ICR is written once, ISR is read back before return. LBDF/RTOF/EOBF exist on USART/UART,
+     * UDR on USART1..3 only, CMF/WUF on every instance (RM0440 Table 370).
      *
-     * @param[in] instance USART ornegi.
-     * @param[in] flags    USART_MODE_FLAGS_CLEARABLE'in bos olmayan, ornekte bulunan alt
-     *                     kumesi.
-     * @retval SPL_OK              Secili bayraklar temizlendi.
-     * @retval SPL_ERR_PARAM       Gecersiz ornek, bos maske ya da temizlenemeyen bit.
-     * @retval SPL_ERR_UNSUPPORTED Istenen bayrak ornekte yok.
+     * Caller: none beyond the file-header duties.
+     *
+     * @param[in] instance USART instance.
+     * @param[in] flags    Non-empty subset of USART_MODE_FLAGS_CLEARABLE present on the
+     *                     instance.
+     * @retval SPL_OK              Selected flags cleared.
+     * @retval SPL_ERR_PARAM       Invalid instance, empty mask or non-clearable bit.
+     * @retval SPL_ERR_UNSUPPORTED Requested flag not on the instance.
      */
     /* Level: PARAM[F] UNSUPPORTED[F] */
     SPL_Status USART_ClearModeFlags(USART_TypeDef *instance, uint32_t flags);

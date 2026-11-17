@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 #ifndef STM32G4_FMAC_H
 #define STM32G4_FMAC_H
 #include <stdint.h>
@@ -9,19 +10,23 @@ extern "C"
 {
 #endif
 
-/* Filter math accelerator (FMAC, RM0440 Rev 9 section 18). Single instance,
- * present on every STM32G4 SKU. FIR and IIR (direct form 1) filters with
- * Q1.15 data; no float, no static state, no waits.
- * Caller duties (not done here): AHB clock RCC_AHB1ENR.FMACEN (RCC module),
- * NVIC (FMAC_IRQn) and DMA/DMAMUX channels when RIEN/WIEN or DMAREN/DMAWEN
- * are used. Serialize callers: no two APIs may run concurrently (for
- * example a TryRead in an ISR and FilterStop in the main loop).
- * Typical flow: FMAC_ConfigBuffers -> FMAC_ControlConfig(0 or error IEs) ->
+/* Filter math accelerator driver for STM32G4 (FMAC, RM0440 Rev 9 section 18).
+ * Scope: single instance, present on every STM32G4 SKU. FIR and IIR (direct form 1) filters
+ * with Q1.15 data; buffer layout, preload, start / stop and the polling data path.
+ * Usage: FMAC_ConfigBuffers -> FMAC_ControlConfig(0 or error IEs) ->
  * FMAC_LoadX2 (coefficients) [-> FMAC_LoadX1 / FMAC_LoadY] ->
  * FMAC_ControlConfig(data IEs / DMA) -> FMAC_FilterStart ->
  * FMAC_TryWrite / FMAC_TryRead ... -> FMAC_FilterStop.
+ * Common rules: no float, no dynamic memory, no static state, no function waits (BUSY /
+ * WOULD_BLOCK are returned instead); output parameters are written only on OK.
  * Error flags (OVFL, UNFL, SAT) are cleared ONLY by FMAC_Reset (RM0440
  * 18.4.6), which also stops the function and resets the buffer pointers.
+ * Caller duties (all APIs; not done by the driver):
+ *  - Clock: AHB clock RCC_AHB1ENR.FMACEN (RCC module).
+ *  - Interrupts / DMA: NVIC (FMAC_IRQn) and DMA/DMAMUX channels when RIEN/WIEN or
+ *    DMAREN/DMAWEN are used.
+ *  - Serialize callers: no two APIs may run concurrently (for example a TryRead in an ISR and
+ *    FilterStop in the main loop).
  * Contract: Docs/v0.13_FMAC_CONTRACT.md. */
 
 /* FMAC_PARAM.FUNC values (RM0440 18.4.4). */
@@ -67,11 +72,13 @@ extern "C"
      * watermark > 3, base + size >= 256 (RM0440 18.3.2), X2 overlaps X1 or
      * Y, or X1 and Y overlap without coinciding exactly (same base and
      * size: the RM0440 18.3.8 memory-saving FIR layout). OK otherwise. */
+    /* Caller: none. */
     /* Level: PARAM[r] */
     SPL_Status FMAC_LayoutCheck(const FMAC_LayoutTypeDef *layout);
     /* Writes X1BUFCFG, X2BUFCFG, YBUFCFG (reserved bits 0) after
      * FMAC_LayoutCheck. Requires START = 0 (RM0440 18.4.1-18.4.3):
      * filter running => STATE; load in progress or reset pending => BUSY. */
+    /* Caller: bound the BUSY retries (reset / load completes only while the FMAC is clocked). */
     /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status FMAC_ConfigBuffers(const FMAC_LayoutTypeDef *layout);
     /* CR = flags (subset of FMAC_CR_CONFIG_ALL), RESET written 0. PARAM for
@@ -79,11 +86,14 @@ extern "C"
      * one method per direction). DMAREN/DMAWEN can change only with
      * START = 0 (RM0440 18.4.5): a change while START = 1 => STATE.
      * Reset pending => BUSY. Never touches PARAM. */
+    /* Caller: set up the NVIC line or the DMA channels before enabling their requests. */
     /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status FMAC_ControlConfig(uint32_t flags);
     /* CR.RESET = 1, CR configuration bits kept. Resets pointers, SR (clears
      * OVFL/UNFL/SAT) and PARAM incl. START (RM0440 18.4.5). Self-clearing:
      * poll FMAC_GetState until it is not FMAC_STATE_RESET. Always OK. */
+    /* Caller: poll FMAC_GetState (bounded) until it is not FMAC_STATE_RESET before the next call;
+     * buffers, coefficients and the filter function must be loaded again. */
     /* Level: - */
     SPL_Status FMAC_Reset(void);
 
@@ -95,11 +105,15 @@ extern "C"
      * STATE: filter running; RIEN, WIEN, DMAREN or DMAWEN set (RM0440 18.3.5
      * recommends them off during initialization); n (+ m) larger than the
      * configured buffer size. BUSY: reset pending or a load in progress. */
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status FMAC_LoadX1(const int16_t *data, uint8_t n);
     /* X2 = b[0..n-1] followed by a[0..m-1] (IIR feedback; FIR: m = 0). */
+    /* Caller: coefficients in Q1.15 scaled for the gain r used at FMAC_FilterStart (overflow is
+     * reported only as SAT / clipped output). */
     /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status FMAC_LoadX2(const int16_t *b, uint8_t n, const int16_t *a, uint8_t m);
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status FMAC_LoadY(const int16_t *data, uint8_t n);
 
@@ -111,29 +125,37 @@ extern "C"
      * layout invalid, IIR with X1/Y overlapping, DMAWEN with FULL_WM != 0 or
      * DMAREN with EMPTY_WM != 0 (RM0440 18.4.1/18.4.3).
      * BUSY: reset pending or a load in progress. */
+    /* Caller: DMA channels ready before this call when DMAREN / DMAWEN are set; check SAT when the
+     * output must not saturate (FMAC_GetFlags). */
     /* Level: PARAM[F] STATE[r] BUSY[r] */
     SPL_Status FMAC_FilterStart(uint32_t func, uint8_t p, uint8_t q, uint8_t r);
     /* START = 0 by software; FUNC/P/Q/R kept (RM0440 18.4.4). Stops any
      * function. No write when START is already 0. Always OK. */
+    /* Caller: stop the DMA channels first; read the remaining output with FMAC_TryRead. */
     /* Level: - */
     SPL_Status FMAC_FilterStop(void);
 
     /* Polling data path, never stalls. Reads PARAM before SR.
      * TryWrite: BUSY (reset/load), STATE (no filter running), ERR_HW (OVFL
      * set), WOULD_BLOCK (X1FULL = 1), else one WDATA write. */
+    /* Caller: bound the WOULD_BLOCK retries (an unread Y buffer stalls the filter); after ERR_HW
+     * FMAC_Reset and reload. */
     /* Level: STATE[r] HW[r] BUSY[r] WOULD_BLOCK[r] */
     SPL_Status FMAC_TryWrite(int16_t sample);
     /* TryRead: PARAM (NULL), BUSY (reset/load), ERR_HW (UNFL set), OK with
      * one RDATA read when YEMPTY = 0 (also after FilterStop), WOULD_BLOCK
      * when YEMPTY = 1 and a filter runs, STATE when YEMPTY = 1 and no filter
      * runs. *sample written on OK only. */
+    /* Caller: bound the WOULD_BLOCK retries; after ERR_HW FMAC_Reset and reload. */
     /* Level: PARAM[F] STATE[r] HW[r] BUSY[r] WOULD_BLOCK[r] */
     SPL_Status FMAC_TryRead(int16_t *sample);
 
     /* *flags = SR & FMAC_FLAGS_ALL. No side effects. */
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] */
     SPL_Status FMAC_GetFlags(uint32_t *flags);
     /* *state = one of FMAC_STATE_*. No side effects. */
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] */
     SPL_Status FMAC_GetState(uint32_t *state);
 

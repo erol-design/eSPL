@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 #ifndef STM32G4_CORDIC_H
 #define STM32G4_CORDIC_H
 #include <stdint.h>
@@ -9,13 +10,21 @@ extern "C"
 {
 #endif
 
-/* CORDIC coprocessor (RM0440 Rev 9 section 17). Single instance on every
- * supported SKU, no static state, no waits, integer only.
- * Caller duties: AHB clock RCC_AHB1ENR.CORDICEN; NVIC/DMA setup for those
- * modes; one caller-owned CORDIC_ContextTypeDef shared by all calls;
- * serialize callers (not reentrant). Arguments are written pre-scaled and
- * results are returned raw (RM0440 17.3.4). The driver never reads
- * CORDIC_RDATA before RRDY=1, so the AHB bus is never stalled (17.3.7).
+/* CORDIC coprocessor driver (RM0440 Rev 9 section 17).
+ * Scope: the single CORDIC instance on every supported SKU; integer only; q1.15 pack helpers.
+ * Usage: CORDIC_ContextInit, CORDIC_Config, then CORDIC_TryWrite / CORDIC_TryRead pairs
+ * (polling), or CORDIC_InterruptConfig / CORDIC_DmaConfig for those modes.
+ * Common rules: no function waits; no static state (outstanding-operation count lives in the
+ * caller's CORDIC_ContextTypeDef); no clock is enabled here. Arguments are written pre-scaled
+ * and results are returned raw (RM0440 17.3.4). The driver never reads CORDIC_RDATA before
+ * RRDY=1, so the AHB bus is never stalled (17.3.7).
+ * Caller duties (all APIs):
+ *  - Clock: AHB clock RCC_AHB1ENR.CORDICEN before any call (RCC module).
+ *  - State: one caller-owned CORDIC_ContextTypeDef shared by all calls.
+ *  - Values: scale arguments before writing and undo the scaling on results (multiply phase
+ *    results by pi, etc.); the driver does no arithmetic on values.
+ *  - Concurrency: not reentrant; serialize callers. With IEN=1 the ISR owns the result path
+ *    (thread code then does not call CORDIC_TryRead).
  * Contract: Docs/v0.13_CORDIC_CONTRACT.md. */
 
 /* CORDIC_CSR.FUNC values (RM0440 17.4.1). */
@@ -38,7 +47,8 @@ extern "C"
     {
         uint32_t function;   /* CORDIC_FUNC_x. */
         uint32_t precision;  /* PRECISION = iterations / 4, 1..15 (Table 118). Best accuracy at 6
-                              * (sqrt: 3); higher values were less accurate on silicon (contract). */
+                              * (sqrt: 3); higher values were less accurate on silicon
+                              * (contract). */
         uint32_t scale;      /* SCALE n; allowed range depends on function. */
         uint32_t arg_size;   /* CORDIC_SIZE_x. */
         uint32_t res_size;   /* CORDIC_SIZE_x. */
@@ -54,17 +64,26 @@ extern "C"
     } CORDIC_ContextTypeDef;
 
     /* outstanding = 0. No register access. */
+    /* Caller: call once before first use and after a CORDIC reset; a stale RRDY is drained with
+     * CORDIC_TryRead. */
     /* Level: PARAM[F] */
     SPL_Status CORDIC_ContextInit(CORDIC_ContextTypeDef *ctx);
     /* One CSR write (IEN kept, DMA bits 0). PARAM: NULL or field rule broken
      * (see contract). STATE: DMA enabled, RRDY=1, or outstanding != 0. */
+    /* Caller: after a function change with 32-bit arguments write ARG2 explicitly
+     * (arg_writes = 2) for the first calculation (ARG2 value after a FUNC change is not
+     * specified, contract O4; not enforced). */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status CORDIC_Config(const CORDIC_ContextTypeDef *ctx, const CORDIC_ConfigTypeDef *config);
     /* IEN = enable (interrupt while RRDY=1). Other fields kept. */
+    /* Caller: NVIC priority / enable of CORDIC_IRQn and its handler, which reads the result
+     * (CORDIC_TryRead) to clear RRDY. */
     /* Level: PARAM[F] */
     SPL_Status CORDIC_InterruptConfig(uint8_t enable);
     /* DMAREN/DMAWEN. Entering DMA mode needs outstanding=0 and RRDY=0 (STATE).
-     * Configure the DMA channels first: DMAWEN=1 requests data at once. */
+     * DMAWEN=1 requests data at once. */
+    /* Caller: configure the DMA / DMAMUX channels first; disable DMA mode only after the
+     * channels completed (the context does not count DMA-started calculations, contract O3). */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status CORDIC_DmaConfig(const CORDIC_ContextTypeDef *ctx, uint8_t read_enable,
                                 uint8_t write_enable);
@@ -74,17 +93,21 @@ extern "C"
      * PARAM: NULL or argument outside the RM range for FUNC/SCALE.
      * STATE: DMA enabled, two operations outstanding (read first), or CSR
      * not a valid configuration. */
+    /* Caller: none beyond the file-header duties. */
     /* Level: PARAM[F] STATE[r] */
     SPL_Status CORDIC_TryWrite(CORDIC_ContextTypeDef *ctx, uint32_t wdata1, uint32_t wdata2);
     /* Reads the result(s) of the oldest calculation when RRDY=1: rdata1 = first
      * RDATA word, rdata2 = second word (NRES=1 only; may be NULL otherwise).
      * WOULD_BLOCK: RRDY=0 with a calculation outstanding (RDATA not touched).
      * STATE: DMA enabled, or RRDY=0 and nothing outstanding. */
+    /* Caller: bound the poll (a stopped CORDIC clock keeps RRDY=0). */
     /* Level: PARAM[F] STATE[r] WOULD_BLOCK[r] */
     SPL_Status CORDIC_TryRead(CORDIC_ContextTypeDef *ctx, uint32_t *rdata1, uint32_t *rdata2);
     /* q1.15 packing helpers (pure integer, no register access). */
+    /* Caller: none. */
     /* Level: PARAM[F] */
     SPL_Status CORDIC_PackQ15(int16_t arg1, int16_t arg2, uint32_t *wdata);
+    /* Caller: none. */
     /* Level: PARAM[F] */
     SPL_Status CORDIC_UnpackQ15(uint32_t rdata, int16_t *res1, int16_t *res2);
 

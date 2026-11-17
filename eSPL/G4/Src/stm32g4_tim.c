@@ -1,3 +1,7 @@
+/* SPDX-License-Identifier: MIT */
+/* TIM driver (RM0440 Rev 9 sections 29..32). Instance families are decided with SKU guards
+ * (#if defined(TIMx)); the v0.10 extension is compiled only with TIM_SPL_EXTENDED.
+ * Public contract: stm32g4_tim.h, Docs/v0.10_TIM_CONTRACT.md. */
 #define SPL_LIBRARY_BUILD 1
 #include "stm32g4_tim.h"
 
@@ -112,7 +116,7 @@ SPL_Status TIM_BaseInit(TIM_TypeDef *t, const TIM_BaseInitTypeDef *cfg)
                   (cfg->auto_reload_preload > 1U) || (cfg->prescaler > 0xFFFFU) ||
                   (cfg->period == 0U) || (Tim_WidthValid(t, cfg->period) == 0U)),
                 SPL_ERR_PARAM);
-    /* Issue #27 politikasi: yazilmis CCRx sinanmaz; periyot karsilastirmanin altina inebilir. */
+    /* Issue #27 policy: the written CCRx are not checked; the period may drop below a compare. */
     if ((t->CR1 & TIM_CR1_CEN) != 0U)
     {
         return SPL_ERR_STATE;
@@ -221,7 +225,7 @@ SPL_Status TIM_OutputCompareInit(TIM_TypeDef *t, uint8_t ch, const TIM_OCInitTyp
                     (cfg->mode == (uint32_t)TIM_OC_TOGGLE) ||
                     (cfg->mode == (uint32_t)TIM_OC_PWM1) || (cfg->mode == (uint32_t)TIM_OC_PWM2))),
                 SPL_ERR_PARAM);
-    /* Issue #27 politikasi: compare ARR'ye gore sinanmaz (CCR > ARR gecerli), yalniz genislik. */
+    /* Issue #27 policy: compare not checked against ARR (CCR > ARR is valid), width only. */
     ccer_mask = (uint32_t)1U << (4U * ((uint32_t)ch - 1U));
     if (((t->CR1 & TIM_CR1_CEN) != 0U) || ((t->CCER & ccer_mask) != 0U))
     {
@@ -294,10 +298,10 @@ SPL_Status TIM_SetCompare(TIM_TypeDef *t, uint8_t ch, uint32_t compare)
     /* Reject invalid parameters before hardware access. */
     SPL_REQUIRE(!((Tim_ChannelValid(t, ch) == 0U) || (Tim_WidthValid(t, compare) == 0U)),
                 SPL_ERR_PARAM);
-    /* Issue #27 politikasi (HRTIM ile ayni): ARR ile iliski sinanmaz, yalniz register
-     * genisligi. CCR > ARR gecerli bir degerdir: PWM kipinde OCxREF sabit kalir, karsilastirma
-     * kipinde periyot icinde eslesme olmaz. Iki ayri register yazimi atomik degildir; OCxPE /
-     * ARPE = 1 iken etkin degerler bir sonraki update olayinda birlikte yuklenir. */
+    /* Issue #27 policy (same as HRTIM): the relation to ARR is not checked, register width
+     * only. CCR > ARR is a valid value: in PWM mode OCxREF stays fixed, in compare mode there is
+     * no match in the period. Two separate register writes are not atomic; with OCxPE /
+     * ARPE = 1 the active values load together at the next update event. */
     *Tim_Ccr(t, ch) = compare;
     return SPL_OK;
 }
@@ -327,12 +331,12 @@ SPL_Status TIM_GetCapture(TIM_TypeDef *t, uint8_t ch, uint32_t *capture)
     *capture = *Tim_Ccr(t, ch);
     return SPL_OK;
 }
-/* v0.15 (CCL-2 ZMN-23): MOE geri okumasinda en cok okuma sayisi. Olculen gecikme 1 okuma
- * (G431 Rev X); 4 okuma payli ust sinirdir, kirilma girisi etkinse hepsi 0 gorur. */
+/* v0.15 (CCL-2 ZMN-23): maximum number of reads in the MOE read-back. Measured delay 1 read
+ * (G431 Rev X); 4 reads is an upper bound with margin; with the break input active all read 0. */
 #define TIM_MOE_READBACK_READS 4U
-/* v0.15 (CCL-2 ZMN-23): bu zamanlayicinin kirilma bayraklari (BIF; varsa B2IF ve SBIF).
- * Bayrak kuruluyken kirilma olmus ve ele alinmamis demektir; MOE acilmaz. Eski kucuk host
- * mock'unda bu bitler yoksa maske 0 olur. */
+/* v0.15 (CCL-2 ZMN-23): break flags of this timer (BIF; B2IF and SBIF where present). A set
+ * flag means a break happened and was not handled; MOE is not set. In the old minimal host mock
+ * these bits do not exist and the mask is 0. */
 static uint32_t Tim_BreakFlags(const TIM_TypeDef *t)
 {
 #if defined(TIM_SPL_EXTENDED)
@@ -360,9 +364,9 @@ SPL_Status TIM_MainOutputEnable(TIM_TypeDef *t, uint8_t enable)
         {
             return SPL_BUSY;
         }
-        /* v0.15 (CCL-2 ZMN-23): kirilma bayragi kuruluyken hicbir sey yazilmaz. Cagiran once
-         * kirilmanin sebebini giderir, bayragi TIM_ClearFlags ile temizler (giris hala etkinse
-         * bayrak temizlenmez, RM0440 29.6.5) ve sonra tekrar dener. Otomatik temizleme yok. */
+        /* v0.15 (CCL-2 ZMN-23): nothing is written while a break flag is set. The caller first
+         * removes the break cause, clears the flag with TIM_ClearFlags (it does not clear while
+         * the input is still active, RM0440 29.6.5) and then retries. No automatic clearing. */
         if ((t->SR & Tim_BreakFlags(t)) != 0U)
         {
             return SPL_ERR_HW;
@@ -378,11 +382,12 @@ SPL_Status TIM_MainOutputEnable(TIM_TypeDef *t, uint8_t enable)
      * Table 276). Writing 0 keeps the break armed. Any BDTR write also
      * freezes LOCK (RM0440 29.6.20): run TIM_BreakDeadTimeInit first. */
     t->BDTR = bdtr & (uint32_t)~TIM_BDTR_DSRM_BITS;
-    /* v0.15 (CCL-2 ZMN-23): kirilma girisi etkinken donanim MOE'yi kurmaz (RM0440 29.3.16);
-     * bayrak okumasi ile yazim arasinda gelen kirilma da burada gorulur. Geri okuma: MOE
-     * tutmadiysa basari donulmez. MOE yazimi bir esitleme gecikmesiyle gorunur: NUCLEO-G431RB
-     * Rev X olcumu (2026-11-12) yazimdan hemen sonraki ilk okuma 0, ikinci okuma 1. Bu yuzden
-     * sabit sayida okuma yapilir (sinirli, dis olay beklenmez); MOE gorulunce hemen OK. */
+    /* v0.15 (CCL-2 ZMN-23): hardware does not set MOE while a break input is active (RM0440
+     * 29.3.16); a break arriving between the flag read and the write is also seen here. Read
+     * back: no success unless MOE latched. The MOE write becomes visible after a
+     * resynchronisation delay: NUCLEO-G431RB Rev X measurement (2026-11-12), first read right
+     * after the write 0, second read 1. Hence a fixed number of reads (bounded, no external
+     * event awaited); OK as soon as MOE is seen. */
     if (enable != 0U)
     {
         uint32_t i;

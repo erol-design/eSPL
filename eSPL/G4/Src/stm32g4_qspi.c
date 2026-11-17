@@ -1,9 +1,12 @@
+/* SPDX-License-Identifier: MIT */
 #define SPL_LIBRARY_BUILD 1
 #include "stm32g4_qspi.h"
 
-/* Quad-SPI driver, RM0440 Rev 9 section 20. Contract:
- * Docs/v0.12_QSPI_CONTRACT.md. Every register write happens only after all
- * parameter and state checks passed. */
+/* Quad-SPI driver, RM0440 Rev 9 section 20. Built only where CMSIS defines QUADSPI; elsewhere
+ * every API is a stub returning SPL_ERR_UNSUPPORTED. The ES0430 workarounds are built for the
+ * G471/473/474/483/484 dies only. Every register write happens only after all parameter and
+ * state checks passed.
+ * Public contract: stm32g4_qspi.h, Docs/v0.12_QSPI_CONTRACT.md. */
 
 #if defined(QUADSPI)
 

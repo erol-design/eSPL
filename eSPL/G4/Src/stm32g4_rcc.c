@@ -1,3 +1,8 @@
+/* SPDX-License-Identifier: MIT */
+/* Reset and clock control driver (RM0440 Rev 9 chapter 7). Variants: peripheral enable /
+ * reset bits and kernel selectors absent from the CMSIS header of the SKU return
+ * SPL_ERR_UNSUPPORTED; the v0.11 clock-tree APIs need the full CMSIS header (RCC_CR_HSION).
+ * Public contract: stm32g4_rcc.h, Docs/v0.11_RCC_CONTRACT.md. */
 #define SPL_LIBRARY_BUILD 1
 #include "stm32g4_rcc.h"
 SPL_Status RCC_GpioClockEnable(GPIO_TypeDef *port)
@@ -70,7 +75,7 @@ SPL_Status RCC_GetClocks(uint32_t hse_hz, RCC_ClocksTypeDef *clocks)
     uint32_t apb1_div;
     uint32_t apb2_div;
 
-    SPL_REQUIRE(clocks != (RCC_ClocksTypeDef *)0, SPL_ERR_PARAM); /* Gecersiz cikti isaretcisi */
+    SPL_REQUIRE(clocks != (RCC_ClocksTypeDef *)0, SPL_ERR_PARAM); /* Invalid output pointer */
 
     cfgr = RCC->CFGR;
     src = cfgr & RCC_CFGR_SWS;
@@ -158,8 +163,8 @@ SPL_Status RCC_GetUsartKernelClock(const USART_TypeDef *instance, uint32_t hse_h
     SPL_Status result;
 
     SPL_REQUIRE(instance != (const USART_TypeDef *)0,
-                SPL_ERR_PARAM);                             /* Gecersiz MMIO taban adresi */
-    SPL_REQUIRE(kernel_hz != (uint32_t *)0, SPL_ERR_PARAM); /* Gecersiz cikti isaretcisi */
+                SPL_ERR_PARAM);                             /* Invalid MMIO base address */
+    SPL_REQUIRE(kernel_hz != (uint32_t *)0, SPL_ERR_PARAM); /* Invalid output pointer */
 
     if (instance == USART1)
     {
@@ -765,7 +770,7 @@ SPL_Status RCC_GetOscReady(RCC_OscTypeDef osc, uint8_t *ready)
     uint32_t on_bit;
     uint32_t rdy_bit;
 
-    SPL_REQUIRE(ready != (uint8_t *)0, SPL_ERR_PARAM); /* Gecersiz cikti adresi */
+    SPL_REQUIRE(ready != (uint8_t *)0, SPL_ERR_PARAM); /* Invalid output address */
     switch (osc)
     {
     case RCC_OSC_HSI16:
@@ -805,7 +810,7 @@ SPL_Status RCC_SetHseBypass(uint8_t bypass)
     uint32_t cr;
     uint32_t want;
 
-    SPL_REQUIRE(bypass <= 1U, SPL_ERR_PARAM); /* HSEBYP icin yalniz 0/1 */
+    SPL_REQUIRE(bypass <= 1U, SPL_ERR_PARAM); /* HSEBYP accepts 0/1 only */
     cr = RCC->CR;
     want = (bypass != 0U) ? RCC_CR_HSEBYP : 0U;
     if ((cr & RCC_CR_HSEBYP) == want)
@@ -843,7 +848,7 @@ SPL_Status RCC_ConfigPll(const RCC_PllConfigTypeDef *config, uint32_t hse_hz)
     uint32_t cr;
 
     SPL_REQUIRE(config != (const RCC_PllConfigTypeDef *)0,
-                SPL_ERR_PARAM); /* Gecersiz PLL konfig adresi */
+                SPL_ERR_PARAM); /* Invalid PLL config address */
     if (config->source == (uint32_t)RCC_PLLSRC_HSI16)
     {
         src_hz = RCC_HSI16_HZ;
@@ -851,7 +856,7 @@ SPL_Status RCC_ConfigPll(const RCC_PllConfigTypeDef *config, uint32_t hse_hz)
     else if (config->source == (uint32_t)RCC_PLLSRC_HSE)
     {
         SPL_REQUIRE((hse_hz >= RCC_HSE_MIN_HZ) && (hse_hz <= RCC_HSE_MAX_HZ),
-                    SPL_ERR_PARAM); /* HSE frekansi PLL calisma sinirlarini belirler. */
+                    SPL_ERR_PARAM); /* HSE frequency sets the PLL operating limits. */
         src_hz = hse_hz;
     }
     else
@@ -859,12 +864,12 @@ SPL_Status RCC_ConfigPll(const RCC_PllConfigTypeDef *config, uint32_t hse_hz)
         return SPL_ERR_PARAM;
     }
     SPL_REQUIRE((config->m >= 1U) && (config->m <= 16U) && (config->n >= 8U) && (config->n <= 127U),
-                SPL_ERR_PARAM); /* PLLM/PLLN kodlamasi ve sifira bolme riski. */
+                SPL_ERR_PARAM); /* PLLM/PLLN encoding and divide-by-zero risk. */
     SPL_REQUIRE((config->p >= 2U) && (config->p <= 31U) && (Rcc_IsEvenDivider(config->q) != 0U) &&
                     (Rcc_IsEvenDivider(config->r) != 0U),
-                SPL_ERR_PARAM); /* PLL cikis bolenleri gecerli olmali. */
+                SPL_ERR_PARAM); /* PLL output dividers must be valid. */
     SPL_REQUIRE((config->p_enable <= 1U) && (config->q_enable <= 1U) && (config->r_enable <= 1U),
-                SPL_ERR_PARAM); /* PLL cikis secimi yanlis anlasilmasin. */
+                SPL_ERR_PARAM); /* PLL output selection must be unambiguous. */
 
     /* Exact integer range checks: f_in = src / m, f_vco = src * n / m,
      * f_out = f_vco / div. Every output divider is checked, enabled or not. */
@@ -877,7 +882,7 @@ SPL_Status RCC_ConfigPll(const RCC_PllConfigTypeDef *config, uint32_t hse_hz)
                     (src_n <= (uint64_t)RCC_PLL_OUT_MAX_HZ * m * config->p) &&
                     (src_n <= (uint64_t)RCC_PLL_OUT_MAX_HZ * m * config->q) &&
                     (src_n <= (uint64_t)RCC_PLL_OUT_MAX_HZ * m * config->r),
-                SPL_ERR_PARAM); /* VCO ve tum PLL cikislari elektriksel sinirda. */
+                SPL_ERR_PARAM); /* VCO and all PLL outputs within electrical limits. */
 
     /* RM0440 7.2.4: configuration only while the PLL is fully stopped. */
     cr = RCC->CR;
@@ -971,7 +976,7 @@ SPL_Status RCC_GetPllReady(uint8_t *ready)
 {
     uint32_t cr;
 
-    SPL_REQUIRE(ready != (uint8_t *)0, SPL_ERR_PARAM); /* Gecersiz cikti adresi */
+    SPL_REQUIRE(ready != (uint8_t *)0, SPL_ERR_PARAM); /* Invalid output address */
     cr = RCC->CR;
     *ready = ((cr & RCC_CR_PLLRDY) != 0U) ? 1U : 0U;
     if ((cr & (RCC_CR_PLLON | RCC_CR_PLLRDY)) == 0U)
@@ -1062,7 +1067,7 @@ SPL_Status RCC_GetSysclkSource(RCC_SysclkTypeDef *source)
 {
     uint32_t sws;
 
-    SPL_REQUIRE(source != (RCC_SysclkTypeDef *)0, SPL_ERR_PARAM); /* Cikti isaretcisi gecersiz */
+    SPL_REQUIRE(source != (RCC_SysclkTypeDef *)0, SPL_ERR_PARAM); /* Output pointer invalid */
     sws = RCC->CFGR & RCC_CFGR_SWS;
     if (sws == RCC_CFGR_SWS_HSI)
     {
@@ -1528,7 +1533,7 @@ SPL_Status RCC_EnableCss(void)
 
 SPL_Status RCC_GetCssFlag(uint8_t *set)
 {
-    SPL_REQUIRE(set != (uint8_t *)0, SPL_ERR_PARAM); /* CSS fault cikti isaretcisi gecersiz */
+    SPL_REQUIRE(set != (uint8_t *)0, SPL_ERR_PARAM); /* CSS fault output pointer invalid */
     *set = ((RCC->CIFR & RCC_CIFR_CSSF) != 0U) ? 1U : 0U;
     return SPL_OK;
 }
@@ -1545,7 +1550,7 @@ SPL_Status RCC_ClearCssFlag(void)
 SPL_Status RCC_GetResetFlags(uint32_t *flags)
 {
     SPL_REQUIRE(flags != (uint32_t *)0,
-                SPL_ERR_PARAM); /* Reset nedenleri cikti isaretcisi gecersiz */
+                SPL_ERR_PARAM); /* Reset cause output pointer invalid */
     *flags = RCC->CSR & RCC_RESET_FLAGS;
     return SPL_OK;
 }

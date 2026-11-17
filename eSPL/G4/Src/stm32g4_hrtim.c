@@ -1,9 +1,11 @@
+/* SPDX-License-Identifier: MIT */
 #define SPL_LIBRARY_BUILD 1
 #include "stm32g4_hrtim.h"
 
-/* High-resolution timer HRTIM1, RM0440 Rev 9 section 28. Contract:
- * Docs/v0.14_HRTIM_CONTRACT.md. Every register write happens only after all
- * parameter and state checks passed. */
+/* High-resolution timer HRTIM1 driver, RM0440 Rev 9 section 28. Built only where CMSIS
+ * defines HRTIM1 (G474/G484/G414); elsewhere every API returns SPL_ERR_UNSUPPORTED. Every
+ * register write happens only after all parameter and state checks passed.
+ * Public contract: stm32g4_hrtim.h, Docs/v0.14_HRTIM_CONTRACT.md. */
 
 #if defined(HRTIM1)
 
@@ -110,7 +112,7 @@ SPL_Status HRTIM_DllCalibrationStart(void)
 
 SPL_Status HRTIM_DllReady(uint8_t *ready)
 {
-    /* NULL isaretci okuma/yazma etkisi hedef mimaride guvenilir bir hata degildir. */
+    /* A NULL pointer access is not a reliable fault on the target architecture. */
     SPL_REQUIRE(!(ready == (uint8_t *)0), SPL_ERR_PARAM);
     *ready = (uint8_t)Hrtim_DllReadyFlag();
     return SPL_OK;
@@ -118,8 +120,8 @@ SPL_Status HRTIM_DllReady(uint8_t *ready)
 
 SPL_Status HRTIM_DllPeriodic(uint8_t enable, uint32_t rate)
 {
-    /* Gecersiz alan / maske register semantigini bozabilir veya yanlis donanim durumuna yol
-     * acar. */
+    /* An invalid field / mask could break the register semantics or leave a wrong
+     * hardware state. */
     SPL_REQUIRE(!((enable > 1U) || ((enable != 0U) && (rate > HRTIM_CALRTE_MAX))), SPL_ERR_PARAM);
     if (enable == 0U)
     {
@@ -136,8 +138,8 @@ SPL_Status HRTIM_DllPeriodic(uint8_t enable, uint32_t rate)
 }
 
 /* 1 when every non-zero CMP1..4 of t fits the Table 232 limits of ckpsc.
- * Issue #27 politikasi: CMP ile PER birbirinden bagimsizdir; CMP > PER gecerli bir degerdir
- * (periyot icinde olay uretmez). Sinanan yalniz on bolucu tablosudur. */
+ * Issue #27 policy: CMP and PER are independent; CMP > PER is a valid value (it produces no
+ * event in the period). Only the prescaler table is checked. */
 static uint32_t Hrtim_ComparesFit(const HRTIM_Timerx_TypeDef *t, uint32_t ckpsc)
 {
     const uint32_t cmp[4] = {t->CMP1xR, t->CMP2xR, t->CMP3xR, t->CMP4xR};
@@ -160,11 +162,11 @@ SPL_Status HRTIM_TimerInit(uint32_t timer, const HRTIM_TimerInitTypeDef *cfg)
     HRTIM_Timerx_TypeDef *t;
     uint32_t cr;
 
-    /* NULL isaretci okuma/yazma etkisi hedef mimaride guvenilir bir hata degildir. */
+    /* A NULL pointer access is not a reliable fault on the target architecture. */
     SPL_REQUIRE(!((timer >= HRTIM_TIMER_COUNT) || (cfg == (const HRTIM_TimerInitTypeDef *)0)),
                 SPL_ERR_PARAM);
-    /* Gecersiz alan / maske register semantigini bozabilir veya yanlis donanim durumuna yol
-     * acar. */
+    /* An invalid field / mask could break the register semantics or leave a wrong
+     * hardware state. */
     SPL_REQUIRE(!((cfg->prescaler > HRTIM_CKPSC_MAX) || (cfg->repetition > HRTIM_REP_MAX) ||
                   (cfg->continuous > 1U) || (cfg->retrigger > 1U) || (cfg->preload > 1U) ||
                   (cfg->update_on_rep > 1U) || (Hrtim_InRange(cfg->prescaler, cfg->period) == 0U)),
@@ -198,11 +200,11 @@ SPL_Status HRTIM_SetPeriod(uint32_t timer, uint32_t period)
 {
     HRTIM_Timerx_TypeDef *t;
 
-    /* Gecersiz timer secimi register erisimini / olay maskesini bozabilir. */
+    /* An invalid timer selection would corrupt the register access / event mask. */
     SPL_REQUIRE(!(timer >= HRTIM_TIMER_COUNT), SPL_ERR_PARAM);
     t = Hrtim_Timer(timer);
-    /* Gecersiz alan / maske register semantigini bozabilir veya yanlis donanim durumuna yol
-     * acar. */
+    /* An invalid field / mask could break the register semantics or leave a wrong
+     * hardware state. */
     SPL_REQUIRE(!(Hrtim_InRange(Hrtim_Ckpsc(t), period) == 0U), SPL_ERR_PARAM);
     /* Running with PREEN = 0: PERxR takes effect at once. A period at or below the moving
      * counter would let it run to 0xFFFF before it wraps, and a counter read races the write
@@ -213,9 +215,10 @@ SPL_Status HRTIM_SetPeriod(uint32_t timer, uint32_t period)
     {
         return SPL_ERR_STATE;
     }
-    /* Issue #27 politikasi: HRTIM_SetCompare ile ayni kural, yalniz Tablo 232. Yazilmis CMP1..4
-     * sinanmaz; CMP > PER gecerlidir (periyot icinde olay yok). Iki ayri register yazimi atomik
-     * degildir: PREEN = 1 iken etkin degerler birlikte bir sonraki update olayinda yuklenir. */
+    /* Issue #27 policy: same rule as HRTIM_SetCompare, Table 232 only. The written CMP1..4
+     * are not checked; CMP > PER is valid (no event in the period). Two separate register
+     * writes are not atomic: with PREEN = 1 the active values load together at the next update
+     * event. */
     t->PERxR = period;
     return SPL_OK;
 }
@@ -226,16 +229,16 @@ SPL_Status HRTIM_SetCompare(uint32_t timer, uint32_t unit, uint32_t value)
     volatile uint32_t *reg;
     uint32_t ok;
 
-    /* Gecersiz timer secimi register erisimini / olay maskesini bozabilir. */
+    /* An invalid timer selection would corrupt the register access / event mask. */
     SPL_REQUIRE(!((timer >= HRTIM_TIMER_COUNT) || (unit < 1U) || (unit > 4U)), SPL_ERR_PARAM);
     t = Hrtim_Timer(timer);
     /* RM0440 28.3.4: 0 skips a pulse, allowed in CMP1 and CMP3 only. */
     ok = ((value == 0U) && ((unit == 1U) || (unit == 3U))) ? 1U
                                                            : Hrtim_InRange(Hrtim_Ckpsc(t), value);
-    /* Issue #27 politikasi: PER ile iliski sinanmaz; CMP > PER gecerli (periyot icinde
-     * eslesme olmaz, olay uretilmez). HRTIM_SetPeriod ile ayni kural. */
-    /* Gecersiz alan / maske register semantigini bozabilir veya yanlis donanim durumuna yol
-     * acar. */
+    /* Issue #27 policy: the relation to PER is not checked; CMP > PER is valid (no match and
+     * no event in the period). Same rule as HRTIM_SetPeriod. */
+    /* An invalid field / mask could break the register semantics or leave a wrong
+     * hardware state. */
     SPL_REQUIRE(!(ok == 0U), SPL_ERR_PARAM);
     reg = (unit == 1U)   ? &t->CMP1xR
           : (unit == 2U) ? &t->CMP2xR
@@ -257,12 +260,12 @@ SPL_Status HRTIM_OutputConfig(uint32_t timer, uint32_t output, const HRTIM_Outpu
     uint32_t value;
     uint32_t field;
 
-    /* NULL isaretci okuma/yazma etkisi hedef mimaride guvenilir bir hata degildir. */
+    /* A NULL pointer access is not a reliable fault on the target architecture. */
     SPL_REQUIRE(!((timer >= HRTIM_TIMER_COUNT) || (output < 1U) || (output > 2U) ||
                   (cfg == (const HRTIM_OutputTypeDef *)0)),
                 SPL_ERR_PARAM);
-    /* Gecersiz alan / maske register semantigini bozabilir veya yanlis donanim durumuna yol
-     * acar. */
+    /* An invalid field / mask could break the register semantics or leave a wrong
+     * hardware state. */
     SPL_REQUIRE(!(((cfg->set_sources & HRTIM_SW_TRIGGER) != 0U) ||
                   ((cfg->reset_sources & HRTIM_SW_TRIGGER) != 0U) || (cfg->polarity > 1U) ||
                   (cfg->idle_level > 1U) || (cfg->fault_state > HRTIM_FAULT_MAX)),
@@ -299,11 +302,11 @@ SPL_Status HRTIM_DeadTimeConfig(uint32_t timer, const HRTIM_DeadTimeTypeDef *cfg
 {
     HRTIM_Timerx_TypeDef *t;
 
-    /* NULL isaretci okuma/yazma etkisi hedef mimaride guvenilir bir hata degildir. */
+    /* A NULL pointer access is not a reliable fault on the target architecture. */
     SPL_REQUIRE(!((timer >= HRTIM_TIMER_COUNT) || (cfg == (const HRTIM_DeadTimeTypeDef *)0)),
                 SPL_ERR_PARAM);
-    /* Gecersiz alan / maske register semantigini bozabilir veya yanlis donanim durumuna yol
-     * acar. */
+    /* An invalid field / mask could break the register semantics or leave a wrong
+     * hardware state. */
     SPL_REQUIRE(
         !((cfg->enable > 1U) ||
           ((cfg->enable != 0U) && ((cfg->prescaler > HRTIM_DTPRSC_MAX) ||
@@ -338,7 +341,7 @@ SPL_Status HRTIM_ForceOutput(uint32_t timer, uint32_t output, uint8_t active)
     HRTIM_Timerx_TypeDef *t;
     volatile uint32_t *reg;
 
-    /* Gecersiz timer secimi register erisimini / olay maskesini bozabilir. */
+    /* An invalid timer selection would corrupt the register access / event mask. */
     SPL_REQUIRE(!((timer >= HRTIM_TIMER_COUNT) || (output < 1U) || (output > 2U) || (active > 1U)),
                 SPL_ERR_PARAM);
     t = Hrtim_Timer(timer);
@@ -357,7 +360,7 @@ SPL_Status HRTIM_ForceOutput(uint32_t timer, uint32_t output, uint8_t active)
 
 SPL_Status HRTIM_OutputEnable(uint32_t mask)
 {
-    /* Gecersiz bayrak/maske ayrilmis bitlere yazim yapabilir. */
+    /* An invalid flag / mask would write reserved bits. */
     SPL_REQUIRE(!((mask == 0U) || ((mask & ~HRTIM_OUTPUT_ALL) != 0U)), SPL_ERR_PARAM);
     HRTIM1->sCommonRegs.OENR = mask; /* writing 0 has no effect: no read-modify-write */
     return SPL_OK;
@@ -365,7 +368,7 @@ SPL_Status HRTIM_OutputEnable(uint32_t mask)
 
 SPL_Status HRTIM_OutputDisable(uint32_t mask)
 {
-    /* Gecersiz bayrak/maske ayrilmis bitlere yazim yapabilir. */
+    /* An invalid flag / mask would write reserved bits. */
     SPL_REQUIRE(!((mask == 0U) || ((mask & ~HRTIM_OUTPUT_ALL) != 0U)), SPL_ERR_PARAM);
     HRTIM1->sCommonRegs.ODISR = mask;
     return SPL_OK;
@@ -373,7 +376,7 @@ SPL_Status HRTIM_OutputDisable(uint32_t mask)
 
 SPL_Status HRTIM_OutputStatus(uint32_t *enabled, uint32_t *disable_status)
 {
-    /* NULL isaretci okuma/yazma etkisi hedef mimaride guvenilir bir hata degildir. */
+    /* A NULL pointer access is not a reliable fault on the target architecture. */
     SPL_REQUIRE(!((enabled == (uint32_t *)0) || (disable_status == (uint32_t *)0)), SPL_ERR_PARAM);
     *enabled = HRTIM1->sCommonRegs.OENR & HRTIM_OUTPUT_ALL;
     *disable_status = HRTIM1->sCommonRegs.ODSR & HRTIM_OUTPUT_ALL;
@@ -384,7 +387,7 @@ SPL_Status HRTIM_CounterEnable(uint32_t timer_mask, uint8_t enable)
 {
     const uint32_t bits = timer_mask << HRTIM_MCR_TCEN_POS;
 
-    /* Gecersiz timer secimi register erisimini / olay maskesini bozabilir. */
+    /* An invalid timer selection would corrupt the register access / event mask. */
     SPL_REQUIRE(!((timer_mask == 0U) || ((timer_mask & ~HRTIM_TIMER_ALL) != 0U) || (enable > 1U)),
                 SPL_ERR_PARAM);
     if (enable == 0U)
@@ -403,7 +406,7 @@ SPL_Status HRTIM_CounterEnable(uint32_t timer_mask, uint8_t enable)
 
 static SPL_Status Hrtim_Cr2Trigger(uint32_t timer_mask, uint32_t pos)
 {
-    /* Gecersiz timer secimi register erisimini / olay maskesini bozabilir. */
+    /* An invalid timer selection would corrupt the register access / event mask. */
     SPL_REQUIRE(!((timer_mask == 0U) || ((timer_mask & ~HRTIM_TIMER_ALL) != 0U)), SPL_ERR_PARAM);
     /* Only the SWPx bits are read/write state; no pending trigger is copied back. */
     HRTIM1->sCommonRegs.CR2 = (HRTIM1->sCommonRegs.CR2 & HRTIM_CR2_SWP_ALL) | (timer_mask << pos);
@@ -422,7 +425,7 @@ SPL_Status HRTIM_SoftwareReset(uint32_t timer_mask)
 
 SPL_Status HRTIM_GetFlags(uint32_t timer, uint32_t *flags)
 {
-    /* NULL isaretci okuma/yazma etkisi hedef mimaride guvenilir bir hata degildir. */
+    /* A NULL pointer access is not a reliable fault on the target architecture. */
     SPL_REQUIRE(!((timer >= HRTIM_TIMER_COUNT) || (flags == (uint32_t *)0)), SPL_ERR_PARAM);
     *flags = Hrtim_Timer(timer)->TIMxISR;
     return SPL_OK;
@@ -430,7 +433,7 @@ SPL_Status HRTIM_GetFlags(uint32_t timer, uint32_t *flags)
 
 SPL_Status HRTIM_ClearFlags(uint32_t timer, uint32_t flags)
 {
-    /* Gecersiz timer secimi register erisimini / olay maskesini bozabilir. */
+    /* An invalid timer selection would corrupt the register access / event mask. */
     SPL_REQUIRE(
         !((timer >= HRTIM_TIMER_COUNT) || (flags == 0U) || ((flags & ~HRTIM_TIMFLAG_ALL) != 0U)),
         SPL_ERR_PARAM);
@@ -442,7 +445,7 @@ SPL_Status HRTIM_ClearFlags(uint32_t timer, uint32_t flags)
 
 SPL_Status HRTIM_GetCommonFlags(uint32_t *flags)
 {
-    /* NULL isaretci okuma/yazma etkisi hedef mimaride guvenilir bir hata degildir. */
+    /* A NULL pointer access is not a reliable fault on the target architecture. */
     SPL_REQUIRE(!(flags == (uint32_t *)0), SPL_ERR_PARAM);
     *flags = HRTIM1->sCommonRegs.ISR;
     return SPL_OK;
@@ -450,7 +453,7 @@ SPL_Status HRTIM_GetCommonFlags(uint32_t *flags)
 
 SPL_Status HRTIM_ClearCommonFlags(uint32_t flags)
 {
-    /* Gecersiz bayrak/maske ayrilmis bitlere yazim yapabilir. */
+    /* An invalid flag / mask would write reserved bits. */
     SPL_REQUIRE(!((flags == 0U) || ((flags & ~HRTIM_COMMON_CLEARABLE) != 0U)), SPL_ERR_PARAM);
     HRTIM1->sCommonRegs.ICR = flags;
     /* Read back: the clear reaches the peripheral before return (METHOD 1.7, issue #23). */

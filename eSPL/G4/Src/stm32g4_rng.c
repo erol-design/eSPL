@@ -1,7 +1,8 @@
+/* SPDX-License-Identifier: MIT */
+/* True random number generator (RNG) driver, RM0440 Rev 9 section 26.
+ * Public contract: stm32g4_rng.h. */
 #define SPL_LIBRARY_BUILD 1
 #include "stm32g4_rng.h"
-
-/* RM0440 Rev 9 section 26. */
 
 #define RNG_CR_KNOWN_BITS (RNG_CR_CED | RNG_CR_IE | RNG_CR_RNGEN)
 

@@ -1,7 +1,8 @@
+/* SPDX-License-Identifier: MIT */
+/* Clock recovery system (CRS) driver, RM0440 Rev 9 section 8.
+ * Public contract: stm32g4_crs.h. */
 #define SPL_LIBRARY_BUILD 1
 #include "stm32g4_crs.h"
-
-/* RM0440 Rev 9 section 8 (CRS). */
 
 /* CR bits that are kept on read-modify-write. SWSYNC (bit 7, self-clearing
  * command) and reserved bits are never written back. */

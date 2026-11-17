@@ -1,8 +1,8 @@
+/* SPDX-License-Identifier: MIT */
+/* Independent watchdog driver. RM0440 Rev 9 section 35. Public contract: stm32g4_iwdg.h. */
 #define SPL_LIBRARY_BUILD 1
 #include <stddef.h>
 #include "stm32g4_iwdg.h"
-
-/* RM0440 Rev 9 section 35. */
 
 #define IWDG_SR_UPDATING (IWDG_SR_PVU | IWDG_SR_RVU | IWDG_SR_WVU)
 

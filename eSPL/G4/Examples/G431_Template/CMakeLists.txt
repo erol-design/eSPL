@@ -1,54 +1,30 @@
-# eSPL G431_Template, Arm GCC derlemesi.
-#   cmake -S . -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=arm-none-eabi.cmake
+# SPDX-License-Identifier: MIT
+# G431_Template with CMake + Arm GCC (the Keil project G431_Template.uvprojx builds the same main.c).
+#   cmake -S . -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=../../cmake/arm-none-eabi-gcc.cmake
 #   cmake --build build
-# Cikti: build/G431_Template.elf, .hex, .bin
-cmake_minimum_required(VERSION 3.20)
-project(G431_Template C ASM)
+# Output: build/G431_Template.elf, .hex and .bin. Default device and linker script: STM32G431RBTx
+# (NUCLEO-G431RB); another SKU: -DESPL_G4_DEVICE=... and -DG4_TEMPLATE_LINKER_SCRIPT=....
+# Check level: -DESPL_G4_CHECK_LEVEL=0 (FULL, default) or 2 (FAST), the same for the whole build.
+cmake_minimum_required(VERSION 3.15)
+project(G431_Template LANGUAGES C ASM)
 
-set(ESPL_G4 ${CMAKE_CURRENT_SOURCE_DIR}/../..)
-set(ESPL_COMMON ${ESPL_G4}/../Common)
+set(ESPL_G4_DEVICE STM32G431xx CACHE STRING "CMSIS device macro")
+set(G4_TEMPLATE_LINKER_SCRIPT "${CMAKE_CURRENT_LIST_DIR}/STM32G431xB_FLASH.ld" CACHE FILEPATH "GNU ld script")
 
-# Cihaz ve denetim seviyesi: SPL_CHECK_LEVEL 0 = FULL, 2 = FAST (butun derlemede ayni).
-set(DEVICE STM32G431xx)
-set(SPL_CHECK_LEVEL 0 CACHE STRING "eSPL denetim seviyesi (0 FULL, 2 FAST)")
+add_subdirectory(../.. espl_g4)
 
-add_executable(${PROJECT_NAME}
-    main.c
-    ${ESPL_G4}/Src/stm32g4_check.c
-    ${ESPL_G4}/Src/stm32g4_flash.c
-    ${ESPL_G4}/Src/stm32g4_gpio.c
-    ${ESPL_G4}/Src/stm32g4_pwr.c
-    ${ESPL_G4}/Src/stm32g4_rcc.c
-    ${ESPL_G4}/Src/stm32g4_usart.c
-    ${ESPL_G4}/CMSIS/Device/Source/system_stm32g4xx.c
-    ${ESPL_G4}/CMSIS/Device/Source/startup/gcc/startup_stm32g431xx.s
-)
-set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX .elf)
+add_executable(G431_Template main.c)
+set_target_properties(G431_Template PROPERTIES SUFFIX ".elf" C_EXTENSIONS OFF)
+target_compile_options(G431_Template PRIVATE -Wall -Wextra -Wconversion -Werror)
+target_link_libraries(G431_Template PRIVATE espl::g4 espl::g4_startup)
+target_link_options(G431_Template PRIVATE "-T${G4_TEMPLATE_LINKER_SCRIPT}"
+    "-Wl,-Map=$<TARGET_FILE_DIR:G431_Template>/G431_Template.map")
+set_property(TARGET G431_Template APPEND PROPERTY LINK_DEPENDS "${G4_TEMPLATE_LINKER_SCRIPT}")
 
-target_include_directories(${PROJECT_NAME} PRIVATE
-    ${ESPL_G4}/Inc
-    ${ESPL_G4}/Private
-    ${ESPL_COMMON}/Inc
-    ${ESPL_G4}/CMSIS/Device/Include
-    ${ESPL_G4}/CMSIS/Core/Include
-)
-target_compile_definitions(${PROJECT_NAME} PRIVATE ${DEVICE} SPL_CHECK_LEVEL=${SPL_CHECK_LEVEL})
-
-set(MCU_FLAGS -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard)
-target_compile_options(${PROJECT_NAME} PRIVATE
-    ${MCU_FLAGS}
-    $<$<COMPILE_LANGUAGE:C>:-std=c99 -Wall -Wextra -O2 -g -ffunction-sections -fdata-sections>
-    $<$<COMPILE_LANGUAGE:ASM>:-x assembler-with-cpp>
-)
-target_link_options(${PROJECT_NAME} PRIVATE
-    ${MCU_FLAGS}
-    -T${CMAKE_CURRENT_SOURCE_DIR}/STM32G431xB_FLASH.ld
-    --specs=nano.specs
-    -Wl,--gc-sections -Wl,-Map=${PROJECT_NAME}.map -Wl,--print-memory-usage
-)
-
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:${PROJECT_NAME}> ${PROJECT_NAME}.hex
-    COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:${PROJECT_NAME}> ${PROJECT_NAME}.bin
-    COMMAND ${CMAKE_SIZE} $<TARGET_FILE:${PROJECT_NAME}>
-)
+find_program(ESPL_OBJCOPY NAMES arm-none-eabi-objcopy)
+if(ESPL_OBJCOPY)
+    add_custom_command(TARGET G431_Template POST_BUILD
+        COMMAND ${ESPL_OBJCOPY} -O ihex $<TARGET_FILE:G431_Template> $<TARGET_FILE_DIR:G431_Template>/G431_Template.hex
+        COMMAND ${ESPL_OBJCOPY} -O binary $<TARGET_FILE:G431_Template> $<TARGET_FILE_DIR:G431_Template>/G431_Template.bin
+        VERBATIM)
+endif()

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* Internal DMA/DMAMUX device mapping. Not a public API. */
 #ifndef STM32G4_DMA_PRIV_H
 #define STM32G4_DMA_PRIV_H

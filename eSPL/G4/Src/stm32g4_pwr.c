@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: MIT */
+/* Power controller (PWR) driver, RM0440 section 6.
+ * Public contract: stm32g4_pwr.h. */
 #define SPL_LIBRARY_BUILD 1
 #include <stddef.h>
 #include "stm32g4_pwr.h"

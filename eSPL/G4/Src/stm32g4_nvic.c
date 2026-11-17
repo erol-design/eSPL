@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: MIT */
+/* NVIC and SysTick wrappers over the CMSIS core functions (ARMv7-M, PM0214).
+ * Public contract: stm32g4_nvic.h. */
 #define SPL_LIBRARY_BUILD 1
 #include <stddef.h>
 #include "stm32g4_nvic.h"
