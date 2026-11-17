@@ -291,6 +291,8 @@ Contributions involving hardware behavior should include references to the relev
 
 Bug reports should identify the MCU part number, silicon revision, compiler version, eSPL revision, expected behavior, and observed behavior.
 
+Security-relevant problems (for example a bypass of a flash protection or key-handling contract) should be reported privately to eroldesign@gmail.com rather than in a public issue.
+
 ## License
 
 eSPL is released under the MIT License (`LICENSE`). Third-party components keep their own licenses: CMSIS Core (Arm) and CMSIS Device (ST) under each family's `CMSIS/` folder are Apache-2.0 (see `eSPL/G0/THIRD_PARTY_NOTICES.md`).
