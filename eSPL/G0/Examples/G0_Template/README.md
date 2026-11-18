@@ -49,5 +49,5 @@ and `espl::g0_startup` (CMSIS system file + GCC startup). Linker script: `stm32g
 4. Check level: keep `SPL_CHECK_LEVEL=0` (FULL) during development; 2 (FAST) removes the argument
    checks (Docs/CHECK_LEVEL.md). The library and the application are always built with the same
    value; a mixed build does not link.
-5. Group `SPL_Driver` holds every `Src/` file. Unused drivers cost no flash (the linker removes
+5. Group `eSPL_Driver` holds every `Src/` file. Unused drivers cost no flash (the linker removes
    unreferenced sections); keep `stm32g0_check.c`, it defines the check-level link guard.

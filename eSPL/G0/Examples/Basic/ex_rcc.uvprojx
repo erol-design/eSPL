@@ -382,7 +382,7 @@
       </TargetOption>
       <Groups>
         <Group>
-          <GroupName>SPL_Driver</GroupName>
+          <GroupName>eSPL_Driver</GroupName>
           <Files>
             <File>
               <FileName>stm32g0_gpio.c</FileName>
