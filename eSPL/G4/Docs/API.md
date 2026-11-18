@@ -4354,7 +4354,7 @@ SCR = flags (non-empty subset of TAMP_FLAGS_ALL), then SR read back.
 
 ## stm32g4_sai.h
 
-Serial audio interface driver for STM32G4: SAI1 (blocks A and B) and its PDM interface, RM0440 Rev 9 chapter 43. Scope: block configuration, enable / disable, FIFO access, flags, interrupts, DMA request and PDM. G4 has no SAI_GCR (no external synchronization, RM0440 43.6 starts at offset 0x04), so there is no SYNCIN/SYNCOUT API. SAI1 is absent on STM32G411xx/G414xx: only SAI_CheckSupport exists there. Usage: SAI_BlockInit (SAIEN = 0), optional SAI_PdmInit / SAI_InterruptConfig, DMA channel then SAI_DmaCmd(1), SAI_Enable (slave transmitter: preload the FIFO first); SAI_TryWrite / SAI_TryRead or DMA; SAI_Disable and poll SAI_IsDisabled to stop. Common rules: no dynamic memory, no static state; no function waits (STATE / WOULD_BLOCK are returned instead); all parameters are validated before any write; output parameters are written only on OK. CR1 is modified only while SAIEN = 0, except by SAI_Disable. Caller duties (all APIs; not done by the driver):  - Clock: RCC bus clock and reset (RCC_PERIPH_SAI1) and kernel clock source    (RCC_KERNEL_SAI1 / CCIPR.SAI1SEL).  - Pins / DMA / interrupts: GPIO alternate functions, DMA channel and DMAMUX request, NVIC    (SAI1_IRQn).  - Serialize calls per block; SAI_TryWrite, SAI_TryRead, SAI_GetFlags, SAI_GetFifoLevel and    SAI_ClearFlags may run in an ISR while the block is not configured concurrently. Contract: Docs/v0.12_SAI_CONTRACT.md.
+Serial audio interface driver for STM32G4: SAI1 (blocks A and B) and its PDM interface, RM0440 Rev 9 chapter 43. Scope: block configuration, enable / disable, FIFO access, flags, interrupts, DMA request and PDM. G4 has no SAI_GCR (no external synchronization, RM0440 43.6 starts at offset 0x04), so there is no SYNCIN/SYNCOUT API. SAI1 is absent on STM32G411xx/G414xx: only SAI_CheckSupport exists there. Usage: SAI_BlockInit (SAIEN = 0), optional SAI_PdmInit / SAI_InterruptConfig, DMA channel then SAI_DmaCmd(1), SAI_Enable (slave transmitter: preload the FIFO first); SAI_TryWrite / SAI_TryRead or DMA; SAI_Disable and poll SAI_IsDisabled to stop. Common rules: no dynamic memory, no static state; no function waits (STATE / WOULD_BLOCK are returned instead); all parameters are validated before any write; output parameters are written only on OK. CR1 is modified only while SAIEN = 0, except by SAI_Disable. Caller duties (all APIs; not done by the driver):  - Clock: RCC bus clock and reset (RCC_PERIPH_SAI1) and kernel clock source    (RCC_KERNEL_SAI1 / CCIPR.SAI1SEL).  - Pins / DMA / interrupts: GPIO alternate functions, DMA channel and DMAMUX request, NVIC    (SAI1_IRQn).  - Pins of a master block (bench finding, NUCLEO-G431RB Rev X, 2026-11-18; not stated in    RM0440 Rev 9): its SCK_x pin must be in its alternate function, otherwise the bit clock    does not run (the FIFO never drains); a block synchronous with it (SAI_SYNC_INTERNAL)    also needs the master's FS_x pin in its alternate function, otherwise it receives    nothing. Map both even when nothing is connected to them.  - Serialize calls per block; SAI_TryWrite, SAI_TryRead, SAI_GetFlags, SAI_GetFifoLevel and    SAI_ClearFlags may run in an ISR while the block is not configured concurrently. Contract: Docs/v0.12_SAI_CONTRACT.md.
 
 ### `SAI_CheckSupport`
 
@@ -4397,7 +4397,7 @@ SPL_Status SAI_Enable(SAI_Block_TypeDef *block);
 
 Sets SAIEN. STATE: SAIEN already 1 (enabled or disable pending), or a slave transmitter with an empty FIFO (preload it first, RM0440 43.4.4). Master: the kernel clock must be running (caller duty).
 
-- Caller: master: the kernel clock runs; slave: SCK / FS come from the external master; with SAI_SYNC_INTERNAL (this block is a slave) enable it before the clock-providing master block (RM0440 43.4.4: enable the slave before the master). With DMA follow the SAI_DmaCmd order.
+- Caller: master: the kernel clock runs and the SCK_x pin (and FS_x for a synchronous partner block) is in its alternate function (file header); slave: SCK / FS come from the external master; with SAI_SYNC_INTERNAL (this block is a slave) enable it before the clock-providing master block (RM0440 43.4.4: enable the slave before the master). With DMA follow the SAI_DmaCmd order.
 - Level: `PARAM[F] STATE[r]`
 
 ### `SAI_Disable`
@@ -4408,7 +4408,7 @@ SPL_Status SAI_Disable(SAI_Block_TypeDef *block);
 
 Non-blocking disable request: clears SAIEN. Hardware keeps SAIEN=1 until the current audio frame ends (RM0440 43.4.15); poll SAI_IsDisabled with a bounded budget. A slave whose SCK/FS stopped never completes the frame: recover with the RCC SAI1 reset. OK without a write when already disabled. If one block is synchronous with the other, disable the asynchronous (clock-providing) block first (caller duty).
 
-- Caller: disable the asynchronous (clock-providing) block last; poll SAI_IsDisabled with a bounded budget, then RCC SAI1 reset if the frame never ends.
+- Caller: disable the asynchronous (clock-providing) block first (RM0440 43.4.15), the synchronous slave right after it within the same frame; poll SAI_IsDisabled with a bounded budget, then RCC SAI1 reset if the frame never ends.
 - Level: `PARAM[F]`
 
 ### `SAI_IsDisabled`
