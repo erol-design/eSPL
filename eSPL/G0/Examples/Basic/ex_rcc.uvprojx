@@ -7,7 +7,7 @@
 
   <Targets>
     <Target>
-      <TargetName>ex_rcc</TargetName>
+      <TargetName>eSPL_examples</TargetName>
       <ToolsetNumber>0x4</ToolsetNumber>
       <ToolsetName>ARM-ADS</ToolsetName>
       <pCCUsed>6220000::V6.22::ARMCLANG</pCCUsed>

@@ -62,9 +62,10 @@ Build for all of them. Arm Compiler 6, device STM32G0B1RETx, debugger ST-LINK; o
 `Objects/ex_<name>/ex_<name>.axf` and `.hex`.
 
 The projects are generated from `Examples/G0_Template/G0_Template.uvprojx` by
-`Tools/gen_basic_keil.py` (only the target name, the output folders and the Application group
-differ). Change settings in the template and run the tool again rather than editing one example
-project; a new example is added to `EX_NAMES` in `CMakeLists.txt`, which both build systems use.
+`Tools/gen_basic_keil.py`: the target is `eSPL_examples` in every project; only the output name,
+the output folders and the Application group differ. Change settings in the template and run the
+tool again rather than editing one example project; a new example is added to `EX_NAMES` in
+`CMakeLists.txt`, which both build systems use.
 
 ## Board assumptions
 
