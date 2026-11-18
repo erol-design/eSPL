@@ -33,6 +33,9 @@ not have at all declares no API, so a call does not compile.
 
 Start from [`Examples/G0_Template`](Examples/G0_Template): NUCLEO-G0B1RE LED blink, Keil MDK project
 or CMake + Arm GCC (build verified, not yet run on a board).
+One small program per driver: [`Examples/Basic`](Examples/Basic) (15 examples: GPIO, EXTI, USART,
+RCC, TIM, ADC, DAC, DMA, CRC, SPI, I2C, IWDG, RTC, FLASH; CMake + Arm GCC, build verified, not yet
+run on a board).
 
 ```c
 #include "stm32g0_spl.h"   /* all modules; a single module header also works */

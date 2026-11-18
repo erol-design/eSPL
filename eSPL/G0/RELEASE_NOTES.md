@@ -1,5 +1,12 @@
 # eSPL STM32G0 release notes
 
+## v0.20.0-dev (2026-11-18 examples)
+
+- `Examples/Basic`: 15 one-file driver examples for NUCLEO-G0B1RE (GPIO, EXTI, USART, RCC PLL,
+  TIM PWM and update interrupt, ADC with VREFINT, DAC, DMA, CRC-32, SPI loop-back, I2C scan, IWDG,
+  RTC, FLASH), built with CMake + Arm GCC without warnings at both check levels. Not yet run on a
+  board. No driver change.
+
 ## v0.20.0-dev (2026-11-18 update)
 
 - Fix: `FLASH_GetEcc` reads the ECC fail address (`ADDR_ECC`) with the reference manual width
