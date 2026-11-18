@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<ProjectWorkspace xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="project_mpw.xsd">
+
+  <SchemaVersion>1.0</SchemaVersion>
+
+  <Header>### uVision Project, (C) Keil Software</Header>
+
+  <WorkspaceName>WorkSpace</WorkspaceName>
+
+  <project>
+    <PathAndName>.\ex_gpio.uvprojx</PathAndName>
+    <NodeIsActive>1</NodeIsActive>
+  </project>
+
+  <project>
+    <PathAndName>.\ex_exti.uvprojx</PathAndName>
+  </project>
+
+  <project>
+    <PathAndName>.\ex_usart.uvprojx</PathAndName>
+  </project>
+
+  <project>
+    <PathAndName>.\ex_rcc.uvprojx</PathAndName>
+  </project>
+
+  <project>
+    <PathAndName>.\ex_tim_pwm.uvprojx</PathAndName>
+  </project>
+
+  <project>
+    <PathAndName>.\ex_tim_irq.uvprojx</PathAndName>
+  </project>
+
+  <project>
+    <PathAndName>.\ex_adc.uvprojx</PathAndName>
+  </project>
+
+  <project>
+    <PathAndName>.\ex_dac.uvprojx</PathAndName>
+  </project>
+
+  <project>
+    <PathAndName>.\ex_dma.uvprojx</PathAndName>
+  </project>
+
+  <project>
+    <PathAndName>.\ex_crc.uvprojx</PathAndName>
+  </project>
+
+  <project>
+    <PathAndName>.\ex_spi.uvprojx</PathAndName>
+  </project>
+
+  <project>
+    <PathAndName>.\ex_i2c.uvprojx</PathAndName>
+  </project>
+
+  <project>
+    <PathAndName>.\ex_iwdg.uvprojx</PathAndName>
+  </project>
+
+  <project>
+    <PathAndName>.\ex_rtc.uvprojx</PathAndName>
+  </project>
+
+  <project>
+    <PathAndName>.\ex_flash.uvprojx</PathAndName>
+  </project>
+
+</ProjectWorkspace>

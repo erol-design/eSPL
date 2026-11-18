@@ -55,8 +55,16 @@ or any ST-LINK tool. Linker script: `../G0_Template/stm32g0b1re.ld`. FAST level:
 `-DESPL_G0_CHECK_LEVEL=2`. Another SKU: `-DESPL_G0_DEVICE=...` and `-DEX_LINKER_SCRIPT=...`
 (the DAC example needs a SKU with a DAC).
 
-Keil MDK: copy `Examples/G0_Template`, replace its `main.c` with one `ex_<name>.c`, and add
-`ex_board.c` and the folder of `ex_board.h` to the project.
+## Building (Keil MDK)
+
+Open `ex_<name>.uvprojx` for one example, or the workspace `Basic.uvmpw` and use Project > Batch
+Build for all of them. Arm Compiler 6, device STM32G0B1RETx, debugger ST-LINK; output in
+`Objects/ex_<name>/ex_<name>.axf` and `.hex`.
+
+The projects are generated from `Examples/G0_Template/G0_Template.uvprojx` by
+`Tools/gen_basic_keil.py` (only the target name, the output folders and the Application group
+differ). Change settings in the template and run the tool again rather than editing one example
+project; a new example is added to `EX_NAMES` in `CMakeLists.txt`, which both build systems use.
 
 ## Board assumptions
 
@@ -66,6 +74,7 @@ board change the `EX_*` macros in `ex_board.h` and the pins named in each exampl
 
 ## Status
 
-Verified: every image builds without a warning at check levels 0 and 2 (Arm GCC, `-Wall
--Wextra -Wconversion -Werror`, `Tests/run_cmake.sh`), clang-format clean, 7-bit ASCII. Not run on
-a board yet.
+Verified: every image builds without a warning at check levels 0 and 2 (Arm GCC, `-Wall -Wextra
+-Wconversion -Werror`, `Tests/run_cmake.sh`) and with Keil MDK (Arm Compiler 6, level 0); the Keil
+projects match the template (`Tools/gen_basic_keil.py --check`); clang-format clean, 7-bit ASCII.
+Not run on a board yet.

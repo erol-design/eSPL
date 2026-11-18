@@ -6,6 +6,8 @@
   TIM PWM and update interrupt, ADC with VREFINT, DAC, DMA, CRC-32, SPI loop-back, I2C scan, IWDG,
   RTC, FLASH), built with CMake + Arm GCC without warnings at both check levels. Not yet run on a
   board. No driver change.
+- Keil MDK project for every example (`ex_<name>.uvprojx`) and a workspace `Basic.uvmpw` for batch
+  build; Arm Compiler 6, 0 errors, 0 warnings.
 
 ## v0.20.0-dev (2026-11-18 update)
 
