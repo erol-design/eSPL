@@ -359,6 +359,9 @@ SPL_Status FLASH_EndOperation(void)
 }
 
 #define FLASH_ECC_EVENTS (FLASH_ECCR_ECCD | FLASH_ECCR_ECCC)
+/* HW-012: ADDR_ECC is bits 15:0 in RM0444 3.7.6 / 3.7.7; the CMSIS mask is 14 or 15 bits wide.
+ * The RM width is used so that no address bit is dropped; bits 19:16 are reserved. */
+#define FLASH_ECC_ADDR_MASK 0x0000FFFFUL
 
 SPL_Status FLASH_GetEcc(FLASH_EccTypeDef *ecc)
 {
@@ -378,7 +381,7 @@ SPL_Status FLASH_GetEcc(FLASH_EccTypeDef *ecc)
         }
     }
 #endif
-    ecc->address = eccr & FLASH_ECCR_ADDR_ECC;
+    ecc->address = eccr & FLASH_ECC_ADDR_MASK;
     ecc->detected = (uint8_t)(((eccr & FLASH_ECCR_ECCD) != 0U) ? 1U : 0U);
     ecc->corrected = (uint8_t)(((eccr & FLASH_ECCR_ECCC) != 0U) ? 1U : 0U);
     ecc->system_flash = (uint8_t)(((eccr & FLASH_ECCR_SYSF_ECC) != 0U) ? 1U : 0U);

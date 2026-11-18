@@ -1,5 +1,13 @@
 # eSPL STM32G0 release notes
 
+## v0.20.0-dev (2026-11-18 update)
+
+- Fix: `FLASH_GetEcc` reads the ECC fail address (`ADDR_ECC`) with the reference manual width
+  (RM0444, bits 15:0). The CMSIS mask is 14 or 15 bits wide; on STM32G0B1 / G0C1 bit 15 of the
+  offset was dropped. No other driver change.
+- Register field masks of the CMSIS headers are now checked against the ST SVD files on all 12
+  SKUs (internal verification); the differences found are documented and need no driver change.
+
 ## v0.20.0-dev (2026-11-17 update)
 
 - Umbrella header `stm32g0_spl.h`: one include for every module available on the selected device.
